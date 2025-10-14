@@ -1,129 +1,142 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
+import { Category, Product, ProductSize } from '../types/supabase';
 import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
-interface Category {
-  id: string;
-  name: string;
-}
-
-interface Product {
-  id: string;
-  category_id: string;
-  name: string;
-  description: string;
-  base_price: number;
-  available: boolean;
-}
-
-interface ProductSize {
-  id: string;
-  product_id: string;
-  size_name: string;
-  price_modifier: number;
-}
-
-interface CartItem {
-  product: Product;
-  size: ProductSize | null;
-  quantity: number;
-  notes: string;
-}
+const ITEMS_PER_PAGE = 12;
 
 export function POS() {
   const { user } = useAuth();
+  const { 
+    items: cart,
+    total,
+    paymentMethod,
+    addItem,
+    updateQuantity,
+    removeItem,
+    setPaymentMethod,
+    clearCart
+  } = useCart();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [sizes, setSizes] = useState<ProductSize[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchCategories();
-    fetchProducts();
-    fetchSizes();
+    Promise.all([
+      fetchCategories(),
+      fetchInitialProducts(),
+      fetchSizes()
+    ]).finally(() => setDataLoading(false));
   }, []);
 
   const fetchCategories = async () => {
-    const { data } = await supabase
-      .from('categories')
-      .select('*')
-      .order('name');
-    if (data) setCategories(data);
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      toast.error('Error al cargar categorías');
+      setError('No se pudieron cargar las categorías');
+    }
   };
 
-  const fetchProducts = async () => {
-    const { data } = await supabase
-      .from('products')
-      .select('*')
-      .eq('available', true)
-      .order('name');
-    if (data) setProducts(data);
+  const fetchInitialProducts = async () => {
+    setPage(1);
+    await fetchProducts(true);
+  };
+
+  const fetchProducts = async (reset = false) => {
+    try {
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('available', true)
+        .order('name');
+
+      if (selectedCategory !== 'all') {
+        query = query.eq('category_id', selectedCategory);
+      }
+
+      query = query
+        .range((reset ? 0 : (page - 1) * ITEMS_PER_PAGE), 
+               (reset ? ITEMS_PER_PAGE - 1 : page * ITEMS_PER_PAGE - 1));
+
+      const { data, error } = await query;
+      
+      if (error) throw error;
+
+      if (data) {
+        setProducts(prev => reset ? data : [...prev, ...data]);
+        setHasMore(data.length === ITEMS_PER_PAGE);
+      }
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      toast.error('Error al cargar productos');
+      setError('No se pudieron cargar los productos');
+    }
   };
 
   const fetchSizes = async () => {
-    const { data } = await supabase
-      .from('product_sizes')
-      .select('*');
-    if (data) setSizes(data);
-  };
-
-  const filteredProducts = selectedCategory === 'all'
-    ? products
-    : products.filter(p => p.category_id === selectedCategory);
-
-  const addToCart = (product: Product, size: ProductSize | null = null) => {
-    const existingIndex = cart.findIndex(
-      item => item.product.id === product.id && item.size?.id === size?.id
-    );
-
-    if (existingIndex >= 0) {
-      const newCart = [...cart];
-      newCart[existingIndex].quantity += 1;
-      setCart(newCart);
-    } else {
-      setCart([...cart, { product, size, quantity: 1, notes: '' }]);
+    try {
+      const { data, error } = await supabase
+        .from('product_sizes')
+        .select('*');
+      
+      if (error) throw error;
+      setSizes(data || []);
+    } catch (err) {
+      console.error('Error fetching sizes:', err);
+      toast.error('Error al cargar tamaños');
+      setError('No se pudieron cargar los tamaños de productos');
     }
   };
 
-  const updateQuantity = (index: number, delta: number) => {
-    const newCart = [...cart];
-    newCart[index].quantity += delta;
-    if (newCart[index].quantity <= 0) {
-      newCart.splice(index, 1);
-    }
-    setCart(newCart);
+  useEffect(() => {
+    fetchInitialProducts();
+  }, [selectedCategory]);
+
+  const handleLoadMore = () => {
+    setPage(prev => prev + 1);
+    fetchProducts();
   };
 
-  const removeFromCart = (index: number) => {
-    const newCart = [...cart];
-    newCart.splice(index, 1);
-    setCart(newCart);
-  };
-
-  const calculateTotal = () => {
-    return cart.reduce((sum, item) => {
-      const basePrice = item.product.base_price;
-      const sizeModifier = item.size?.price_modifier || 0;
-      return sum + (basePrice + sizeModifier) * item.quantity;
-    }, 0);
-  };
+  const productSizes = (productId: string) => sizes.filter(s => s.product_id === productId);
 
   const handleCheckout = async () => {
-    if (cart.length === 0 || !user) return;
+    if (cart.length === 0 || !user) {
+      console.log('Carrito vacío o usuario no autenticado:', { cartLength: cart.length, userId: user?.id });
+      return;
+    }
 
     setLoading(true);
     try {
-      const total = calculateTotal();
+      console.log('Iniciando checkout con:', { 
+        employeeId: user.id, 
+        total, 
+        paymentMethod,
+        cartItems: cart.length 
+      });
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           employee_id: user.id,
-          status: 'pending',
+          status: 'preparing',
           total,
           payment_method: paymentMethod,
         })
@@ -142,36 +155,81 @@ export function POS() {
         notes: item.notes,
       }));
 
-      const { error: itemsError } = await supabase
+      console.log('Orden creada:', order);
+      
+      const { data: items, error: itemsError } = await supabase
         .from('order_items')
-        .insert(orderItems);
+        .insert(orderItems)
+        .select();
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error('Error al crear items de la orden:', itemsError);
+        throw itemsError;
+      }
 
-      setCart([]);
-      alert('¡Orden creada exitosamente!');
-    } catch (error) {
-      console.error('Error creating order:', error);
-      alert('Error al crear la orden');
+      console.log('Items de orden creados:', items);
+
+      clearCart();
+      toast.success('¡Orden creada exitosamente!');
+      
+      // Forzar actualización inmediata
+      const channel = supabase.channel('custom-insert-channel')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'orders' },
+          (payload) => {
+            console.log('Cambio detectado:', payload);
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.error('Error creating order:', err);
+      toast.error('Error al crear la orden');
     } finally {
       setLoading(false);
     }
   };
 
-  const productSizes = (productId: string) => sizes.filter(s => s.product_id === productId);
+  if (dataLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando productos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Error</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <div className="flex-1 p-6 overflow-auto">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Productos</h2>
-          <div className="flex gap-2 flex-wrap">
+    <div className="flex h-[calc(100vh-5rem)] bg-gray-50">
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="p-4 bg-white border-b">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Productos</h2>
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
                 selectedCategory === 'all'
                   ? 'bg-amber-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
               }`}
             >
               Todos
@@ -192,9 +250,10 @@ export function POS() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredProducts.map(product => {
-            const productSizesList = productSizes(product.id);
+        <div className="flex-1 overflow-auto p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {products.map(product => {
+              const productSizesList = productSizes(product.id);
 
             return (
               <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-4">
@@ -207,7 +266,7 @@ export function POS() {
                     {productSizesList.map(size => (
                       <button
                         key={size.id}
-                        onClick={() => addToCart(product, size)}
+                        onClick={() => addItem(product, size)}
                         className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex justify-between items-center"
                       >
                         <span>{size.size_name}</span>
@@ -217,7 +276,7 @@ export function POS() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => addToCart(product)}
+                    onClick={() => addItem(product)}
                     className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
                   >
                     Agregar
@@ -225,19 +284,35 @@ export function POS() {
                 )}
               </div>
             );
-          })}
+            })}
+          </div>
+          
+          {hasMore && (
+            <div className="mt-8 text-center">
+              <button
+                onClick={handleLoadMore}
+                className="bg-white hover:bg-gray-50 text-amber-600 font-medium py-3 px-6 rounded-lg shadow-sm transition-colors"
+              >
+                Cargar más productos
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="w-96 bg-white border-l border-gray-200 p-6 flex flex-col">
-        <div className="flex items-center gap-2 mb-6">
-          <ShoppingCart className="w-6 h-6 text-amber-600" />
-          <h2 className="text-2xl font-bold text-gray-900">Carrito</h2>
+      <div className="w-96 bg-white border-l border-gray-200 flex flex-col">
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="w-6 h-6 text-amber-600" />
+            <h2 className="text-xl font-bold text-gray-900">Carrito</h2>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-auto mb-6">
+        <div className="flex-1 overflow-auto p-4">
           {cart.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">El carrito está vacío</p>
+            <div className="h-full flex items-center justify-center">
+              <p className="text-gray-500">El carrito está vacío</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {cart.map((item, index) => (
@@ -250,7 +325,7 @@ export function POS() {
                       )}
                     </div>
                     <button
-                      onClick={() => removeFromCart(index)}
+                      onClick={() => removeItem(index)}
                       className="text-red-500 hover:text-red-700"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -282,46 +357,46 @@ export function POS() {
           )}
         </div>
 
-        <div className="border-t border-gray-200 pt-4 space-y-4">
-          <div className="flex justify-between items-center text-xl font-bold">
+        <div className="p-4 border-t bg-gray-50">
+          <div className="flex justify-between items-center text-xl font-bold mb-4">
             <span>Total:</span>
-            <span className="text-amber-600">${calculateTotal().toFixed(2)}</span>
+            <span className="text-amber-600">${total.toFixed(2)}</span>
           </div>
 
-          <div>
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setPaymentMethod('cash')}
-                className={`p-3 rounded-lg border-2 transition-colors ${
+                className={`p-3 rounded-lg border-2 bg-white transition-colors ${
                   paymentMethod === 'cash'
                     ? 'border-amber-600 bg-amber-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <Banknote className="w-6 h-6 mx-auto mb-1" />
+                <Banknote className="w-5 h-5 mx-auto mb-1" />
                 <span className="text-xs">Efectivo</span>
               </button>
               <button
                 onClick={() => setPaymentMethod('card')}
-                className={`p-3 rounded-lg border-2 transition-colors ${
+                className={`p-3 rounded-lg border-2 bg-white transition-colors ${
                   paymentMethod === 'card'
                     ? 'border-amber-600 bg-amber-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <CreditCard className="w-6 h-6 mx-auto mb-1" />
+                <CreditCard className="w-5 h-5 mx-auto mb-1" />
                 <span className="text-xs">Tarjeta</span>
               </button>
               <button
                 onClick={() => setPaymentMethod('digital')}
-                className={`p-3 rounded-lg border-2 transition-colors ${
+                className={`p-3 rounded-lg border-2 bg-white transition-colors ${
                   paymentMethod === 'digital'
                     ? 'border-amber-600 bg-amber-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <Smartphone className="w-6 h-6 mx-auto mb-1" />
+                <Smartphone className="w-5 h-5 mx-auto mb-1" />
                 <span className="text-xs">Digital</span>
               </button>
             </div>
@@ -330,7 +405,7 @@ export function POS() {
           <button
             onClick={handleCheckout}
             disabled={cart.length === 0 || loading}
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-4 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Procesando...' : 'Procesar Orden'}
           </button>

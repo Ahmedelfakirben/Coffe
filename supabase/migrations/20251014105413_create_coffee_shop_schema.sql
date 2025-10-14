@@ -81,6 +81,9 @@
 */
 
 -- Create categories table
+-- Ensure pgcrypto is available for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS categories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -103,7 +106,7 @@ CREATE TABLE IF NOT EXISTS products (
 -- Create product_sizes table
 CREATE TABLE IF NOT EXISTS product_sizes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id uuid REFERENCES products(id) ON DELETE CASCADE NOT NULL,
+  product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   size_name text NOT NULL,
   price_modifier decimal(10,2) DEFAULT 0,
   created_at timestamptz DEFAULT now()
@@ -123,7 +126,8 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE TABLE IF NOT EXISTS orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
-  employee_id uuid REFERENCES auth.users(id) ON DELETE SET NULL NOT NULL,
+  -- Make employee_id nullable since ON DELETE SET NULL is used
+  employee_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   status text DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'ready', 'completed', 'cancelled')),
   total decimal(10,2) DEFAULT 0,
   payment_method text CHECK (payment_method IN ('cash', 'card', 'digital')),
@@ -135,8 +139,8 @@ CREATE TABLE IF NOT EXISTS orders (
 -- Create order_items table
 CREATE TABLE IF NOT EXISTS order_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id uuid REFERENCES orders(id) ON DELETE CASCADE NOT NULL,
-  product_id uuid REFERENCES products(id) ON DELETE RESTRICT NOT NULL,
+  order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  product_id uuid NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
   size_id uuid REFERENCES product_sizes(id) ON DELETE SET NULL,
   quantity integer DEFAULT 1,
   unit_price decimal(10,2) NOT NULL,
