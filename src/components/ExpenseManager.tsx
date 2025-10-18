@@ -3,7 +3,7 @@ import { Plus, Filter, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Expense, ExpenseCategory } from '../types/expenses';
+import { Expense, ExpenseCategory, Supplier } from '../types/expenses';
 
 const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   { value: 'supplier', label: 'Proveedores' },
@@ -17,6 +17,7 @@ const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
 export function ExpenseManager() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filterCategory, setFilterCategory] = useState<ExpenseCategory | 'all'>('all');
@@ -25,7 +26,7 @@ export function ExpenseManager() {
     end: new Date().toISOString().split('T')[0],
   });
   const [newExpense, setNewExpense] = useState({
-    category: 'supplier' as ExpenseCategory,
+    category: '' as string,
     description: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
@@ -35,7 +36,24 @@ export function ExpenseManager() {
 
   useEffect(() => {
     fetchExpenses();
+    fetchSuppliers();
   }, [filterCategory, dateRange]);
+
+  const fetchSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('active', true)
+        .order('name');
+
+      if (error) throw error;
+      setSuppliers(data || []);
+    } catch (err) {
+      console.error('Error fetching suppliers:', err);
+      toast.error('Error al cargar proveedores');
+    }
+  };
 
   const fetchExpenses = async () => {
     try {
@@ -47,7 +65,13 @@ export function ExpenseManager() {
         .order('date', { ascending: false });
 
       if (filterCategory !== 'all') {
-        query = query.eq('category', filterCategory);
+        // Check if it's a supplier ID or a category
+        const isSupplier = suppliers.some(s => s.id === filterCategory);
+        if (isSupplier) {
+          query = query.eq('supplier_id', filterCategory);
+        } else {
+          query = query.eq('category', filterCategory);
+        }
       }
 
       const { data, error } = await query;
@@ -65,14 +89,27 @@ export function ExpenseManager() {
     setLoading(true);
 
     try {
+      // Determine category and supplier_id based on selection
+      let category: ExpenseCategory = 'other';
+      let supplierId: string | null = null;
+
+      if (suppliers.some(s => s.id === newExpense.supplier_id)) {
+        // It's a supplier
+        category = 'supplier';
+        supplierId = newExpense.supplier_id;
+      } else {
+        // It's a regular category
+        category = newExpense.supplier_id as ExpenseCategory;
+      }
+
       const { error } = await supabase
         .from('expenses')
         .insert({
           date: newExpense.date,
-          category: newExpense.category,
+          category: category,
           description: newExpense.description,
           amount: parseFloat(newExpense.amount),
-          supplier_id: newExpense.supplier_id ? newExpense.supplier_id : null,
+          supplier_id: supplierId,
           employee_id: user?.id ?? null,
         });
 
@@ -81,7 +118,7 @@ export function ExpenseManager() {
       toast.success('Gasto registrado exitosamente');
       setShowForm(false);
       setNewExpense({
-        category: 'supplier',
+        category: '',
         description: '',
         amount: '',
         date: new Date().toISOString().split('T')[0],
@@ -99,10 +136,12 @@ export function ExpenseManager() {
 
   const downloadReport = () => {
     const csvContent = [
-      ['Fecha', 'Categoría', 'Descripción', 'Monto'],
+      ['Fecha', 'Categoría/Proveedor', 'Descripción', 'Monto'],
       ...expenses.map(expense => [
         new Date(expense.date).toLocaleDateString(),
-        EXPENSE_CATEGORIES.find(cat => cat.value === expense.category)?.label || expense.category,
+        suppliers.find(s => s.id === expense.supplier_id)?.name ||
+        EXPENSE_CATEGORIES.find(cat => cat.value === expense.category)?.label ||
+        expense.category,
         expense.description,
         expense.amount.toFixed(2)
       ])
@@ -159,19 +198,29 @@ export function ExpenseManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Categoría
+                Categoría / Proveedor
               </label>
               <select
-                value={newExpense.category}
-                onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value as ExpenseCategory })}
+                value={newExpense.supplier_id}
+                onChange={(e) => setNewExpense({ ...newExpense, supplier_id: e.target.value, category: e.target.value ? 'supplier' : '' })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 required
               >
-                {EXPENSE_CATEGORIES.map(category => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
-                  </option>
-                ))}
+                <option value="">Seleccionar categoría o proveedor</option>
+                <optgroup label="Otras categorías">
+                  <option value="salary">Salarios</option>
+                  <option value="rent">Alquiler</option>
+                  <option value="utilities">Servicios</option>
+                  <option value="maintenance">Mantenimiento</option>
+                  <option value="other">Otros</option>
+                </optgroup>
+                <optgroup label="Proveedores">
+                  {suppliers.map(supplier => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
@@ -226,7 +275,7 @@ export function ExpenseManager() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoría
+              Categoría / Proveedor
             </label>
             <select
               value={filterCategory}
@@ -234,11 +283,20 @@ export function ExpenseManager() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             >
               <option value="all">Todas las categorías</option>
-              {EXPENSE_CATEGORIES.map(category => (
-                <option key={category.value} value={category.value}>
-                  {category.label}
-                </option>
-              ))}
+              <optgroup label="Otras categorías">
+                <option value="salary">Salarios</option>
+                <option value="rent">Alquiler</option>
+                <option value="utilities">Servicios</option>
+                <option value="maintenance">Mantenimiento</option>
+                <option value="other">Otros</option>
+              </optgroup>
+              <optgroup label="Proveedores">
+                {suppliers.map(supplier => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
 
@@ -285,7 +343,7 @@ export function ExpenseManager() {
                   Fecha
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Categoría
+                  Categoría / Proveedor
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Descripción
@@ -302,7 +360,9 @@ export function ExpenseManager() {
                     {new Date(expense.date).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {EXPENSE_CATEGORIES.find(cat => cat.value === expense.category)?.label}
+                    {suppliers.find(s => s.id === expense.supplier_id)?.name ||
+                     EXPENSE_CATEGORIES.find(cat => cat.value === expense.category)?.label ||
+                     expense.category}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     {expense.description}

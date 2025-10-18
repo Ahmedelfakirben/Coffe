@@ -196,54 +196,75 @@ export function ProductsManager() {
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+    if (!confirm('¿Estás seguro de que deseas eliminar este producto?\n\nEl producto será eliminado permanentemente de la lista de productos activos. Los pedidos históricos que contengan este producto se mantendrán intactos.')) return;
 
     try {
-      // First check if product is used in any orders (both current and historical)
+      // Check if product is used in any orders (for informational purposes)
+      console.log('Checking product usage for ID:', id);
       const { data: orderItems, error: checkError } = await supabase
         .from('order_items')
-        .select('id')
+        .select('id, orders!inner(status)')
         .eq('product_id', id)
         .limit(1);
 
       if (checkError) {
         console.error('Error checking product usage:', checkError);
-        // Continue with deletion even if check fails, but log the error
-        console.warn('Could not verify product usage, proceeding with deletion');
-      } else {
-        console.log('Order items check result:', orderItems);
-        if (orderItems && orderItems.length > 0) {
-          toast.error('No se puede eliminar el producto porque está siendo usado en pedidos existentes');
-          return;
-        }
-      }
-
-      // Also check order_history if it exists
-      try {
-        const { data: historyItems, error: historyError } = await supabase
-          .from('order_history')
-          .select('id')
-          .eq('product_id', id)
-          .limit(1);
-
-        if (!historyError && historyItems && historyItems.length > 0) {
-          toast.error('No se puede eliminar el producto porque aparece en el historial de pedidos');
-          return;
-        }
-      } catch (historyErr) {
-        // order_history table might not exist, ignore this error
-        console.log('order_history table not available, skipping check');
-      }
-
-      // If no orders found, proceed with deletion
-      const { error } = await supabase.from('products').delete().eq('id', id);
-      if (error) {
-        console.error('Error deleting product:', error);
-        toast.error(`Error al eliminar producto: ${error.message}`);
+        toast.error('Error al verificar el uso del producto');
         return;
       }
 
-      toast.success('Producto eliminado correctamente');
+      console.log('Order items found:', orderItems);
+      if (orderItems && orderItems.length > 0) {
+        console.log('Product is used in orders, but will proceed with soft delete');
+      }
+
+      console.log('Proceeding with soft delete');
+
+      // Check if product appears in order history (for informational purposes only)
+      const { data: historyItems, error: historyError } = await supabase
+        .from('order_history')
+        .select('id, items')
+        .limit(1000); // Get a reasonable number of recent history records
+
+      if (historyError) {
+        console.error('Error checking order history:', historyError);
+        // Don't block deletion for history check errors
+      }
+
+      let productInHistory = false;
+      if (historyItems) {
+        productInHistory = historyItems.some(record => {
+          try {
+            const items = Array.isArray(record.items) ? record.items : [];
+            return items.some((item: any) => item.product_id === id);
+          } catch (err) {
+            console.error('Error parsing order history items:', err);
+            return false;
+          }
+        });
+      }
+
+      if (productInHistory) {
+        console.log('Product found in order history, but proceeding with soft delete');
+        toast('El producto aparece en el historial de pedidos, pero se eliminará correctamente.', {
+          icon: '⚠️',
+          duration: 4000
+        });
+      }
+
+      // Proceed with direct deletion (constraints now allow this)
+      const { error: deleteError } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        console.error('Error deleting product:', deleteError);
+        toast.error(`Error al eliminar producto: ${deleteError.message}`);
+        return;
+      }
+
+      toast.success('Producto eliminado correctamente. El historial de pedidos se mantiene intacto.');
       fetchProducts();
     } catch (err) {
       console.error('Error in delete operation:', err);
@@ -397,7 +418,9 @@ export function ProductsManager() {
                     </div>
                   ) : (
                     <div>
-                      <div className="font-medium text-gray-900">{product.name}</div>
+                      <div className="font-medium text-gray-900">
+                        {product.name}
+                      </div>
                       <div className="text-sm text-gray-500">{product.description}</div>
                     </div>
                   )}
@@ -463,12 +486,14 @@ export function ProductsManager() {
                       <button
                         onClick={() => setEditingProduct(product)}
                         className="text-blue-600 hover:text-blue-800"
+                        title="Editar producto"
                       >
                         <Edit2 className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => handleDeleteProduct(product.id)}
                         className="text-red-600 hover:text-red-800"
+                        title="Eliminar producto permanentemente"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>

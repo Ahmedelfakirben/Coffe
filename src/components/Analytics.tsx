@@ -428,127 +428,134 @@ export function Analytics() {
         return acc;
       }, {});
 
-      // Create daily report content
-      const reportContent = `
-        <div style="font-family: monospace; max-width: 400px; margin: 0 auto; padding: 10px;">
-          <h1 style="text-align: center; margin-bottom: 10px; font-size: 18px;">REPORTE DIARIO</h1>
-          <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
+      // Create Excel workbook
+      const wb = XLSX.utils.book_new();
 
-          <div style="margin-bottom: 10px;">
-            <strong>Fecha:</strong> ${today.toLocaleDateString('es-ES')}
-          </div>
+      // Company Header Sheet
+      const headerData = [
+        ['🏪 COFFEE SHOP MANAGEMENT SYSTEM'],
+        ['📊 REPORTE DIARIO DE OPERACIONES'],
+        [''],
+        ['📅 FECHA DEL REPORTE:', today.toLocaleDateString('es-ES', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })],
+        ['⏰ HORA DE GENERACIÓN:', today.toLocaleTimeString('es-ES')],
+        ['👤 GENERADO POR:', profile?.full_name || 'Sistema'],
+        [''],
+        ['═'.repeat(50)],
+        ['📈 RESUMEN EJECUTIVO'],
+        ['═'.repeat(50)]
+      ];
 
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
+      wsHeader['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+        { s: { r: 8, c: 0 }, e: { r: 8, c: 3 } },
+        { s: { r: 9, c: 0 }, e: { r: 9, c: 3 } }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsHeader, 'Portada');
 
-          <div style="margin-bottom: 10px;">
-            <strong>RESUMEN DEL DÍA</strong>
-          </div>
+      // Summary Sheet
+      const summaryData = [
+        ['📊 RESUMEN FINANCIERO DIARIO'],
+        [''],
+        ['INDICADOR', 'VALOR', 'DETALLE'],
+        ['💰 Ventas Totales', `$${totalSales.toFixed(2)}`, `${(orders || []).length} pedidos completados`],
+        ['💸 Gastos Totales', `$${totalExpenses.toFixed(2)}`, `${(expenses || []).length} gastos registrados`],
+        ['💵 Beneficio Neto', `$${profit.toFixed(2)}`, `${((profit / totalSales) * 100 || 0).toFixed(2)}% margen`],
+        ['📦 Productos Vendidos', orders?.reduce((sum, order) =>
+          sum + (order.order_items?.reduce((itemSum: number, item: any) => itemSum + item.quantity, 0) || 0), 0) || 0, 'unidades'],
+        ['👥 Empleados Activos', Object.keys(employeeSessions).length, 'con sesiones de caja'],
+        ['🔄 Sesiones de Caja', (sessions || []).length, 'aperturas registradas']
+      ];
 
-          <div style="margin-bottom: 5px;">
-            <strong>Total Ventas:</strong> $${totalSales.toFixed(2)}
-          </div>
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      wsSummary['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
 
-          <div style="margin-bottom: 5px;">
-            <strong>Total Gastos:</strong> $${totalExpenses.toFixed(2)}
-          </div>
+      // Employee Sessions Sheet
+      if (Object.keys(employeeSessions).length > 0) {
+        const employeeData = [
+          ['👥 SESIONES POR EMPLEADO'],
+          [''],
+          ['EMPLEADO', 'SESIONES', 'APERTURA PRIMERA', 'CIERRE ÚLTIMO', 'MONTO INICIAL', 'MONTO FINAL', 'DIFERENCIA'],
+          ...Object.values(employeeSessions).map((emp: any) => [
+            emp.employee_name,
+            emp.sessions.length,
+            new Date(emp.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+            emp.lastClose ? new Date(emp.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Pendiente',
+            `$${emp.totalOpening.toFixed(2)}`,
+            `$${emp.totalClosing.toFixed(2)}`,
+            `$${(emp.totalClosing - emp.totalOpening).toFixed(2)}`
+          ])
+        ];
 
-          <div style="margin-bottom: 5px;">
-            <strong>Beneficio Neto:</strong> $${profit.toFixed(2)}
-          </div>
-
-          <div style="margin-bottom: 10px;">
-            <strong>Pedidos Completados:</strong> ${(orders || []).length}
-          </div>
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 10px;">
-            <strong>SESIONES POR EMPLEADO</strong>
-          </div>
-
-          ${Object.values(employeeSessions).map((emp: any) => `
-            <div style="margin-bottom: 12px; border-bottom: 1px dashed #ccc; padding-bottom: 8px;">
-              <div><strong>${emp.employee_name}</strong></div>
-              <div style="font-size: 12px; margin-top: 3px;">
-                Primera apertura: ${new Date(emp.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-              <div style="font-size: 12px;">
-                Último cierre: ${emp.lastClose ? new Date(emp.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Sin cerrar'}
-              </div>
-              <div style="font-size: 12px;">
-                Total inicial: $${emp.totalOpening.toFixed(2)} | Total final: $${emp.totalClosing.toFixed(2)}
-              </div>
-              <div style="font-size: 12px;">
-                Resultado: $${(emp.totalClosing - emp.totalOpening).toFixed(2)} | Sesiones: ${emp.sessions.length}
-              </div>
-            </div>
-          `).join('')}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 10px;">
-            <strong>DESGLOSE DE PEDIDOS</strong>
-          </div>
-
-          ${(orders || []).map(order => `
-            <div style="margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
-              <div><strong>Pedido #${order.id.slice(-8)}</strong></div>
-              <div style="font-size: 12px;">Empleado: ${(order.employee_profiles as any)?.full_name || 'N/A'}</div>
-              <div style="font-size: 12px;">Hora: ${new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
-              <div style="font-size: 12px;">Total: $${order.total.toFixed(2)}</div>
-              <div style="font-size: 12px; margin-top: 3px;">
-                ${order.order_items?.map((item: any) => `${item.quantity}x ${item.products?.[0]?.name || 'Producto'}`).join(', ')}
-              </div>
-            </div>
-          `).join('')}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 10px;">
-            <strong>GASTOS DEL DÍA</strong>
-          </div>
-
-          ${expenses?.map(expense => `
-            <div style="margin-bottom: 5px; font-size: 12px;">
-              ${new Date(expense.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - ${expense.description}: $${expense.amount.toFixed(2)}
-            </div>
-          `).join('') || '<div style="font-size: 12px;">No hay gastos registrados hoy</div>'}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="text-align: center; margin-top: 20px; font-size: 12px;">
-            Generado el ${new Date().toLocaleString('es-ES')}
-          </div>
-        </div>
-      `;
-
-      // Print directly without opening new window
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Reporte Diario</title>
-              <style>
-                @media print {
-                  body { margin: 0; }
-                  @page { size: auto; margin: 5mm; }
-                }
-              </style>
-            </head>
-            <body>
-              ${reportContent}
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        // Close window after printing
-        printWindow.onafterprint = () => printWindow.close();
+        const wsEmployees = XLSX.utils.aoa_to_sheet(employeeData);
+        wsEmployees['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsEmployees, 'Empleados');
       }
 
-      toast.success('Reporte diario generado', { id: 'daily-report' });
+      // Orders Detail Sheet
+      if (orders && orders.length > 0) {
+        const ordersData = [
+          ['📋 DESGLOSE DETALLADO DE PEDIDOS'],
+          [''],
+          ['HORA', 'PEDIDO', 'EMPLEADO', 'PRODUCTOS', 'TOTAL'],
+          ...orders.map(order => [
+            new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+            `#${order.id.slice(-8)}`,
+            (order.employee_profiles as any)?.full_name || 'N/A',
+            order.order_items?.map((item: any) =>
+              `${item.quantity}x ${item.products?.[0]?.name || 'Producto'}`
+            ).join(', ') || 'Sin productos',
+            `$${order.total.toFixed(2)}`
+          ])
+        ];
+
+        const wsOrders = XLSX.utils.aoa_to_sheet(ordersData);
+        wsOrders['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsOrders, 'Pedidos');
+      }
+
+      // Expenses Detail Sheet
+      if (expenses && expenses.length > 0) {
+        const expensesData = [
+          ['💸 DESGLOSE DETALLADO DE GASTOS'],
+          [''],
+          ['HORA', 'DESCRIPCIÓN', 'CATEGORÍA', 'MONTO'],
+          ...expenses.map(expense => [
+            new Date(expense.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+            expense.description,
+            expense.category,
+            `$${expense.amount.toFixed(2)}`
+          ])
+        ];
+
+        const wsExpenses = XLSX.utils.aoa_to_sheet(expensesData);
+        wsExpenses['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsExpenses, 'Gastos');
+      }
+
+      // Generate filename with timestamp
+      const timestamp = today.toISOString().split('T')[0];
+      const filename = `Reporte_Diario_CoffeeShop_${timestamp}.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      toast.success('Reporte diario generado exitosamente', { id: 'daily-report' });
     } catch (error) {
       console.error('Error generating daily report:', error);
       toast.error('Error al generar el reporte diario', { id: 'daily-report' });
@@ -624,109 +631,126 @@ export function Analytics() {
         return acc;
       }, {});
 
-      // Create weekly report content
-      const reportContent = `
-        <div style="font-family: monospace; max-width: 400px; margin: 0 auto; padding: 10px;">
-          <h1 style="text-align: center; margin-bottom: 10px; font-size: 18px;">REPORTE SEMANAL</h1>
-          <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
+      // Create Excel workbook
+      const wb = XLSX.utils.book_new();
 
-          <div style="margin-bottom: 10px;">
-            <strong>Semana:</strong> ${weekStart.toLocaleDateString('es-ES')} - ${weekEnd.toLocaleDateString('es-ES')}
-          </div>
+      // Company Header Sheet
+      const headerData = [
+        ['🏪 COFFEE SHOP MANAGEMENT SYSTEM'],
+        ['📊 REPORTE SEMANAL DE OPERACIONES'],
+        [''],
+        ['📅 PERIODO DEL REPORTE:', `${weekStart.toLocaleDateString('es-ES')} - ${weekEnd.toLocaleDateString('es-ES')}`],
+        ['📊 SEMANA DEL AÑO:', `Semana ${Math.ceil((currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))}`],
+        ['⏰ HORA DE GENERACIÓN:', currentDate.toLocaleTimeString('es-ES')],
+        ['👤 GENERADO POR:', profile?.full_name || 'Sistema'],
+        [''],
+        ['═'.repeat(60)],
+        ['📈 RESUMEN EJECUTIVO SEMANAL'],
+        ['═'.repeat(60)]
+      ];
 
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
+      wsHeader['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+        { s: { r: 9, c: 0 }, e: { r: 9, c: 4 } },
+        { s: { r: 10, c: 0 }, e: { r: 10, c: 4 } }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsHeader, 'Portada');
 
-          <div style="margin-bottom: 10px;">
-            <strong>RESUMEN SEMANAL</strong>
-          </div>
+      // Summary Sheet
+      const summaryData = [
+        ['📊 RESUMEN FINANCIERO SEMANAL'],
+        [''],
+        ['INDICADOR', 'VALOR', 'DETALLE', 'COMPARATIVA'],
+        ['💰 Ventas Totales', `$${summary.sales.toFixed(2)}`, 'Ingresos brutos de la semana', '📈'],
+        ['💸 Gastos Totales', `$${summary.expenses.toFixed(2)}`, `${expenses?.length || 0} gastos registrados`, '📉'],
+        ['💵 Beneficio Neto', `$${summary.profit.toFixed(2)}`, 'Ventas - Gastos', '🎯'],
+        ['📊 Margen de Beneficio', `${summary.profit_margin.toFixed(2)}%`, 'Eficiencia operativa', '⭐'],
+        ['👥 Empleados Activos', Object.keys(dailySessions).length, 'Con actividad esta semana', '👥'],
+        ['🔄 Sesiones de Caja', Object.values(dailySessions).reduce((sum: number, emp: any) => sum + emp.sessions.length, 0), 'Total aperturas de caja', '💼'],
+        ['📦 Promedio Diario', `$${(summary.sales / 7).toFixed(2)}`, 'Ventas promedio por día', '📅']
+      ];
 
-          <div style="margin-bottom: 5px;">
-            <strong>Total Ventas:</strong> $${summary.sales.toFixed(2)}
-          </div>
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      wsSummary['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
 
-          <div style="margin-bottom: 5px;">
-            <strong>Total Gastos:</strong> $${summary.expenses.toFixed(2)}
-          </div>
+      // Daily Breakdown Sheet
+      if (Object.keys(dailySessions).length > 0) {
+        const dailyBreakdown = [
+          ['📅 RESUMEN DIARIO POR EMPLEADO'],
+          [''],
+          ['FECHA', 'EMPLEADO', 'SESIONES', 'APERTURA', 'CIERRE', 'INGRESOS', 'EGRESOS', 'BALANCE']
+        ];
 
-          <div style="margin-bottom: 5px;">
-            <strong>Beneficio Neto:</strong> $${summary.profit.toFixed(2)}
-          </div>
+        // Group by date and calculate daily totals
+        const dailyTotals: any = {};
+        Object.values(dailySessions).forEach((emp: any) => {
+          const date = new Date(emp.date).toLocaleDateString('es-ES');
+          if (!dailyTotals[date]) {
+            dailyTotals[date] = { sales: 0, expenses: 0, sessions: 0 };
+          }
+          dailyTotals[date].sessions += emp.sessions.length;
+        });
 
-          <div style="margin-bottom: 10px;">
-            <strong>Margen de Beneficio:</strong> ${summary.profit_margin.toFixed(1)}%
-          </div>
+        Object.entries(dailySessions).forEach(([key, emp]: [string, any]) => {
+          const date = new Date(emp.date).toLocaleDateString('es-ES');
+          dailyBreakdown.push([
+            date,
+            emp.employee_name,
+            emp.sessions.length,
+            new Date(emp.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+            emp.lastClose ? new Date(emp.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Pendiente',
+            `$${emp.totalOpening.toFixed(2)}`,
+            `$${emp.totalClosing.toFixed(2)}`,
+            `$${(emp.totalClosing - emp.totalOpening).toFixed(2)}`
+          ]);
+        });
 
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 10px;">
-            <strong>RESUMEN DIARIO POR EMPLEADO</strong>
-          </div>
-
-          ${Object.values(dailySessions).map((day: any) => `
-            <div style="margin-bottom: 12px; border-bottom: 1px dashed #ccc; padding-bottom: 8px;">
-              <div><strong>${new Date(day.date).toLocaleDateString('es-ES')} - ${day.employee_name}</strong></div>
-              <div style="font-size: 12px; margin-top: 3px;">
-                Primera apertura: ${new Date(day.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-              <div style="font-size: 12px;">
-                Último cierre: ${day.lastClose ? new Date(day.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Sin cerrar'}
-              </div>
-              <div style="font-size: 12px;">
-                Total inicial: $${day.totalOpening.toFixed(2)} | Total final: $${day.totalClosing.toFixed(2)}
-              </div>
-              <div style="font-size: 12px;">
-                Resultado día: $${(day.totalClosing - day.totalOpening).toFixed(2)} | Sesiones: ${day.sessions.length}
-              </div>
-            </div>
-          `).join('')}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 10px;">
-            <strong>DESGLOSE DE GASTOS</strong>
-          </div>
-
-          ${expenses?.map(expense => `
-            <div style="margin-bottom: 5px; font-size: 12px;">
-              ${new Date(expense.created_at).toLocaleDateString('es-ES')} - ${expense.description}: $${expense.amount.toFixed(2)}
-            </div>
-          `).join('') || '<div style="font-size: 12px;">No hay gastos registrados esta semana</div>'}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="text-align: center; margin-top: 20px; font-size: 12px;">
-            Generado el ${new Date().toLocaleString('es-ES')}
-          </div>
-        </div>
-      `;
-
-      // Print directly without opening new window
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Reporte Semanal</title>
-              <style>
-                @media print {
-                  body { margin: 0; }
-                  @page { size: auto; margin: 5mm; }
-                }
-              </style>
-            </head>
-            <body>
-              ${reportContent}
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        // Close window after printing
-        printWindow.onafterprint = () => printWindow.close();
+        const wsDaily = XLSX.utils.aoa_to_sheet(dailyBreakdown);
+        wsDaily['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsDaily, 'Desglose_Diario');
       }
 
-      toast.success('Reporte semanal generado', { id: 'weekly-report' });
+      // Expenses Detail Sheet
+      if (expenses && expenses.length > 0) {
+        const expensesData = [
+          ['💸 DESGLOSE DETALLADO DE GASTOS SEMANALES'],
+          [''],
+          ['FECHA', 'DESCRIPCIÓN', 'CATEGORÍA', 'MONTO', 'DÍA DE LA SEMANA']
+        ];
+
+        expenses.forEach(expense => {
+          const expenseDate = new Date(expense.created_at);
+          expensesData.push([
+            expenseDate.toLocaleDateString('es-ES'),
+            expense.description,
+            expense.category,
+            `$${expense.amount.toFixed(2)}`,
+            expenseDate.toLocaleDateString('es-ES', { weekday: 'long' })
+          ]);
+        });
+
+        const wsExpenses = XLSX.utils.aoa_to_sheet(expensesData);
+        wsExpenses['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsExpenses, 'Gastos_Detallados');
+      }
+
+      // Generate filename with timestamp
+      const weekNumber = Math.ceil((currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+      const filename = `Reporte_Semanal_CoffeeShop_Semana_${weekNumber}_${currentDate.getFullYear()}.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      toast.success('Reporte semanal generado exitosamente', { id: 'weekly-report' });
     } catch (error) {
       console.error('Error generating weekly report:', error);
       toast.error('Error al generar el reporte semanal', { id: 'weekly-report' });
@@ -798,109 +822,154 @@ export function Analytics() {
         return acc;
       }, {});
 
-      // Create monthly report content
-      const reportContent = `
-        <div style="font-family: monospace; max-width: 400px; margin: 0 auto; padding: 10px;">
-          <h1 style="text-align: center; margin-bottom: 10px; font-size: 18px;">REPORTE MENSUAL DE CAJA</h1>
-          <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
+      // Create Excel workbook
+      const wb = XLSX.utils.book_new();
 
-          <div style="margin-bottom: 10px;">
-            <strong>Mes:</strong> ${currentDate.toLocaleDateString('es-ES', { year: 'numeric', month: 'long' })}
-          </div>
+      // Company Header Sheet
+      const headerData = [
+        ['🏪 COFFEE SHOP MANAGEMENT SYSTEM'],
+        ['📊 REPORTE MENSUAL DE OPERACIONES'],
+        [''],
+        ['📅 PERIODO DEL REPORTE:', `${monthStart.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`],
+        ['📊 MES DEL AÑO:', currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })],
+        ['⏰ HORA DE GENERACIÓN:', currentDate.toLocaleTimeString('es-ES')],
+        ['👤 GENERADO POR:', profile?.full_name || 'Sistema'],
+        [''],
+        ['═'.repeat(60)],
+        ['📈 RESUMEN EJECUTIVO MENSUAL'],
+        ['═'.repeat(60)]
+      ];
 
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
+      wsHeader['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+        { s: { r: 9, c: 0 }, e: { r: 9, c: 4 } },
+        { s: { r: 10, c: 0 }, e: { r: 10, c: 4 } }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsHeader, 'Portada');
 
-          <div style="margin-bottom: 10px;">
-            <strong>RESUMEN MENSUAL</strong>
-          </div>
+      // Summary Sheet
+      const summaryData = [
+        ['📊 RESUMEN FINANCIERO MENSUAL'],
+        [''],
+        ['INDICADOR', 'VALOR', 'DETALLE', 'TENDENCIA'],
+        ['💰 Ventas Totales', `$${monthlySummary.sales.toFixed(2)}`, 'Ingresos brutos del mes', '📈'],
+        ['💸 Gastos Totales', `$${monthlySummary.expenses.toFixed(2)}`, `${expenses?.length || 0} gastos registrados`, '📉'],
+        ['💵 Beneficio Neto', `$${monthlySummary.profit.toFixed(2)}`, 'Ventas - Gastos', '🎯'],
+        ['📊 Margen de Beneficio', `${monthlySummary.profit_margin.toFixed(2)}%`, 'Eficiencia operativa mensual', '⭐'],
+        ['📅 Días de Operación', new Set(Object.values(dailySessions).map((emp: any) => emp.date)).size, 'Días con actividad', '🗓️'],
+        ['👥 Empleados Activos', Object.keys(dailySessions).length, 'Con sesiones este mes', '👥'],
+        ['🔄 Total Sesiones', Object.values(dailySessions).reduce((sum: number, emp: any) => sum + emp.sessions.length, 0), 'Aperturas de caja', '💼'],
+        ['📦 Promedio Diario', `$${(monthlySummary.sales / new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()).toFixed(2)}`, 'Ventas promedio por día', '📅']
+      ];
 
-          <div style="margin-bottom: 5px;">
-            <strong>Total Ventas:</strong> $${monthlySummary.sales.toFixed(2)}
-          </div>
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      wsSummary['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
 
-          <div style="margin-bottom: 5px;">
-            <strong>Total Gastos:</strong> $${monthlySummary.expenses.toFixed(2)}
-          </div>
+      // Daily Performance Sheet
+      if (Object.keys(dailySessions).length > 0) {
+        const performanceData = [
+          ['📅 RENDIMIENTO DIARIO POR EMPLEADO'],
+          [''],
+          ['FECHA', 'EMPLEADO', 'SESIONES', 'APERTURA', 'CIERRE', 'INGRESOS', 'EGRESOS', 'BALANCE DIARIO']
+        ];
 
-          <div style="margin-bottom: 5px;">
-            <strong>Beneficio Neto:</strong> $${monthlySummary.profit.toFixed(2)}
-          </div>
+        // Group by date for daily totals
+        const dailyTotals: any = {};
+        Object.values(dailySessions).forEach((emp: any) => {
+          const date = new Date(emp.date).toLocaleDateString('es-ES');
+          if (!dailyTotals[date]) {
+            dailyTotals[date] = { totalOpening: 0, totalClosing: 0, employees: 0 };
+          }
+          dailyTotals[date].totalOpening += emp.totalOpening;
+          dailyTotals[date].totalClosing += emp.totalClosing;
+          dailyTotals[date].employees += 1;
+        });
 
-          <div style="margin-bottom: 10px;">
-            <strong>Margen de Beneficio:</strong> ${monthlySummary.profit_margin.toFixed(1)}%
-          </div>
+        Object.entries(dailySessions).forEach(([key, emp]: [string, any]) => {
+          const date = new Date(emp.date).toLocaleDateString('es-ES');
+          performanceData.push([
+            date,
+            emp.employee_name,
+            emp.sessions.length,
+            new Date(emp.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+            emp.lastClose ? new Date(emp.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Pendiente',
+            `$${emp.totalOpening.toFixed(2)}`,
+            `$${emp.totalClosing.toFixed(2)}`,
+            `$${(emp.totalClosing - emp.totalOpening).toFixed(2)}`
+          ]);
+        });
 
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+        // Add daily totals row
+        performanceData.push([''], ['📊 TOTALES DIARIOS']);
+        Object.entries(dailyTotals).forEach(([date, totals]: [string, any]) => {
+          performanceData.push([
+            date,
+            `${totals.employees} empleados`,
+            '-',
+            '-',
+            '-',
+            `$${totals.totalOpening.toFixed(2)}`,
+            `$${totals.totalClosing.toFixed(2)}`,
+            `$${(totals.totalClosing - totals.totalOpening).toFixed(2)}`
+          ]);
+        });
 
-          <div style="margin-bottom: 10px;">
-            <strong>RESUMEN DIARIO POR EMPLEADO</strong>
-          </div>
-
-          ${Object.values(dailySessions).map((day: any) => `
-            <div style="margin-bottom: 12px; border-bottom: 1px dashed #ccc; padding-bottom: 8px;">
-              <div><strong>${new Date(day.date).toLocaleDateString('es-ES')} - ${(day.employee_profiles as any)?.full_name || day.employee_name || 'N/A'}</strong></div>
-              <div style="font-size: 12px; margin-top: 3px;">
-                Primera apertura: ${new Date(day.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-              <div style="font-size: 12px;">
-                Último cierre: ${day.lastClose ? new Date(day.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Sin cerrar'}
-              </div>
-              <div style="font-size: 12px;">
-                Total inicial: $${day.totalOpening.toFixed(2)} | Total final: $${day.totalClosing.toFixed(2)}
-              </div>
-              <div style="font-size: 12px;">
-                Resultado día: $${(day.totalClosing - day.totalOpening).toFixed(2)} | Sesiones: ${day.sessions.length}
-              </div>
-            </div>
-          `).join('')}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 10px;">
-            <strong>DESGLOSE DE GASTOS</strong>
-          </div>
-
-          ${expenses?.map(expense => `
-            <div style="margin-bottom: 5px; font-size: 12px;">
-              ${new Date(expense.created_at).toLocaleDateString('es-ES')} - ${expense.description}: $${expense.amount.toFixed(2)}
-            </div>
-          `).join('') || '<div style="font-size: 12px;">No hay gastos registrados este mes</div>'}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="text-align: center; margin-top: 20px; font-size: 12px;">
-            Generado el ${new Date().toLocaleString('es-ES')}
-          </div>
-        </div>
-      `;
-
-      // Print directly without opening new window
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Reporte Mensual de Caja</title>
-              <style>
-                @media print {
-                  body { margin: 0; }
-                  @page { size: auto; margin: 5mm; }
-                }
-              </style>
-            </head>
-            <body>
-              ${reportContent}
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        // Close window after printing
-        printWindow.onafterprint = () => printWindow.close();
+        const wsPerformance = XLSX.utils.aoa_to_sheet(performanceData);
+        wsPerformance['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsPerformance, 'Rendimiento_Diario');
       }
 
-      toast.success('Reporte mensual generado', { id: 'monthly-report' });
+      // Monthly Expenses Breakdown
+      if (expenses && expenses.length > 0) {
+        // Group expenses by category
+        const expensesByCategory: any = {};
+        expenses.forEach(expense => {
+          if (!expensesByCategory[expense.category]) {
+            expensesByCategory[expense.category] = { total: 0, count: 0, items: [] };
+          }
+          expensesByCategory[expense.category].total += expense.amount;
+          expensesByCategory[expense.category].count += 1;
+          expensesByCategory[expense.category].items.push(expense);
+        });
+
+        const expensesData = [
+          ['💸 ANÁLISIS DE GASTOS POR CATEGORÍA'],
+          [''],
+          ['CATEGORÍA', 'TOTAL', 'NÚMERO DE GASTOS', '% DEL TOTAL']
+        ];
+
+        const totalExpensesAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+        Object.entries(expensesByCategory).forEach(([category, data]: [string, any]) => {
+          expensesData.push([
+            category,
+            `$${data.total.toFixed(2)}`,
+            data.count,
+            `${((data.total / totalExpensesAmount) * 100).toFixed(2)}%`
+          ]);
+        });
+
+        const wsExpenses = XLSX.utils.aoa_to_sheet(expensesData);
+        wsExpenses['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsExpenses, 'Gastos_Categoria');
+      }
+
+      // Generate filename with month and year
+      const monthName = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      const filename = `Reporte_Mensual_CoffeeShop_${monthName.replace(/ /g, '_')}.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      toast.success('Reporte mensual generado exitosamente', { id: 'monthly-report' });
     } catch (error) {
       console.error('Error generating monthly report:', error);
       toast.error('Error al generar el reporte mensual', { id: 'monthly-report' });
