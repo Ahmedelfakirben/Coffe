@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone } from 'lucide-react';
 
 interface Order {
   id: string;
@@ -10,6 +10,7 @@ interface Order {
   payment_method: string;
   created_at: string;
   employee_id: string;
+  order_number?: number;
   employee_profiles?: {
     full_name: string;
     role: string;
@@ -24,6 +25,7 @@ interface OrderHistory {
   total: number;
   created_at: string;
   employee_id?: string;
+  order_number?: number;
   employee_profiles?: {
     full_name: string;
   };
@@ -60,7 +62,8 @@ export function OrdersDashboard() {
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'current' | 'history' | 'cash'>('current');
-  const [selectedDateRange, setSelectedDateRange] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string>('all');
   const [employees, setEmployees] = useState<{id:string; full_name:string}[]>([]);
   const [showLatestOnly, setShowLatestOnly] = useState<boolean>(true);
@@ -91,7 +94,7 @@ export function OrdersDashboard() {
       .channel('orders-changes')
       .on(
         'postgres_changes',
-        { 
+        {
           event: '*',
           schema: 'public',
           table: 'orders'
@@ -106,7 +109,7 @@ export function OrdersDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedDateRange, viewMode]);
+  }, [startDate, endDate, viewMode]);
 
   // Redirect cashier users to current view if they somehow access history
   useEffect(() => {
@@ -145,25 +148,37 @@ export function OrdersDashboard() {
         `)
         .order('created_at', { ascending: false });
 
-      // Aplicar filtro de fecha
-      const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const startOfWeek = new Date(now.setDate(now.getDate() - 7)).toISOString();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
-      if (selectedDateRange === 'today') {
-        query = query.gte('created_at', startOfDay);
-      } else if (selectedDateRange === 'week') {
-        query = query.gte('created_at', startOfWeek);
-      } else if (selectedDateRange === 'month') {
-        query = query.gte('created_at', startOfMonth);
+      // Aplicar filtro de fecha personalizado
+      if (startDate) {
+        query = query.gte('created_at', startDate);
+      }
+      if (endDate) {
+        // Add one day to end date to include the entire end date
+        const endDateTime = new Date(endDate);
+        endDateTime.setDate(endDateTime.getDate() + 1);
+        query = query.lt('created_at', endDateTime.toISOString());
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
       if (data) {
-        setOrderHistory(data);
+        // Get order numbers for each history item
+        const historyWithOrderNumbers = await Promise.all(
+          data.map(async (history) => {
+            const { data: orderData } = await supabase
+              .from('orders')
+              .select('order_number')
+              .eq('id', history.order_id)
+              .single();
+
+            return {
+              ...history,
+              order_number: orderData?.order_number
+            };
+          })
+        );
+        setOrderHistory(historyWithOrderNumbers);
       }
     } catch (err) {
       console.error('Error al obtener historial:', err);
@@ -290,6 +305,13 @@ export function OrdersDashboard() {
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+    // If completing an order, show payment method modal first
+    if (newStatus === 'completed') {
+      setOrderToComplete(orderId);
+      setShowPaymentModal(true);
+      return;
+    }
+
     const { error } = await supabase
       .from('orders')
       .update({ status: newStatus })
@@ -299,6 +321,104 @@ export function OrdersDashboard() {
       alert('Error al actualizar el estado');
       return;
     }
+    fetchOrders();
+  };
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [orderToComplete, setOrderToComplete] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+
+  const completeOrderWithPayment = async () => {
+    if (!orderToComplete || !selectedPaymentMethod) return;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        status: 'completed',
+        payment_method: selectedPaymentMethod
+      })
+      .eq('id', orderToComplete);
+
+    if (error) {
+      console.error('Error updating order:', error);
+      alert('Error al completar la orden: ' + error.message);
+      return;
+    }
+
+    // Print ticket automatically
+    const order = orders.find(o => o.id === orderToComplete);
+    if (order) {
+      const ticketContent = `
+        <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
+          <h2 style="text-align: center; margin-bottom: 10px;">TICKET DE COMPRA</h2>
+          <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>Orden #${order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8)}</strong>
+          </div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>Fecha:</strong> ${new Date(order.created_at).toLocaleString('es-ES')}
+          </div>
+
+          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>PRODUCTOS</strong>
+          </div>
+
+          ${order.order_items?.map(item => `
+            <div style="margin-bottom: 5px;">
+              ${item.quantity}x ${item.products?.name}${item.product_sizes ? ` (${item.product_sizes.size_name})` : ''}
+            </div>
+          `).join('')}
+
+          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+          <div style="margin-bottom: 5px;">
+            <strong>Total: $${order.total.toFixed(2)}</strong>
+          </div>
+
+          <div style="margin-bottom: 5px;">
+            <strong>Método de Pago: ${selectedPaymentMethod === 'cash' ? 'Efectivo' : selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital'}</strong>
+          </div>
+
+          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+          <div style="text-align: center; margin-top: 20px; font-size: 12px;">
+            ¡Gracias por su compra!
+          </div>
+        </div>
+      `;
+
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Ticket de Compra</title>
+              <style>
+                @media print {
+                  body { margin: 0; }
+                  @page { size: auto; margin: 5mm; }
+                }
+              </style>
+            </head>
+            <body>
+              ${ticketContent}
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.onafterprint = () => printWindow.close();
+      }
+    }
+
+    setShowPaymentModal(false);
+    setOrderToComplete(null);
+    setSelectedPaymentMethod('');
     fetchOrders();
   };
 
@@ -431,18 +551,6 @@ export function OrdersDashboard() {
               Historial
             </button>
           )}
-          {profile?.role === 'admin' && (
-            <button
-              onClick={() => setViewMode('cash')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                viewMode === 'cash'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Caja
-            </button>
-          )}
         </div>
 
         {viewMode === 'current' ? (
@@ -472,59 +580,67 @@ export function OrdersDashboard() {
             ))}
           </div>
         ) : viewMode === 'history' ? (
-          <div className="flex gap-2 flex-wrap">
-            {['today', 'week', 'month', 'all'].map((range) => (
+          <div className="flex gap-4 flex-wrap items-center mb-6">
+            <div className="flex gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Desde:</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Hasta:</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              </div>
               <button
-                key={range}
-                onClick={() => {
-                  setSelectedDateRange(range as any);
-                  fetchOrderHistory();
-                }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  selectedDateRange === range
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
+                onClick={fetchOrderHistory}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
               >
-                {range === 'today' && 'Hoy'}
-                {range === 'week' && 'Esta Semana'}
-                {range === 'month' && 'Este Mes'}
-                {range === 'all' && 'Todo'}
+                Filtrar
               </button>
-            ))}
+            </div>
+
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
-              className="px-4 py-2 rounded-lg border"
+              className="px-4 py-2 rounded-lg border border-gray-200 bg-white"
             >
               <option value="all">Todos los usuarios</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>{emp.full_name}</option>
               ))}
             </select>
-            <button
-              onClick={printReport}
-              className="px-4 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700"
-            >
-              Imprimir resultados
-            </button>
-            <label className="flex items-center gap-2 text-sm ml-auto">
+
+            <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={showLatestOnly}
                 onChange={(e) => setShowLatestOnly(e.target.checked)}
+                className="rounded border-gray-300"
               />
               Mostrar últimas por orden
             </label>
-            <div className="flex gap-2 items-center w-full mt-2">
-              <div className="px-3 py-2 rounded-lg border bg-white">
-                <span className="font-medium">Hoy:</span> ${totals.day.toFixed(2)}
+
+            <div className="flex gap-2 items-center ml-auto">
+              <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
+                <span className="font-medium text-gray-700">Hoy:</span>
+                <span className="font-bold text-amber-600 ml-1">${totals.day.toFixed(2)}</span>
               </div>
-              <div className="px-3 py-2 rounded-lg border bg-white">
-                <span className="font-medium">Semana:</span> ${totals.week.toFixed(2)}
+              <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
+                <span className="font-medium text-gray-700">Semana:</span>
+                <span className="font-bold text-amber-600 ml-1">${totals.week.toFixed(2)}</span>
               </div>
-              <div className="px-3 py-2 rounded-lg border bg-white">
-                <span className="font-medium">Mes:</span> ${totals.month.toFixed(2)}
+              <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
+                <span className="font-medium text-gray-700">Mes:</span>
+                <span className="font-bold text-amber-600 ml-1">${totals.month.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -643,51 +759,62 @@ export function OrdersDashboard() {
             <p className="text-gray-500 text-lg">No hay historial de órdenes para mostrar</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {historyToRender.map(history => (
-              <div
-                key={history.id}
-                className="bg-white rounded-xl shadow-sm border-2 p-4"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      {getStatusIcon(history.status)}
-                      <span className="font-semibold">
-                        Orden #{history.order_id}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      {new Date(history.created_at).toLocaleString('es-ES')}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-amber-600">
-                      ${history.total.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-t pt-3">
-                  <p className="text-sm">
-                    <span className="font-medium">Acción:</span>{' '}
-                    {history.action === 'created' && 'Creada'}
-                    {history.action === 'updated' && 'Actualizada'}
-                    {history.action === 'completed' && 'Completada'}
-                    {history.action === 'cancelled' && 'Cancelada'}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Estado:</span>{' '}
-                    {statusLabels[history.status as keyof typeof statusLabels]}
-                  </p>
-                  {history.employee_profiles && (
-                    <p className="text-xs text-gray-600 mt-2">
-                      Empleado: {history.employee_profiles.full_name}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Orden
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Fecha
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Estado
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Acción
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Empleado
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {historyToRender.map(history => (
+                    <tr key={history.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        #{history.order_number ? history.order_number.toString().padStart(3, '0') : history.order_id.slice(-8)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(history.created_at).toLocaleString('es-ES')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(history.status)}`}>
+                          {statusLabels[history.status as keyof typeof statusLabels]}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {history.action === 'created' && 'Creada'}
+                        {history.action === 'updated' && 'Actualizada'}
+                        {history.action === 'completed' && 'Completada'}
+                        {history.action === 'cancelled' && 'Cancelada'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600">
+                        ${history.total.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {history.employee_profiles?.full_name || 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       ) : (
@@ -739,6 +866,72 @@ export function OrdersDashboard() {
             ))}
           </div>
         )
+      )}
+
+      {/* Payment Method Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Seleccionar Método de Pago</h2>
+
+            <div className="grid grid-cols-1 gap-3 mb-6">
+              <button
+                onClick={() => {
+                  setSelectedPaymentMethod('cash');
+                  completeOrderWithPayment();
+                }}
+                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+              >
+                <Banknote className="w-6 h-6 text-green-600" />
+                <div className="text-left">
+                  <div className="font-medium text-gray-900">Efectivo</div>
+                  <div className="text-sm text-gray-600">Pago en efectivo</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedPaymentMethod('card');
+                  completeOrderWithPayment();
+                }}
+                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+              >
+                <CreditCard className="w-6 h-6 text-blue-600" />
+                <div className="text-left">
+                  <div className="font-medium text-gray-900">Tarjeta</div>
+                  <div className="text-sm text-gray-600">Pago con tarjeta</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedPaymentMethod('digital');
+                  completeOrderWithPayment();
+                }}
+                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+              >
+                <Smartphone className="w-6 h-6 text-purple-600" />
+                <div className="text-left">
+                  <div className="font-medium text-gray-900">Digital</div>
+                  <div className="text-sm text-gray-600">Pago digital</div>
+                </div>
+              </button>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setOrderToComplete(null);
+                  setSelectedPaymentMethod('');
+                }}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

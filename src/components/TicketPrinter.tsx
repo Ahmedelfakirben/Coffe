@@ -31,48 +31,123 @@ export function TicketPrinter({
 
   const printTicket = () => {
     const printContent = ticketRef.current?.innerHTML || '';
-    const printWindow = window.open('', '', 'height=600,width=800');
-    
+    const printWindow = window.open('', '', 'height=800,width=1000');
+
     if (printWindow) {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Ticket de Venta</title>
+            <title>Reporte de Caja</title>
             <style>
               body {
-                font-family: 'Courier New', monospace;
+                font-family: 'Arial', sans-serif;
                 margin: 0;
                 padding: 20px;
-                width: 80mm; /* Ancho estándar para tickets */
+                background: white;
               }
-              .ticket {
-                text-align: center;
-                font-size: 12px;
+              .report {
+                max-width: 210mm; /* A4 width */
+                margin: 0 auto;
+                padding: 20px;
+                background: white;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
               }
               .header {
-                margin-bottom: 10px;
+                text-align: center;
+                border-bottom: 2px solid #333;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
               }
-              .divider {
-                border-top: 1px dashed #000;
-                margin: 10px 0;
+              .header h1 {
+                color: #333;
+                margin: 0;
+                font-size: 28px;
               }
-              .item {
-                text-align: left;
+              .header p {
+                color: #666;
                 margin: 5px 0;
+                font-size: 14px;
               }
-              .total {
+              .info-section {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 30px;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 8px;
+              }
+              .info-item {
+                flex: 1;
+                text-align: center;
+              }
+              .info-item strong {
+                display: block;
+                font-size: 18px;
+                color: #333;
+                margin-bottom: 5px;
+              }
+              .info-item span {
+                color: #666;
+                font-size: 14px;
+              }
+              .table-container {
+                margin: 30px 0;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                overflow: hidden;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+              }
+              th, td {
+                padding: 12px 15px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+              }
+              th {
+                background: #f8f9fa;
                 font-weight: bold;
-                margin-top: 10px;
+                color: #333;
+              }
+              .total-row {
+                background: #e9ecef;
+                font-weight: bold;
+              }
+              .total-row td {
+                border-top: 2px solid #333;
               }
               .footer {
-                margin-top: 20px;
-                font-size: 10px;
+                margin-top: 40px;
+                text-align: center;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+                color: #666;
+                font-size: 12px;
+              }
+              .signature-section {
+                margin-top: 40px;
+                display: flex;
+                justify-content: space-between;
+              }
+              .signature-box {
+                width: 200px;
+                text-align: center;
+                border-top: 1px solid #333;
+                padding-top: 10px;
               }
               @media print {
                 body {
-                  width: 80mm;
+                  background: white !important;
+                  -webkit-print-color-adjust: exact;
+                }
+                .report {
+                  box-shadow: none;
                   margin: 0;
-                  padding: 0;
+                  padding: 15mm;
+                }
+                .no-print {
+                  display: none;
                 }
               }
             </style>
@@ -82,7 +157,7 @@ export function TicketPrinter({
           </body>
         </html>
       `);
-      
+
       printWindow.document.close();
       printWindow.focus();
       printWindow.print();
@@ -100,43 +175,87 @@ export function TicketPrinter({
   return (
     <div>
       <div ref={ticketRef} className="hidden">
-        <div className="ticket">
+        <div className="report">
           <div className="header">
-            <h2>Coffee Shop</h2>
-            <p>Sistema de Gestión</p>
-            <div className="divider"></div>
-            <p>Ticket #: {orderNumber}</p>
-            <p>Fecha: {orderDate.toLocaleDateString()}</p>
-            <p>Hora: {orderDate.toLocaleTimeString()}</p>
-            <p>Cajero: {cashierName}</p>
+            <h1>Coffee Shop</h1>
+            <p>Sistema de Gestión Integral</p>
+            <p>Reporte de Caja</p>
           </div>
 
-          <div className="divider"></div>
+          <div className="info-section">
+            <div className="info-item">
+              <strong>{orderNumber}</strong>
+              <span>Número de Reporte</span>
+            </div>
+            <div className="info-item">
+              <strong>{orderDate.toLocaleDateString('es-ES')}</strong>
+              <span>Fecha</span>
+            </div>
+            <div className="info-item">
+              <strong>{orderDate.toLocaleTimeString('es-ES')}</strong>
+              <span>Hora</span>
+            </div>
+            <div className="info-item">
+              <strong>{cashierName}</strong>
+              <span>Cajero</span>
+            </div>
+          </div>
 
-          <div className="items">
-            {items.map((item, index) => (
-              <div key={index} className="item">
-                <p>
-                  {item.quantity}x {item.name}
-                  {item.size && ` (${item.size})`}
-                </p>
-                <p>$ {(item.price * item.quantity).toFixed(2)}</p>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cantidad</th>
+                  <th>Producto</th>
+                  <th>Tamaño</th>
+                  <th>Precio Unit.</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => (
+                  <tr key={index}>
+                    <td>{item.quantity}</td>
+                    <td>{item.name}</td>
+                    <td>{item.size || '-'}</td>
+                    <td>${item.price.toFixed(2)}</td>
+                    <td>${(item.price * item.quantity).toFixed(2)}</td>
+                  </tr>
+                ))}
+                <tr className="total-row">
+                  <td colSpan={4} style={{ textAlign: 'right', fontWeight: 'bold' }}>TOTAL</td>
+                  <td style={{ fontWeight: 'bold', fontSize: '16px' }}>${total.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginTop: '30px', padding: '20px', background: '#f8f9fa', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <strong>Método de Pago:</strong> {paymentMethod}
               </div>
-            ))}
+              <div style={{ textAlign: 'right' }}>
+                <strong>Monto Total:</strong>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#28a745' }}>
+                  ${total.toFixed(2)}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="divider"></div>
-
-          <div className="total">
-            <p>Total: $ {total.toFixed(2)}</p>
-            <p>Método de Pago: {paymentMethod}</p>
+          <div className="signature-section">
+            <div className="signature-box">
+              <p>Firma del Cajero</p>
+            </div>
+            <div className="signature-box">
+              <p>Firma del Supervisor</p>
+            </div>
           </div>
-
-          <div className="divider"></div>
 
           <div className="footer">
-            <p>¡Gracias por su compra!</p>
-            <p>Vuelva pronto</p>
+            <p>Este documento es oficial y forma parte del registro contable de Coffee Shop</p>
+            <p>Generado el {new Date().toLocaleString('es-ES')}</p>
           </div>
         </div>
       </div>
@@ -144,10 +263,10 @@ export function TicketPrinter({
       {!hideButton && (
         <button
           onClick={printTicket}
-          className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
         >
           <Printer className="w-5 h-5" />
-          Imprimir Ticket
+          Imprimir Reporte
         </button>
       )}
     </div>

@@ -189,14 +189,16 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     }
     setClosingLoading(true);
     try {
+      // Obtener todas las sesiones abiertas del día actual
+      const today = new Date().toISOString().split('T')[0];
       const { data: sessions, error: fetchErr } = await supabase
         .from('cash_register_sessions')
-        .select('id, opened_at')
+        .select('id, opened_at, opening_amount')
         .eq('employee_id', user.id)
         .eq('status', 'open')
         .is('closed_at', null)
-        .order('opened_at', { ascending: false })
-        .limit(1);
+        .gte('opened_at', today)
+        .order('opened_at', { ascending: true });
       if (fetchErr) throw fetchErr;
 
       if (!sessions || sessions.length === 0) {
@@ -206,7 +208,13 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         return;
       }
 
-      const sessionId = sessions[0].id;
+      // Calcular el resultado del día: primera apertura - monto actual + todas las aperturas intermedias
+      const firstOpening = sessions[0].opening_amount;
+      const totalOpenings = sessions.reduce((sum, session) => sum + session.opening_amount, 0);
+      const dailyResult = amount - firstOpening; // Resultado = cierre final - primera apertura
+
+      // Cerrar todas las sesiones abiertas
+      const sessionIds = sessions.map(s => s.id);
       const { error: updateErr } = await supabase
         .from('cash_register_sessions')
         .update({
@@ -214,10 +222,133 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           closed_at: new Date().toISOString(),
           status: 'closed',
         })
-        .eq('id', sessionId);
+        .in('id', sessionIds);
       if (updateErr) throw updateErr;
 
-      toast.success('Cierre de caja registrado.');
+      // Obtener pedidos del día para el ticket
+      const { data: orders, error: ordersErr } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          total,
+          created_at,
+          order_items (
+            quantity,
+            unit_price,
+            products (name)
+          )
+        `)
+        .eq('employee_id', user.id)
+        .gte('created_at', today)
+        .lte('created_at', today + 'T23:59:59')
+        .eq('status', 'completed');
+
+      if (ordersErr) throw ordersErr;
+
+      // Generar ticket de cierre
+      const ticketContent = `
+        <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
+          <h2 style="text-align: center; margin-bottom: 10px;">CIERRE DE CAJA</h2>
+          <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>Empleado:</strong> ${profile?.full_name || user.email}
+          </div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}
+          </div>
+
+          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>SESIONES DEL DÍA</strong>
+          </div>
+
+          ${sessions.map((session, index) => `
+            <div style="margin-bottom: 5px;">
+              Sesión ${index + 1}: ${new Date(session.opened_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - ${formatCurrency(session.opening_amount)}
+            </div>
+          `).join('')}
+
+          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>RESUMEN FINANCIERO</strong>
+          </div>
+
+          <div style="margin-bottom: 5px;">
+            <strong>Primera Apertura:</strong> ${formatCurrency(firstOpening)}
+          </div>
+
+          <div style="margin-bottom: 5px;">
+            <strong>Cierre Final:</strong> ${formatCurrency(amount)}
+          </div>
+
+          <div style="margin-bottom: 5px;">
+            <strong>Resultado del Día:</strong> ${formatCurrency(dailyResult)}
+          </div>
+
+          <div style="margin-bottom: 5px;">
+            <strong>Total Pedidos:</strong> ${(orders || []).length}
+          </div>
+
+          <div style="margin-bottom: 5px;">
+            <strong>Total Ventas:</strong> ${formatCurrency((orders || []).reduce((sum, order) => sum + order.total, 0))}
+          </div>
+
+          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+          <div style="margin-bottom: 10px;">
+            <strong>PEDIDOS DEL DÍA (${(orders || []).length})</strong>
+          </div>
+
+          ${(orders || []).map(order => `
+            <div style="margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
+              <div><strong>Pedido #${order.id.slice(-8)}</strong></div>
+              <div>Hora: ${new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+              <div>Total: ${formatCurrency(order.total)}</div>
+              <div style="font-size: 12px; margin-top: 3px;">
+                ${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || 'Producto'}`).join(', ')}
+              </div>
+            </div>
+          `).join('')}
+
+          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+          <div style="text-align: center; margin-top: 20px; font-size: 12px;">
+            Generado el ${new Date().toLocaleString('es-ES')}
+          </div>
+        </div>
+      `;
+
+      // Imprimir ticket directamente
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Cierre de Caja</title>
+              <style>
+                @media print {
+                  body { margin: 0; }
+                  @page { size: auto; margin: 5mm; }
+                }
+              </style>
+            </head>
+            <body>
+              ${ticketContent}
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        // Cerrar ventana después de imprimir
+        printWindow.onafterprint = () => printWindow.close();
+      }
+
+      toast.success('Cierre de caja registrado e impreso.');
       setShowCloseCashModal(false);
       await signOut();
     } catch (err: any) {
@@ -228,9 +359,24 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     }
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(amount);
+  };
+
   const handleLogoutClick = () => {
     if (profile?.role === 'cashier') {
       setShowCloseCashModal(true);
+    } else if (profile?.role === 'admin') {
+      // Para administradores, mostrar opción de cerrar caja o salir directamente
+      const confirmClose = window.confirm('¿Desea cerrar la sesión de caja antes de salir?');
+      if (confirmClose) {
+        setShowCloseCashModal(true);
+      } else {
+        signOut();
+      }
     } else {
       signOut();
     }
@@ -306,6 +452,17 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               >
                 Cancelar
               </button>
+              {profile?.role === 'admin' && (
+                <button
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                  onClick={async () => {
+                    setShowCloseCashModal(false);
+                    await signOut();
+                  }}
+                >
+                  Salir Sin Cambios
+                </button>
+              )}
               <button
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
                 onClick={handleCloseCashSubmit}

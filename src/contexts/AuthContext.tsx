@@ -75,12 +75,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) throw error;
+
+    // Wait for profile to be fetched and then redirect admin to analytics
+    if (data.user) {
+      // Small delay to ensure profile is loaded
+      setTimeout(async () => {
+        const { data: profileData } = await supabase
+          .from('employee_profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileData?.role === 'admin') {
+          // Force redirect to analytics for admin users
+          window.location.hash = '#/analytics';
+        }
+      }, 100);
+    }
   };
 
   const signOut = async () => {

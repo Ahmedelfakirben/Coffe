@@ -22,7 +22,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
-  const [ordersForTable, setOrdersForTable] = useState<Array<{id:string; total:number; payment_method:string; status:string; created_at:string}>>([]);
+  const [ordersForTable, setOrdersForTable] = useState<Array<{id:string; total:number; payment_method:string; status:string; created_at:string; order_number:number; table_id:string}>>([]);
   const [selectedTableName, setSelectedTableName] = useState<string>('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
   const [showPaymentSelector, setShowPaymentSelector] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('id,total,payment_method,status,created_at')
+        .select('id,total,payment_method,status,created_at,order_number,table_id')
         .eq('table_id', id)
         .in('status', ['preparing'])
         .order('created_at', { ascending: false });
@@ -136,6 +136,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         }
         setActiveOrderId(null);
         toast.success('Mesa seleccionada para la orden');
+        // Always redirect to POS when selecting a table
         onGoToPOS?.();
       }
     } catch (err) {
@@ -177,6 +178,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         .select(`
           id,
           total,
+          order_number,
           created_at,
           order_items (
             quantity,
@@ -193,7 +195,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       // Actualizar el estado de la orden
       const { error } = await supabase
         .from('orders')
-        .update({ 
+        .update({
           status: 'completed',
           payment_method: paymentMethod
         })
@@ -211,19 +213,26 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
 
       setTicket({
         orderDate: new Date(orderData.created_at),
-        orderNumber: orderId,
+        orderNumber: orderData.order_number ? orderData.order_number.toString().padStart(3, '0') : orderId.slice(-8),
         items: ticketItems,
         total: typeof orderData.total === 'string' ? parseFloat(orderData.total) : orderData.total,
         paymentMethod: paymentMethod,
         cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
       });
 
-      await refreshTableStatusBasedOnOrders(tableId);
+      // Clear ticket after a short delay to prevent duplicate printing
+      setTimeout(() => setTicket(null), 1000);
+
+      // Liberar la mesa completamente después de completar el pedido
+      await supabase
+        .from('tables')
+        .update({ status: 'available' })
+        .eq('id', tableId);
+
       toast.success('Pedido validado correctamente');
       setShowOrdersModal(false);
       setShowPaymentSelector(null);
       setActiveOrderId(null);
-      await fetchOpenOrdersForTable(tableId);
       await fetchTables();
     } catch (err) {
       console.error('Error validando pedido desde Sala:', err);
@@ -265,7 +274,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   }
 
   return (
-    <div className="p-4">
+    <div className="min-h-screen bg-gray-50 p-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900">Sala</h2>
         <div className="flex gap-2 items-center">
@@ -290,34 +299,63 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       </div>
 
       {/* Plano de la sala con mesas objetuales */}
-      <div className="bg-gray-100 border rounded-xl p-6 min-h-[60vh]">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-8 place-items-center">
+      <div
+        className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-8 min-h-[60vh] shadow-inner relative overflow-hidden"
+        style={{
+          backgroundImage: `url('/src/assets/image/sala.png')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      >
+        {/* Overlay para mantener legibilidad */}
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-50/80 to-orange-50/80 rounded-2xl"></div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 place-items-center relative z-10">
           {tables.map((table) => (
             <button
               key={table.id}
               onClick={() => selectTable(table)}
-              className={`relative w-32 h-32 rounded-full border-4 shadow-sm transition-transform hover:scale-105 flex items-center justify-center ${statusColor(table.status)} ${tableId === table.id ? 'ring-4 ring-amber-500' : ''}`}
+              className={`relative w-36 h-36 rounded-2xl border-4 shadow-lg transition-all duration-300 hover:scale-110 hover:shadow-xl flex flex-col items-center justify-center ${statusColor(table.status)} ${tableId === table.id ? 'ring-4 ring-amber-500 ring-offset-2' : ''}`}
               title={`${table.name} • ${table.seats} sillas • ${table.status}`}
             >
-              <div className="text-center">
-                <div className="text-sm font-bold">{table.name}</div>
-                <div className="text-xs">{table.seats} sillas</div>
+              {/* Mesa circular con patas */}
+              <div className="relative">
+                <div className="w-20 h-16 bg-amber-800 rounded-t-full shadow-md"></div>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-16 h-4 bg-amber-900 rounded-b-lg"></div>
+                {/* Patas de la mesa */}
+                <div className="absolute -bottom-2 left-2 w-1 h-3 bg-amber-900 rounded"></div>
+                <div className="absolute -bottom-2 right-2 w-1 h-3 bg-amber-900 rounded"></div>
               </div>
-              {/* Indicadores de asientos simples */}
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                {Array.from({ length: Math.min(table.seats, 6) }).map((_, i) => (
-                  <span key={i} className="w-3 h-3 rounded-full bg-gray-300 border border-white"></span>
-                ))}
+
+              {/* Información de la mesa */}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg border border-white/20">
+                <div className="text-sm font-bold text-gray-800">{table.name}</div>
+                <div className="text-xs text-gray-600 flex items-center justify-center gap-1">
+                  <span>👥</span>
+                  {table.seats} personas
+                </div>
+              </div>
+
+              {/* Indicadores de estado visual */}
+              <div className="absolute top-2 right-2">
+                {table.status === 'occupied' && <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse shadow-sm"></div>}
+                {table.status === 'available' && <div className="w-3 h-3 bg-green-500 rounded-full shadow-sm"></div>}
               </div>
             </button>
           ))}
         </div>
-        {/* Leyenda de estados */}
-        <div className="mt-6 flex flex-wrap gap-3 text-xs">
-          <span className="px-2 py-1 rounded bg-green-50 text-green-700 border border-green-200">Disponible</span>
-          <span className="px-2 py-1 rounded bg-yellow-50 text-yellow-700 border border-yellow-200">Ocupada</span>
-          <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200">Reservada</span>
-          <span className="px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">Sucio</span>
+
+        {/* Leyenda mejorada */}
+        <div className="mt-8 flex flex-wrap justify-center gap-4 relative z-10">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm border border-green-200 shadow-sm">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span className="text-sm font-medium text-green-700">Disponible</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm border border-yellow-200 shadow-sm">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium text-yellow-700">Ocupada</span>
+          </div>
         </div>
       </div>
       {showOrdersModal && (
@@ -331,7 +369,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                 {ordersForTable.map(order => (
                   <div key={order.id} className="border rounded-lg p-2 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold">Pedido #{order.id.slice(0,8)}</p>
+                      <p className="text-sm font-semibold">Pedido #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(0,8)}</p>
                       <p className="text-xs text-gray-600">Total: ${order.total?.toFixed?.(2) ?? Number(order.total).toFixed(2)}</p>
                       <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
                     </div>
@@ -424,17 +462,6 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                 }}
               >
                 Cerrar
-              </button>
-              <button
-                className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm"
-                onClick={() => {
-                  setShowOrdersModal(false);
-                  setShowPaymentSelector(null);
-                  toast.success('Mesa seleccionada para nueva orden');
-                  onGoToPOS?.();
-                }}
-              >
-                Confirmar nuevo pedido
               </button>
             </div>
           </div>

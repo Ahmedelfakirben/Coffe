@@ -3,7 +3,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.cash_register_sessions (
   id uuid primary key default gen_random_uuid(),
-  employee_id uuid not null references auth.users(id) on delete cascade,
+  employee_id uuid not null,
   opening_amount numeric(12,2) not null check (opening_amount >= 0),
   opened_at timestamptz not null default timezone('utc'::text, now()),
   closing_amount numeric(12,2) null check (closing_amount >= 0),
@@ -13,6 +13,15 @@ create table if not exists public.cash_register_sessions (
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now())
 );
+
+-- Fix foreign key reference to employee_profiles
+do $$
+begin
+  if exists (select 1 from information_schema.table_constraints where constraint_name = 'cash_register_sessions_employee_id_fkey' and table_name = 'cash_register_sessions') then
+    alter table public.cash_register_sessions drop constraint cash_register_sessions_employee_id_fkey;
+  end if;
+  alter table public.cash_register_sessions add constraint cash_register_sessions_employee_id_fkey foreign key (employee_id) references public.employee_profiles(id) on delete cascade;
+end $$;
 
 -- Indexes
 create index if not exists idx_cash_sessions_employee on public.cash_register_sessions(employee_id);
@@ -73,6 +82,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists handle_cash_sessions_updated_at on public.cash_register_sessions;
 create trigger handle_cash_sessions_updated_at
   before update on public.cash_register_sessions
   for each row

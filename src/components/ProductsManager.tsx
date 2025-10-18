@@ -114,14 +114,9 @@ export function ProductsManager() {
           console.error('Error subiendo imagen:', uploadError);
           toast.error(`Error subiendo imagen: ${uploadError.message || 'Verifica el bucket "product-images" y permisos públicos.'}`);
         } else {
-          const { data: publicData, error: publicErr } = supabase.storage
+          const { data: publicData } = supabase.storage
             .from('product-images')
             .getPublicUrl(filePath);
-
-          if (publicErr) {
-            console.error('Error obteniendo URL pública:', publicErr);
-            toast.error(`No se pudo obtener la URL pública: ${publicErr.message || ''}`);
-          }
 
           const publicUrl = publicData?.publicUrl;
           if (publicUrl) {
@@ -179,17 +174,17 @@ export function ProductsManager() {
         console.error('Error subiendo imagen:', uploadError);
         toast.error(`Error subiendo imagen: ${uploadError.message || ''}`);
       } else {
-        const { data: publicData, error: publicErr } = supabase.storage
+        const { data: publicData } = supabase.storage
           .from('product-images')
           .getPublicUrl(filePath);
-        if (publicErr) {
-          console.error('Error obteniendo URL pública:', publicErr);
-          toast.error(`No se pudo obtener la URL pública: ${publicErr.message || ''}`);
-        } else if (publicData?.publicUrl) {
+
+        if (publicData?.publicUrl) {
           await supabase
             .from('products')
             .update({ image_url: publicData.publicUrl })
             .eq('id', editingProduct.id);
+        } else {
+          toast.error('No se pudo obtener la URL pública de la imagen.');
         }
       }
     }
@@ -202,12 +197,58 @@ export function ProductsManager() {
 
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar este producto?')) return;
-    const { error } = await supabase.from('products').delete().eq('id', id);
-    if (error) {
-      alert('Error al eliminar producto');
-      return;
+
+    try {
+      // First check if product is used in any orders (both current and historical)
+      const { data: orderItems, error: checkError } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('product_id', id)
+        .limit(1);
+
+      if (checkError) {
+        console.error('Error checking product usage:', checkError);
+        // Continue with deletion even if check fails, but log the error
+        console.warn('Could not verify product usage, proceeding with deletion');
+      } else {
+        console.log('Order items check result:', orderItems);
+        if (orderItems && orderItems.length > 0) {
+          toast.error('No se puede eliminar el producto porque está siendo usado en pedidos existentes');
+          return;
+        }
+      }
+
+      // Also check order_history if it exists
+      try {
+        const { data: historyItems, error: historyError } = await supabase
+          .from('order_history')
+          .select('id')
+          .eq('product_id', id)
+          .limit(1);
+
+        if (!historyError && historyItems && historyItems.length > 0) {
+          toast.error('No se puede eliminar el producto porque aparece en el historial de pedidos');
+          return;
+        }
+      } catch (historyErr) {
+        // order_history table might not exist, ignore this error
+        console.log('order_history table not available, skipping check');
+      }
+
+      // If no orders found, proceed with deletion
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting product:', error);
+        toast.error(`Error al eliminar producto: ${error.message}`);
+        return;
+      }
+
+      toast.success('Producto eliminado correctamente');
+      fetchProducts();
+    } catch (err) {
+      console.error('Error in delete operation:', err);
+      toast.error('Error al eliminar producto');
     }
-    fetchProducts();
   };
 
   const getCategoryName = (categoryId: string | null) => {

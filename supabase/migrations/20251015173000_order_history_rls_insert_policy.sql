@@ -15,7 +15,6 @@ CREATE POLICY "Employees can insert order history"
       WHERE public.employee_profiles.id = auth.uid()
         AND public.employee_profiles.active = true
     )
-    AND employee_id = auth.uid()
   );
 
 -- (Optional) Allow updates if needed in the future

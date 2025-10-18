@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS orders (
   status text DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'ready', 'completed', 'cancelled')),
   total decimal(10,2) DEFAULT 0,
   payment_method text CHECK (payment_method IN ('cash', 'card', 'digital')),
+  order_number integer,
   notes text DEFAULT '',
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
