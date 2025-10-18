@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
+import { toast } from 'react-hot-toast';
 
 interface EmployeeProfile {
   id: string;
@@ -53,12 +54,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('employee_profiles')
-      .select('*')
+      .select('id, full_name, role, phone, active, email, deleted_at')
       .eq('id', userId)
       .maybeSingle();
 
     if (error) {
       console.error('Error fetching profile:', error);
+      return;
+    }
+
+    // Bloquear acceso si usuario está inactivo o eliminado
+    if (data && (!data.active || data.deleted_at)) {
+      await supabase.auth.signOut();
+      setProfile(null);
+      toast.error('Tu cuenta está desactivada o eliminada');
       return;
     }
 

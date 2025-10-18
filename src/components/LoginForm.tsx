@@ -16,8 +16,9 @@ export function LoginForm() {
 
     try {
       await signIn(email, password);
-    } catch (err) {
-      setError('Credenciales inválidas. Por favor intenta de nuevo.');
+    } catch (err: any) {
+      const message = err?.message || 'Credenciales inválidas. Por favor intenta de nuevo.';
+      setError(message);
       console.error(err);
     } finally {
       setLoading(false);

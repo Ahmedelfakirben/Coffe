@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface Category {
   id: string;
@@ -15,6 +16,7 @@ interface Product {
   description: string;
   base_price: number;
   available: boolean;
+  image_url?: string;
 }
 
 interface ProductSize {
@@ -37,12 +39,38 @@ export function ProductsManager() {
     base_price: 0,
     available: true,
   });
+  const [newProductImage, setNewProductImage] = useState<File | null>(null);
+  const [newProductPreviewUrl, setNewProductPreviewUrl] = useState<string | null>(null);
+  const [editingImage, setEditingImage] = useState<File | null>(null);
+  const [editingImagePreviewUrl, setEditingImagePreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategories();
     fetchProducts();
     fetchSizes();
   }, []);
+
+  // Vista previa para nueva imagen de producto
+  useEffect(() => {
+    if (!newProductImage) {
+      setNewProductPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(newProductImage);
+    setNewProductPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newProductImage]);
+
+  // Vista previa para imagen en edición
+  useEffect(() => {
+    if (!editingImage) {
+      setEditingImagePreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(editingImage);
+    setEditingImagePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [editingImage]);
 
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name');
@@ -60,14 +88,62 @@ export function ProductsManager() {
   };
 
   const handleCreateProduct = async () => {
-    const { error } = await supabase.from('products').insert(newProduct);
-    if (error) {
+    try {
+      const { data: created, error } = await supabase
+        .from('products')
+        .insert(newProduct)
+        .select('id')
+        .single();
+
+      if (error) {
+        alert('Error al crear producto');
+        return;
+      }
+
+      if (created && newProductImage) {
+        const fileExt = newProductImage.name.split('.').pop();
+        const filePath = `products/${created.id}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, newProductImage, {
+            upsert: true,
+            contentType: newProductImage.type,
+          });
+
+        if (uploadError) {
+          console.error('Error subiendo imagen:', uploadError);
+          toast.error(`Error subiendo imagen: ${uploadError.message || 'Verifica el bucket "product-images" y permisos públicos.'}`);
+        } else {
+          const { data: publicData, error: publicErr } = supabase.storage
+            .from('product-images')
+            .getPublicUrl(filePath);
+
+          if (publicErr) {
+            console.error('Error obteniendo URL pública:', publicErr);
+            toast.error(`No se pudo obtener la URL pública: ${publicErr.message || ''}`);
+          }
+
+          const publicUrl = publicData?.publicUrl;
+          if (publicUrl) {
+            await supabase
+              .from('products')
+              .update({ image_url: publicUrl })
+              .eq('id', created.id);
+          } else {
+            toast.error('No se pudo obtener la URL pública de la imagen.');
+          }
+        }
+      }
+
+      setShowNewProduct(false);
+      setNewProduct({ name: '', description: '', category_id: '', base_price: 0, available: true });
+      setNewProductImage(null);
+      setNewProductPreviewUrl(null);
+      fetchProducts();
+    } catch (err) {
+      console.error('Error creando producto:', err);
       alert('Error al crear producto');
-      return;
     }
-    setShowNewProduct(false);
-    setNewProduct({ name: '', description: '', category_id: '', base_price: 0, available: true });
-    fetchProducts();
   };
 
   const handleUpdateProduct = async () => {
@@ -87,6 +163,39 @@ export function ProductsManager() {
       alert('Error al actualizar producto');
       return;
     }
+
+    // Subir nueva imagen si se seleccionó
+    if (editingImage && editingProduct) {
+      const fileExt = editingImage.name.split('.').pop();
+      const filePath = `products/${editingProduct.id}/${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, editingImage, {
+          upsert: true,
+          contentType: editingImage.type,
+        });
+
+      if (uploadError) {
+        console.error('Error subiendo imagen:', uploadError);
+        toast.error(`Error subiendo imagen: ${uploadError.message || ''}`);
+      } else {
+        const { data: publicData, error: publicErr } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath);
+        if (publicErr) {
+          console.error('Error obteniendo URL pública:', publicErr);
+          toast.error(`No se pudo obtener la URL pública: ${publicErr.message || ''}`);
+        } else if (publicData?.publicUrl) {
+          await supabase
+            .from('products')
+            .update({ image_url: publicData.publicUrl })
+            .eq('id', editingProduct.id);
+        }
+      }
+    }
+
+    setEditingImage(null);
+    setEditingImagePreviewUrl(null);
     setEditingProduct(null);
     fetchProducts();
   };
@@ -168,6 +277,20 @@ export function ProductsManager() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Imagen (opcional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => setNewProductImage(e.target.files?.[0] || null)}
+                  className="w-full"
+                />
+                {newProductPreviewUrl && (
+                  <div className="mt-2">
+                    <img src={newProductPreviewUrl} alt="Vista previa" className="h-24 w-24 object-cover rounded border" />
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleCreateProduct}
@@ -204,12 +327,33 @@ export function ProductsManager() {
               <tr key={product.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4">
                   {editingProduct?.id === product.id ? (
-                    <input
-                      type="text"
-                      value={editingProduct.name}
-                      onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
-                    />
+                    <div>
+                      <input
+                        type="text"
+                        value={editingProduct.name}
+                        onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded"
+                      />
+                      <div className="mt-2 flex items-center gap-3">
+                        {(editingImagePreviewUrl || product.image_url) && (
+                          <img
+                            src={editingImagePreviewUrl || product.image_url || ''}
+                            alt="Vista previa"
+                            className="h-16 w-16 object-cover rounded border"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => {
+                            const file = e.target.files?.[0] || null;
+                            setEditingImage(file);
+                          }}
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <div>
                       <div className="font-medium text-gray-900">{product.name}</div>

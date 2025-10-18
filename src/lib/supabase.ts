@@ -84,6 +84,8 @@ export interface Database {
           role: 'admin' | 'cashier' | 'barista';
           phone: string | null;
           active: boolean;
+          email: string | null;
+          deleted_at: string | null;
           created_at: string;
         };
       };

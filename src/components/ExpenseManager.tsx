@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Filter, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { Expense, ExpenseCategory } from '../types/expenses';
 
@@ -14,6 +15,7 @@ const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
 ];
 
 export function ExpenseManager() {
+  const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -66,8 +68,12 @@ export function ExpenseManager() {
       const { error } = await supabase
         .from('expenses')
         .insert({
-          ...newExpense,
+          date: newExpense.date,
+          category: newExpense.category,
+          description: newExpense.description,
           amount: parseFloat(newExpense.amount),
+          supplier_id: newExpense.supplier_id ? newExpense.supplier_id : null,
+          employee_id: user?.id ?? null,
         });
 
       if (error) throw error;

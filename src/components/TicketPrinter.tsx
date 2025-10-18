@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Printer } from 'lucide-react';
 
 interface TicketProps {
@@ -13,6 +13,8 @@ interface TicketProps {
   total: number;
   paymentMethod: string;
   cashierName: string;
+  autoPrint?: boolean;
+  hideButton?: boolean;
 }
 
 export function TicketPrinter({
@@ -22,6 +24,8 @@ export function TicketPrinter({
   total,
   paymentMethod,
   cashierName,
+  autoPrint = false,
+  hideButton = false,
 }: TicketProps) {
   const ticketRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +90,13 @@ export function TicketPrinter({
     }
   };
 
+  useEffect(() => {
+    if (autoPrint) {
+      // Slight delay to ensure content is ready
+      setTimeout(() => printTicket(), 50);
+    }
+  }, [autoPrint]);
+
   return (
     <div>
       <div ref={ticketRef} className="hidden">
@@ -130,13 +141,15 @@ export function TicketPrinter({
         </div>
       </div>
 
-      <button
-        onClick={printTicket}
-        className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
-      >
-        <Printer className="w-5 h-5" />
-        Imprimir Ticket
-      </button>
+      {!hideButton && (
+        <button
+          onClick={printTicket}
+          className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
+        >
+          <Printer className="w-5 h-5" />
+          Imprimir Ticket
+        </button>
+      )}
     </div>
   );
 }

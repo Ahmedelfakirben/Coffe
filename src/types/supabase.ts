@@ -13,6 +13,7 @@ export interface Product {
   available: boolean;
   created_at: string;
   updated_at: string;
+  image_url: string; // added: product image url
 }
 
 export interface ProductSize {
@@ -51,6 +52,8 @@ export interface EmployeeProfile {
   role: 'admin' | 'cashier' | 'barista';
   phone: string | null;
   active: boolean;
+  email?: string | null;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 }

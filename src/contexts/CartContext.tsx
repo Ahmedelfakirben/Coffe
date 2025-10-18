@@ -12,11 +12,17 @@ interface CartContextType {
   items: CartItem[];
   total: number;
   paymentMethod: 'cash' | 'card' | 'digital';
+  serviceType: 'dine_in' | 'takeaway';
+  tableId: string | null;
+  activeOrderId: string | null;
   addItem: (product: Product, size?: ProductSize) => void;
   updateQuantity: (index: number, delta: number) => void;
   removeItem: (index: number) => void;
   setItemNotes: (index: number, notes: string) => void;
   setPaymentMethod: (method: 'cash' | 'card' | 'digital') => void;
+  setServiceType: (type: 'dine_in' | 'takeaway') => void;
+  setTableId: (tableId: string | null) => void;
+  setActiveOrderId: (orderId: string | null) => void;
   clearCart: () => void;
 }
 
@@ -25,6 +31,9 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
+  const [serviceType, setServiceType] = useState<'dine_in' | 'takeaway'>('takeaway');
+  const [tableId, setTableId] = useState<string | null>(null);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
 
   const addItem = useCallback((product: Product, size: ProductSize | null = null) => {
     setItems(currentItems => {
@@ -66,6 +75,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => {
     setItems([]);
+    setTableId(null);
+    setServiceType('takeaway');
+    setActiveOrderId(null);
   }, []);
 
   const total = items.reduce((sum, item) => {
@@ -80,11 +92,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
         items,
         total,
         paymentMethod,
+        serviceType,
+        tableId,
+        activeOrderId,
         addItem,
         updateQuantity,
         removeItem,
         setItemNotes,
         setPaymentMethod,
+        setServiceType,
+        setTableId,
+        setActiveOrderId,
         clearCart,
       }}
     >
