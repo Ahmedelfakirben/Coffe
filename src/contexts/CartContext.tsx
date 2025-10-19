@@ -11,7 +11,7 @@ interface CartItem {
 interface CartContextType {
   items: CartItem[];
   total: number;
-  paymentMethod: 'cash' | 'card' | 'digital';
+  paymentMethod: 'cash' | 'card' | 'digital' | null;
   serviceType: 'dine_in' | 'takeaway';
   tableId: string | null;
   activeOrderId: string | null;
@@ -19,7 +19,7 @@ interface CartContextType {
   updateQuantity: (index: number, delta: number) => void;
   removeItem: (index: number) => void;
   setItemNotes: (index: number, notes: string) => void;
-  setPaymentMethod: (method: 'cash' | 'card' | 'digital') => void;
+  setPaymentMethod: (method: 'cash' | 'card' | 'digital' | null) => void;
   setServiceType: (type: 'dine_in' | 'takeaway') => void;
   setTableId: (tableId: string | null) => void;
   setActiveOrderId: (orderId: string | null) => void;
@@ -30,7 +30,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital' | null>(null);
   const [serviceType, setServiceType] = useState<'dine_in' | 'takeaway'>('takeaway');
   const [tableId, setTableId] = useState<string | null>(null);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
@@ -75,6 +75,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => {
     setItems([]);
+    setPaymentMethod(null);
     setTableId(null);
     setServiceType('takeaway');
     setActiveOrderId(null);

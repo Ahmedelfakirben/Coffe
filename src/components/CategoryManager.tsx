@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
 interface Category {
   id: string;
   name: string;
+  description: string;
   created_at: string;
 }
 
@@ -14,6 +15,7 @@ export function CategoryManager() {
   const [newCategory, setNewCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   useEffect(() => {
     fetchCategories();
@@ -21,16 +23,26 @@ export function CategoryManager() {
 
   const fetchCategories = async () => {
     try {
+      setLoadingCategories(true);
+      console.log('Fetching categories...');
       const { data, error } = await supabase
         .from('categories')
         .select('*')
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching categories:', error);
+        throw error;
+      }
+
+      console.log('Categories loaded:', data?.length || 0);
       setCategories(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching categories:', err);
-      toast.error('Error al cargar categorías');
+      toast.error(`Error al cargar categorías: ${err.message || 'Error desconocido'}`);
+      setCategories([]);
+    } finally {
+      setLoadingCategories(false);
     }
   };
 
@@ -40,75 +52,133 @@ export function CategoryManager() {
 
     setLoading(true);
     try {
+      console.log('Submitting category:', { editingCategory, newCategory });
+
       if (editingCategory) {
-        const { error } = await supabase
+        console.log('Updating category:', editingCategory.id, 'to:', newCategory);
+        const { data, error } = await supabase
           .from('categories')
           .update({ name: newCategory })
-          .eq('id', editingCategory.id);
+          .eq('id', editingCategory.id)
+          .select();
 
-        if (error) throw error;
-        toast.success('Categoría actualizada');
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
+
+        console.log('Update successful:', data);
+        toast.success('Categoría actualizada correctamente');
       } else {
-        const { error } = await supabase
+        console.log('Creating new category:', newCategory);
+        const { data, error } = await supabase
           .from('categories')
-          .insert({ name: newCategory });
+          .insert({ name: newCategory })
+          .select();
 
-        if (error) throw error;
-        toast.success('Categoría creada');
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+
+        console.log('Insert successful:', data);
+        toast.success('Categoría creada correctamente');
       }
 
       setNewCategory('');
       setEditingCategory(null);
       await fetchCategories();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving category:', err);
-      toast.error('Error al guardar la categoría');
+      toast.error(`Error al guardar la categoría: ${err.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleEdit = (category: Category) => {
+    console.log('Editing category:', category);
     setEditingCategory(category);
     setNewCategory(category.name);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar esta categoría?')) return;
+    const category = categories.find(c => c.id === id);
+    if (!category) return;
+
+    if (!confirm(`¿Estás seguro de eliminar la categoría "${category.name}"?\n\nEsta acción no se puede deshacer.`)) return;
 
     try {
+      // First check if category is being used by products
+      const { data: products, error: checkError } = await supabase
+        .from('products')
+        .select('id, name')
+        .eq('category_id', id)
+        .limit(5);
+
+      if (checkError) {
+        console.error('Error checking category usage:', checkError);
+        toast.error('Error al verificar el uso de la categoría');
+        return;
+      }
+
+      if (products && products.length > 0) {
+        toast.error(`No se puede eliminar la categoría porque está siendo usada por ${products.length} producto(s). Elimine o reasigne los productos primero.`);
+        return;
+      }
+
+      console.log('Deleting category:', id);
       const { error } = await supabase
         .from('categories')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
-      toast.success('Categoría eliminada');
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
+
+      toast.success('Categoría eliminada correctamente');
       await fetchCategories();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error deleting category:', err);
-      toast.error('Error al eliminar la categoría');
+      toast.error(`Error al eliminar la categoría: ${err.message || 'Error desconocido'}`);
     }
   };
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Gestión de Categorías</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Gestión de Categorías</h2>
+        <button
+          onClick={fetchCategories}
+          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+          title="Actualizar lista"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Actualizar
+        </button>
+      </div>
 
-      <form onSubmit={handleSubmit} className="mb-8">
-        <div className="flex gap-4">
-          <input
-            type="text"
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            placeholder="Nombre de la categoría"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-            required
-          />
+      <form onSubmit={handleSubmit} className="mb-8 bg-white rounded-lg shadow-sm p-6 border">
+        <div className="flex gap-4 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {editingCategory ? 'Editando Categoría' : 'Nueva Categoría'}
+            </label>
+            <input
+              type="text"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder={editingCategory ? `Editando: ${editingCategory.name}` : "Nombre de la categoría"}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              required
+            />
+          </div>
           <button
             type="submit"
-            disabled={loading}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            disabled={loading || !newCategory.trim()}
+            className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             {loading ? 'Guardando...' : editingCategory ? 'Actualizar' : 'Crear'}
           </button>
@@ -125,38 +195,60 @@ export function CategoryManager() {
             </button>
           )}
         </div>
+        {editingCategory && (
+          <div className="mt-2 text-sm text-gray-600">
+            Modificando categoría: <span className="font-medium">{editingCategory.name}</span>
+          </div>
+        )}
       </form>
 
       <div className="bg-white rounded-lg shadow">
         <div className="px-4 py-3 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Categorías Existentes</h3>
+          <h3 className="text-lg font-medium text-gray-900">
+            Categorías Existentes {categories.length > 0 && `(${categories.length})`}
+          </h3>
         </div>
-        <ul className="divide-y divide-gray-200">
-          {categories.map((category) => (
-            <li key={category.id} className="px-4 py-3 flex items-center justify-between">
-              <span className="text-gray-900">{category.name}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleEdit(category)}
-                  className="text-amber-600 hover:text-amber-700 p-1"
-                >
-                  <Edit className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => handleDelete(category.id)}
-                  className="text-red-500 hover:text-red-700 p-1"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            </li>
-          ))}
-          {categories.length === 0 && (
-            <li className="px-4 py-3 text-gray-500 text-center">
-              No hay categorías creadas
-            </li>
-          )}
-        </ul>
+        {loadingCategories ? (
+          <div className="px-4 py-8 text-center text-gray-500">
+            <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            Cargando categorías...
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {categories.map((category) => (
+              <li key={category.id} className="px-4 py-4 flex items-center justify-between hover:bg-gray-50">
+                <div className="flex-1">
+                  <span className="text-gray-900 font-medium">{category.name}</span>
+                  <div className="text-sm text-gray-500 mt-1">
+                    Creada: {new Date(category.created_at).toLocaleDateString('es-ES')}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleEdit(category)}
+                    className="text-amber-600 hover:text-amber-800 hover:bg-amber-50 p-2 rounded-lg transition-colors"
+                    title="Editar categoría"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(category.id)}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                    title="Eliminar categoría"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </li>
+            ))}
+            {categories.length === 0 && (
+              <li className="px-4 py-8 text-gray-500 text-center">
+                <div className="text-lg mb-2">📂</div>
+                No hay categorías creadas
+              </li>
+            )}
+          </ul>
+        )}
       </div>
     </div>
   );

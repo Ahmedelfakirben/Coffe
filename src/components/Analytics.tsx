@@ -99,14 +99,21 @@ export function Analytics() {
 
   const fetchEmployeeActivity = async () => {
     try {
+      console.log('Fetching employee activity...');
+
+      // Fetch only active employees who haven't been deleted
       const { data: employees, error } = await supabase
         .from('employee_profiles')
         .select(`
           id,
           full_name,
           role,
-          updated_at
-        `);
+          active,
+          deleted_at,
+          created_at
+        `)
+        .eq('active', true)
+        .is('deleted_at', null);
 
       if (error) {
         console.error('Error fetching employees:', error);
@@ -115,59 +122,66 @@ export function Analytics() {
         return;
       }
 
+      console.log(`Found ${employees?.length || 0} active employees`);
+
       if (employees && employees.length > 0) {
+        const today = new Date().toISOString().split('T')[0];
+
         const activityData = await Promise.all(
           employees.map(async (emp) => {
             try {
               // Get open sessions (not closed) - this determines if user is online
               const { data: openSessions, error: openSessionsError } = await supabase
                 .from('cash_register_sessions')
-                .select('id')
+                .select('id, opened_at')
                 .eq('employee_id', emp.id)
                 .is('closed_at', null);
-    
+
               if (openSessionsError) {
                 console.error('Error fetching open sessions for employee:', emp.id, openSessionsError);
               }
-    
+
               // Get sessions today
-              const today = new Date().toISOString().split('T')[0];
               const { data: sessions, error: sessionsError } = await supabase
                 .from('cash_register_sessions')
                 .select('id')
                 .eq('employee_id', emp.id)
                 .gte('opened_at', today);
-    
+
               if (sessionsError) {
                 console.error('Error fetching sessions for employee:', emp.id, sessionsError);
               }
-    
-              // Get orders today
+
+              // Get orders today (all statuses to show real activity)
               const { data: orders, error: ordersError } = await supabase
                 .from('orders')
-                .select('total')
+                .select('total, status')
                 .eq('employee_id', emp.id)
-                .gte('created_at', today)
-                .eq('status', 'completed');
-    
+                .gte('created_at', today);
+
               if (ordersError) {
                 console.error('Error fetching orders for employee:', emp.id, ordersError);
               }
-    
-              const totalSales = orders?.reduce((sum, order) => sum + order.total, 0) || 0;
-    
-              // Consider online if they have an open cash session OR were active in last 15 minutes
-              const hasOpenSession = openSessions && openSessions.length > 0;
-              const recentlyActive = new Date(emp.updated_at) > new Date(Date.now() - 15 * 60 * 1000);
-              const isOnline = hasOpenSession || recentlyActive;
-    
-              console.log(`Employee ${emp.full_name}: open sessions: ${openSessions?.length || 0}, recently active: ${recentlyActive}, isOnline: ${isOnline}`);
-    
+
+              // Calculate total sales from completed orders only
+              const totalSales = orders
+                ?.filter(order => order.status === 'completed')
+                .reduce((sum, order) => sum + order.total, 0) || 0;
+
+              // User is online if they have an open cash session
+              const isOnline = openSessions && openSessions.length > 0;
+
+              const lastLogin = openSessions && openSessions.length > 0
+                ? openSessions[0].opened_at
+                : emp.created_at;
+
+              console.log(`Employee ${emp.full_name}: open sessions: ${openSessions?.length || 0}, isOnline: ${isOnline}, sessions today: ${sessions?.length || 0}, orders today: ${orders?.length || 0}`);
+
               return {
                 id: emp.id,
                 full_name: emp.full_name,
                 role: emp.role,
-                last_login: emp.updated_at,
+                last_login: lastLogin,
                 total_sessions_today: sessions?.length || 0,
                 total_orders_today: orders?.length || 0,
                 total_sales_today: totalSales,
@@ -179,7 +193,7 @@ export function Analytics() {
                 id: emp.id,
                 full_name: emp.full_name,
                 role: emp.role,
-                last_login: emp.updated_at,
+                last_login: emp.created_at,
                 total_sessions_today: 0,
                 total_orders_today: 0,
                 total_sales_today: 0,
@@ -191,10 +205,12 @@ export function Analytics() {
 
         const onlineCount = activityData.filter(emp => emp.is_online).length;
         console.log(`Total online users: ${onlineCount}`);
+        console.log('Activity data:', activityData);
 
         setEmployeeActivity(activityData);
         setOnlineUsers(onlineCount);
       } else {
+        console.log('No active employees found');
         setEmployeeActivity([]);
         setOnlineUsers(0);
       }
@@ -316,6 +332,8 @@ export function Analytics() {
   const fetchRecentNotifications = async () => {
     // Get recent cash register sessions (last 24 hours)
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // Get start of today for deleted orders
+    const todayStart = new Date().toISOString().split('T')[0];
 
     const { data: sessions } = await supabase
       .from('cash_register_sessions')
@@ -330,7 +348,22 @@ export function Analytics() {
       .order('opened_at', { ascending: false })
       .limit(10);
 
-    const notifications = (sessions || []).map(session => ({
+    // Get deleted orders from today
+    const { data: deletedOrders } = await supabase
+      .from('deleted_orders')
+      .select(`
+        id,
+        order_number,
+        total,
+        deletion_note,
+        deleted_at,
+        employee_profiles!deleted_orders_deleted_by_fkey(full_name)
+      `)
+      .gte('deleted_at', todayStart)
+      .order('deleted_at', { ascending: false })
+      .limit(20);
+
+    const sessionNotifications = (sessions || []).map(session => ({
       id: session.id,
       type: session.closed_at ? 'session_closed' : 'session_opened',
       message: session.closed_at
@@ -340,7 +373,22 @@ export function Analytics() {
       icon: session.closed_at ? '🔒' : '🔓',
     }));
 
-    setRecentNotifications(notifications);
+    const deletedOrderNotifications = (deletedOrders || []).map(order => ({
+      id: `deleted-${order.id}`,
+      type: 'order_deleted',
+      message: `Pedido #${order.order_number?.toString().padStart(3, '0') || 'N/A'} eliminado por ${(order.employee_profiles as any)?.full_name || 'Admin'}`,
+      note: order.deletion_note,
+      total: order.total,
+      timestamp: order.deleted_at,
+      icon: '🗑️',
+    }));
+
+    // Combinar y ordenar todas las notificaciones por timestamp
+    const allNotifications = [...sessionNotifications, ...deletedOrderNotifications]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 15); // Limitar a 15 notificaciones totales
+
+    setRecentNotifications(allNotifications);
   };
 
   const generateDailyReport = async (summary: FinancialSummary) => {
@@ -1351,12 +1399,25 @@ export function Analytics() {
           <h3 className="text-lg font-bold text-gray-900 mb-4">Notificaciones Recientes</h3>
           {recentNotifications.length > 0 ? (
             <div className="space-y-3 max-h-80 overflow-y-auto">
-              {recentNotifications.map((notif) => (
-                <div key={notif.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+              {recentNotifications.map((notif: any) => (
+                <div key={notif.id} className={`flex items-start gap-3 p-3 rounded-lg ${
+                  notif.type === 'order_deleted' ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
+                }`}>
                   <span className="text-lg">{notif.icon}</span>
                   <div className="flex-1">
-                    <p className="text-sm text-gray-900">{notif.message}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm text-gray-900 font-medium">{notif.message}</p>
+                    {notif.type === 'order_deleted' && notif.note && (
+                      <div className="mt-2 p-2 bg-white rounded border border-red-100">
+                        <p className="text-xs font-semibold text-red-600 mb-1">Motivo:</p>
+                        <p className="text-xs text-gray-700">{notif.note}</p>
+                        {notif.total && (
+                          <p className="text-xs font-bold text-red-600 mt-1">
+                            Total: ${notif.total.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
                       {new Date(notif.timestamp).toLocaleString('es-ES', {
                         hour: '2-digit',
                         minute: '2-digit',

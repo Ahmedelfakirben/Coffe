@@ -263,7 +263,7 @@ export function POS() {
             employee_id: user.id,
             status: 'preparing',
             total: 0,
-            payment_method: paymentMethod,
+            payment_method: paymentMethod || 'cash',
             service_type: 'dine_in',
             table_id: tableId,
           })
@@ -297,12 +297,55 @@ export function POS() {
         return;
       }
 
-      // Show payment method modal only when validating directly
-      if (validateDirectly) {
+      // Show payment method modal when validating directly
+      console.log('Checkout flow check:', {
+        validateDirectly,
+        paymentMethod,
+        hasCart: cart.length > 0,
+        showPaymentModal,
+        step: 'initial_check'
+      });
+
+      // If payment modal is already showing, don't proceed with checkout yet
+      if (showPaymentModal) {
+        console.log('Payment modal is showing, waiting for user selection');
+        setLoading(false);
+        return;
+      }
+
+      // ALWAYS show payment modal when validating directly if no payment method selected
+      if (validateDirectly && cart.length > 0 && !paymentMethod) {
+        console.log('Showing payment modal - validating directly, no payment method');
         setShowPaymentModal(true);
         setLoading(false);
         return;
       }
+
+      // If validateDirectly is true and payment method is selected, continue with checkout
+      if (validateDirectly && cart.length > 0 && paymentMethod) {
+        console.log('Proceeding with validated checkout - payment method:', paymentMethod);
+        // Continue with normal checkout flow
+      } else if (!validateDirectly && cart.length > 0) {
+        console.log('Normal checkout flow - not validating directly');
+        // Continue with normal checkout flow (will use default 'cash' if no method selected)
+      } else {
+        console.log('No valid checkout conditions met, stopping');
+        setLoading(false);
+        return;
+      }
+
+      // Continue with the rest of the checkout logic...
+      console.log('Continuing with checkout logic for:', {
+        paymentMethod,
+        cartLength: cart.length,
+        validateDirectly,
+        activeOrderId
+      });
+
+      // ===== MAIN CHECKOUT PROCESSING =====
+      // (The existing checkout logic should continue from here)
+
+      // The rest of the checkout logic continues below...
 
       console.log('Iniciando checkout con:', {
         employeeId: user.id,
@@ -341,11 +384,11 @@ export function POS() {
             employee_id: user.id,
             status: validateDirectly ? 'completed' : 'preparing',
             total,
-            payment_method: paymentMethod,
+            payment_method: paymentMethod || 'cash',
             service_type: serviceType,
             table_id: serviceType === 'dine_in' ? tableId : null,
           })
-          .select()
+          .select('id,total,created_at,order_number')
           .single();
 
         if (orderError) throw orderError;
@@ -357,14 +400,16 @@ export function POS() {
           .select();
         if (itemsError) throw itemsError;
 
-        setTicket({
-          orderDate: new Date(order.created_at),
-          orderNumber: order.id,
-          items: ticketItems,
-          total,
-          paymentMethod,
-          cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
-        });
+        if (validateDirectly && paymentMethod) {
+          setTicket({
+            orderDate: new Date(order.created_at),
+            orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-3).toUpperCase()}`,
+            items: ticketItems,
+            total,
+            paymentMethod,
+            cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
+          });
+        }
 
         // Actualizar estado de mesa
         if (serviceType === 'dine_in' && tableId) {
@@ -378,7 +423,7 @@ export function POS() {
         // Agregar productos a orden existente
         const { data: existingOrder, error: existingErr } = await supabase
           .from('orders')
-          .select('id,total,table_id,status,created_at')
+          .select('id,total,table_id,status,created_at,order_number')
           .eq('id', activeOrderId)
           .single();
         if (existingErr || !existingOrder) throw existingErr || new Error('Orden no encontrada');
@@ -394,18 +439,20 @@ export function POS() {
         const newTotal = prevTotal + deltaTotal;
         const { error: updateErr } = await supabase
           .from('orders')
-          .update({ total: newTotal, status: newStatus, payment_method: paymentMethod })
+          .update({ total: newTotal, status: newStatus, payment_method: paymentMethod || 'cash' })
           .eq('id', activeOrderId);
         if (updateErr) throw updateErr;
 
-        setTicket({
-          orderDate: new Date(),
-          orderNumber: activeOrderId,
-          items: ticketItems,
-          total: newTotal,
-          paymentMethod,
-          cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
-        });
+        if (validateDirectly && paymentMethod) {
+          setTicket({
+            orderDate: new Date(),
+            orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
+            items: ticketItems,
+            total: newTotal,
+            paymentMethod,
+            cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
+          });
+        }
 
         if (existingOrder.table_id) {
           if (validateDirectly) {
@@ -479,9 +526,201 @@ export function POS() {
     );
   }
 
+  // Vista móvil
+  const renderMobileView = () => (
+    <div className="flex flex-col h-[calc(100vh-8rem)] bg-gray-50">
+      {/* Filtros de categoría móvil */}
+      <div className="bg-white p-3 border-b">
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${
+              selectedCategory === 'all'
+                ? 'bg-amber-600 text-white'
+                : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            Todos
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${
+                selectedCategory === cat.id
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Lista de productos móvil */}
+      <div className="flex-1 overflow-y-auto p-3">
+        <div className="space-y-2">
+          {products.map(product => {
+            const productSizesList = productSizes(product.id);
+            return (
+              <div key={product.id} className="bg-white rounded-lg p-3 shadow-sm border">
+                <div className="flex gap-3">
+                  {product.image_url && (
+                    <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 text-sm">{product.name}</h3>
+                    <p className="text-xs text-gray-500 truncate">{product.description}</p>
+                    <p className="text-lg font-bold text-amber-600 mt-1">${product.base_price.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                {productSizesList.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {productSizesList.map(size => (
+                      <button
+                        key={size.id}
+                        onClick={() => addItem(product, size)}
+                        className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 py-2 px-3 rounded-lg text-sm font-medium flex justify-between items-center"
+                      >
+                        <span>{size.size_name}</span>
+                        <span className="font-bold">+${size.price_modifier.toFixed(2)}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => addItem(product)}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg font-semibold mt-2 text-sm"
+                  >
+                    Agregar
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Resumen del pedido móvil (fixed en la parte inferior) */}
+      <div className="bg-white border-t shadow-lg p-4 space-y-3">
+        {/* Total y cantidad de items */}
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-xs text-gray-600">Total del pedido</p>
+            <p className="text-2xl font-bold text-amber-600">${total.toFixed(2)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-600">Items</p>
+            <p className="text-xl font-bold text-gray-900">{cart.length}</p>
+          </div>
+        </div>
+
+        {/* Opciones de servicio */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setServiceType('takeaway')}
+            className={`py-2 px-3 rounded-lg text-sm font-medium ${
+              serviceType === 'takeaway' ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            Para llevar
+          </button>
+          <button
+            onClick={() => setServiceType('dine_in')}
+            className={`py-2 px-3 rounded-lg text-sm font-medium ${
+              serviceType === 'dine_in' ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            En sala
+          </button>
+        </div>
+
+        {serviceType === 'dine_in' && (
+          <select
+            value={tableId || ''}
+            onChange={(e) => setTableId(e.target.value || null)}
+            className="w-full px-3 py-2 rounded-lg border bg-white text-sm"
+          >
+            <option value="">Seleccione mesa</option>
+            {tables.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.name} • {t.status === 'available' ? 'Disponible' : 'Ocupada'}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Validar directamente */}
+        <button
+          onClick={() => setValidateDirectly(!validateDirectly)}
+          className={`w-full py-2 px-3 rounded-lg text-sm font-medium ${
+            validateDirectly ? 'bg-green-100 text-green-700 border-2 border-green-500' : 'bg-gray-100 text-gray-700'
+          }`}
+        >
+          {validateDirectly ? '✓ Validar directamente' : 'Validar directamente'}
+        </button>
+
+        {/* Botón confirmar */}
+        <button
+          onClick={handleCheckout}
+          disabled={cart.length === 0 || loading}
+          className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Procesando...' : 'Confirmar Pedido'}
+        </button>
+
+        {/* Ver carrito */}
+        {cart.length > 0 && (
+          <button
+            onClick={() => {
+              // Scroll to top to show cart details
+              const modal = document.createElement('div');
+              modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-end" onclick="this.remove()">
+                  <div class="bg-white w-full max-h-[70vh] rounded-t-2xl p-4 overflow-y-auto" onclick="event.stopPropagation()">
+                    <h3 class="text-lg font-bold mb-4">Carrito (${cart.length} items)</h3>
+                    ${cart.map((item, index) => `
+                      <div class="flex justify-between items-center py-2 border-b">
+                        <div class="flex-1">
+                          <p class="font-medium text-sm">${item.quantity}x ${item.product.name}${item.size ? ` (${item.size.size_name})` : ''}</p>
+                          <p class="text-xs text-gray-500">$${(item.product.base_price + (item.size?.price_modifier || 0)).toFixed(2)} c/u</p>
+                        </div>
+                        <p class="font-bold text-amber-600">$${((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity).toFixed(2)}</p>
+                      </div>
+                    `).join('')}
+                    <div class="mt-4 pt-4 border-t flex justify-between">
+                      <span class="font-bold">Total:</span>
+                      <span class="font-bold text-amber-600 text-xl">$${total.toFixed(2)}</span>
+                    </div>
+                    <button onclick="this.closest('.fixed').remove()" class="w-full mt-4 bg-gray-200 py-2 rounded-lg">Cerrar</button>
+                  </div>
+                </div>
+              `;
+              document.body.appendChild(modal);
+            }}
+            className="w-full bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium"
+          >
+            Ver Carrito Detallado
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex h-[calc(100vh-5rem)] bg-gray-50">
-      <div className="flex-1 overflow-hidden flex flex-col">
+    <>
+      {/* Vista Móvil */}
+      <div className="md:hidden">
+        {renderMobileView()}
+      </div>
+
+      {/* Vista Desktop */}
+      <div className="hidden md:flex h-[calc(100vh-5rem)] bg-gray-50">
+        <div className="flex-1 overflow-hidden flex flex-col">
         <div className="bg-gradient-to-r from-amber-100 to-orange-100 p-4 border-b border-amber-200">
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-amber-300 scrollbar-track-transparent">
             <button
@@ -808,9 +1047,14 @@ export function POS() {
             <div className="grid grid-cols-1 gap-3 mb-6">
               <button
                 onClick={() => {
+                  console.log('Selecting cash payment method');
                   setPaymentMethod('cash');
                   setShowPaymentModal(false);
-                  handleCheckout();
+                  // Call handleCheckout after a brief delay to ensure state is updated
+                  setTimeout(() => {
+                    console.log('Calling handleCheckout for cash payment, paymentMethod:', paymentMethod);
+                    handleCheckout();
+                  }, 100);
                 }}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
@@ -823,9 +1067,14 @@ export function POS() {
 
               <button
                 onClick={() => {
+                  console.log('Selecting card payment method');
                   setPaymentMethod('card');
                   setShowPaymentModal(false);
-                  handleCheckout();
+                  // Call handleCheckout after a brief delay to ensure state is updated
+                  setTimeout(() => {
+                    console.log('Calling handleCheckout for card payment, paymentMethod:', paymentMethod);
+                    handleCheckout();
+                  }, 100);
                 }}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
@@ -838,9 +1087,14 @@ export function POS() {
 
               <button
                 onClick={() => {
+                  console.log('Selecting digital payment method');
                   setPaymentMethod('digital');
                   setShowPaymentModal(false);
-                  handleCheckout();
+                  // Call handleCheckout after a brief delay to ensure state is updated
+                  setTimeout(() => {
+                    console.log('Calling handleCheckout for digital payment, paymentMethod:', paymentMethod);
+                    handleCheckout();
+                  }, 100);
                 }}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
@@ -863,6 +1117,7 @@ export function POS() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

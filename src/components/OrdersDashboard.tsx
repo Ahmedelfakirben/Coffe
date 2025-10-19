@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface Order {
   id: string;
@@ -60,7 +61,7 @@ export function OrdersDashboard() {
   const { profile, user } = useAuth();
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('preparing');
   const [viewMode, setViewMode] = useState<'current' | 'history' | 'cash'>('current');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -71,6 +72,12 @@ export function OrdersDashboard() {
   const [selectedCashType, setSelectedCashType] = useState<'all' | 'open' | 'close'>('all');
   const [selectedCashUserId, setSelectedCashUserId] = useState<string>('all');
   const [selectedCashDateRange, setSelectedCashDateRange] = useState<'today' | 'week' | 'month' | 'all'>('today');
+
+  // Estado para modal de eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<OrderWithItems | null>(null);
+  const [deletionNote, setDeletionNote] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Function to get the last 2 AM timestamp (24-hour window for cashiers)
   const getLast2AMTimestamp = () => {
@@ -422,9 +429,57 @@ export function OrdersDashboard() {
     fetchOrders();
   };
 
-  const filteredOrders = selectedStatus === 'all'
-    ? orders
-    : orders.filter(o => o.status === selectedStatus);
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete || !user || !deletionNote.trim()) {
+      toast.error('Debe ingresar una nota de eliminación');
+      return;
+    }
+
+    setDeleteLoading(true);
+    try {
+      // Preparar los items del pedido en formato JSON
+      const itemsData = orderToDelete.order_items.map(item => ({
+        quantity: item.quantity,
+        product_name: item.products?.name || 'Producto',
+        size_name: item.product_sizes?.size_name || null
+      }));
+
+      // Insertar registro en deleted_orders
+      const { error: insertError } = await supabase
+        .from('deleted_orders')
+        .insert({
+          order_id: orderToDelete.id,
+          order_number: orderToDelete.order_number,
+          total: orderToDelete.total,
+          items: itemsData,
+          deleted_by: user.id,
+          deletion_note: deletionNote.trim()
+        });
+
+      if (insertError) throw insertError;
+
+      // Eliminar el pedido de la tabla orders
+      const { error: deleteError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderToDelete.id);
+
+      if (deleteError) throw deleteError;
+
+      toast.success('Pedido eliminado correctamente');
+      setShowDeleteModal(false);
+      setOrderToDelete(null);
+      setDeletionNote('');
+      fetchOrders();
+    } catch (error: any) {
+      console.error('Error eliminando pedido:', error);
+      toast.error(`Error al eliminar pedido: ${error.message}`);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const filteredOrders = orders.filter(o => o.status === selectedStatus);
 
   const filteredHistory = selectedUserId === 'all'
     ? orderHistory
@@ -522,8 +577,8 @@ export function OrdersDashboard() {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
+    <div className="p-3 md:p-6">
+      <div className="mb-4 md:mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Panel de Órdenes</h2>
         
         {/* Selector de vista */}
@@ -554,22 +609,12 @@ export function OrdersDashboard() {
         </div>
 
         {viewMode === 'current' ? (
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setSelectedStatus('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                selectedStatus === 'all'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Todas
-            </button>
+          <div className="flex gap-2 flex-wrap justify-center md:justify-start">
             {Object.entries(statusLabels).map(([status, label]) => (
               <button
                 key={status}
                 onClick={() => setSelectedStatus(status)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-colors text-sm md:text-base ${
                   selectedStatus === status
                     ? 'bg-amber-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
@@ -748,6 +793,19 @@ export function OrdersDashboard() {
                       </button>
                     </div>
                   )}
+
+                  {order.status === 'completed' && profile?.role === 'admin' && (
+                    <button
+                      onClick={() => {
+                        setOrderToDelete(order);
+                        setShowDeleteModal(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar Pedido
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -866,6 +924,81 @@ export function OrdersDashboard() {
             ))}
           </div>
         )
+      )}
+
+      {/* Delete Order Modal */}
+      {showDeleteModal && orderToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Eliminar Pedido</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿Está seguro de eliminar el pedido #{orderToDelete.order_number?.toString().padStart(3, '0') || orderToDelete.id.slice(-8)}?
+            </p>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-sm font-medium text-amber-800 mb-2">Detalles del pedido:</p>
+              <div className="space-y-1 text-sm text-gray-700">
+                {orderToDelete.order_items.map((item, idx) => (
+                  <div key={idx}>
+                    {item.quantity}x {item.products?.name}
+                    {item.product_sizes && ` (${item.product_sizes.size_name})`}
+                  </div>
+                ))}
+                <div className="font-bold text-amber-600 pt-2 border-t border-amber-300">
+                  Total: ${orderToDelete.total.toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nota de eliminación *
+              </label>
+              <textarea
+                value={deletionNote}
+                onChange={(e) => setDeletionNote(e.target.value)}
+                placeholder="Ingrese la razón de la eliminación..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                rows={3}
+                maxLength={500}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {deletionNote.length}/500 caracteres
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setOrderToDelete(null);
+                  setDeletionNote('');
+                }}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                disabled={deleteLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteOrder}
+                disabled={deleteLoading || !deletionNote.trim()}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {deleteLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar Pedido
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Payment Method Modal */}

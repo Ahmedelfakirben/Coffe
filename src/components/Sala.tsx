@@ -273,8 +273,110 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
     );
   }
 
+  // Vista móvil
+  const renderMobileView = () => (
+    <div className="min-h-[calc(100vh-8rem)] bg-gray-50">
+      {/* Header móvil */}
+      <div className="bg-white p-4 border-b sticky top-0 z-10">
+        <h2 className="text-xl font-bold text-gray-900">Gestión de Sala</h2>
+        {tableId && (
+          <p className="text-sm text-amber-600 mt-1">
+            Mesa seleccionada: {tables.find(t => t.id === tableId)?.name}
+          </p>
+        )}
+      </div>
+
+      {/* Botones de acción */}
+      <div className="p-4 bg-white border-b flex gap-2">
+        <button
+          onClick={clearSelection}
+          className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
+        >
+          Para llevar
+        </button>
+        {tables.length === 0 && (
+          <button
+            onClick={seedTables}
+            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
+          >
+            Añadir 6 mesas
+          </button>
+        )}
+      </div>
+
+      {/* Lista de mesas móvil */}
+      <div className="p-4 space-y-3">
+        {tables.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No hay mesas configuradas</p>
+          </div>
+        ) : (
+          tables.map((table) => (
+            <button
+              key={table.id}
+              onClick={() => selectTable(table)}
+              className={`w-full bg-white rounded-xl shadow-sm border-2 p-4 text-left transition-all ${
+                statusColor(table.status)
+              } ${
+                tableId === table.id ? 'ring-4 ring-amber-500 ring-offset-2' : ''
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full ${
+                    table.status === 'occupied' ? 'bg-yellow-500 animate-pulse' :
+                    table.status === 'available' ? 'bg-green-500' : 'bg-gray-400'
+                  }`}></div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg">{table.name}</h3>
+                    <p className="text-sm text-gray-600">
+                      👥 {table.seats} personas
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                    table.status === 'available' ? 'bg-green-100 text-green-700' :
+                    table.status === 'occupied' ? 'bg-yellow-100 text-yellow-700' :
+                    table.status === 'reserved' ? 'bg-blue-100 text-blue-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {table.status === 'available' ? 'Disponible' :
+                     table.status === 'occupied' ? 'Ocupada' :
+                     table.status === 'reserved' ? 'Reservada' : 'Sucia'}
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+
+      {/* Leyenda móvil */}
+      <div className="p-4 bg-white border-t fixed bottom-0 left-0 right-0">
+        <div className="flex justify-around text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span className="text-gray-600">Disponible</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+            <span className="text-gray-600">Ocupada</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <>
+      {/* Vista Móvil */}
+      <div className="md:hidden">
+        {renderMobileView()}
+      </div>
+
+      {/* Vista Desktop */}
+      <div className="hidden md:block min-h-screen bg-gray-50 p-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900">Sala</h2>
         <div className="flex gap-2 items-center">
@@ -483,6 +585,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           />
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Category {
@@ -43,6 +43,9 @@ export function ProductsManager() {
   const [newProductPreviewUrl, setNewProductPreviewUrl] = useState<string | null>(null);
   const [editingImage, setEditingImage] = useState<File | null>(null);
   const [editingImagePreviewUrl, setEditingImagePreviewUrl] = useState<string | null>(null);
+  const [creatingProduct, setCreatingProduct] = useState(false);
+  const [updatingProduct, setUpdatingProduct] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -88,7 +91,11 @@ export function ProductsManager() {
   };
 
   const handleCreateProduct = async () => {
+    if (creatingProduct) return;
+
+    setCreatingProduct(true);
     try {
+      // Create product first
       const { data: created, error } = await supabase
         .from('products')
         .insert(newProduct)
@@ -96,37 +103,51 @@ export function ProductsManager() {
         .single();
 
       if (error) {
-        alert('Error al crear producto');
+        toast.error('Error al crear producto');
         return;
       }
 
+      // Upload image if provided
       if (created && newProductImage) {
-        const fileExt = newProductImage.name.split('.').pop();
-        const filePath = `products/${created.id}/${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, newProductImage, {
-            upsert: true,
-            contentType: newProductImage.type,
-          });
+        setUploadingImage(true);
+        try {
+          const fileExt = newProductImage.name.split('.').pop();
+          const filePath = `products/${created.id}/${Date.now()}.${fileExt}`;
 
-        if (uploadError) {
-          console.error('Error subiendo imagen:', uploadError);
-          toast.error(`Error subiendo imagen: ${uploadError.message || 'Verifica el bucket "product-images" y permisos públicos.'}`);
-        } else {
-          const { data: publicData } = supabase.storage
+          toast.loading('Subiendo imagen...', { id: 'image-upload' });
+
+          const { error: uploadError } = await supabase.storage
             .from('product-images')
-            .getPublicUrl(filePath);
+            .upload(filePath, newProductImage, {
+              upsert: true,
+              contentType: newProductImage.type,
+            });
 
-          const publicUrl = publicData?.publicUrl;
-          if (publicUrl) {
-            await supabase
-              .from('products')
-              .update({ image_url: publicUrl })
-              .eq('id', created.id);
+          if (uploadError) {
+            console.error('Error subiendo imagen:', uploadError);
+            toast.error(`Error subiendo imagen: ${uploadError.message || 'Verifica el bucket "product-images" y permisos públicos.'}`, { id: 'image-upload' });
           } else {
-            toast.error('No se pudo obtener la URL pública de la imagen.');
+            const { data: publicData } = supabase.storage
+              .from('product-images')
+              .getPublicUrl(filePath);
+
+            const publicUrl = publicData?.publicUrl;
+            if (publicUrl) {
+              await supabase
+                .from('products')
+                .update({ image_url: publicUrl })
+                .eq('id', created.id);
+
+              toast.success('Imagen subida correctamente', { id: 'image-upload' });
+            } else {
+              toast.error('No se pudo obtener la URL pública de la imagen.', { id: 'image-upload' });
+            }
           }
+        } catch (uploadErr) {
+          console.error('Error during image upload:', uploadErr);
+          toast.error('Error durante la subida de imagen', { id: 'image-upload' });
+        } finally {
+          setUploadingImage(false);
         }
       }
 
@@ -135,64 +156,91 @@ export function ProductsManager() {
       setNewProductImage(null);
       setNewProductPreviewUrl(null);
       fetchProducts();
+      toast.success('Producto creado correctamente');
     } catch (err) {
       console.error('Error creando producto:', err);
-      alert('Error al crear producto');
+      toast.error('Error al crear producto');
+    } finally {
+      setCreatingProduct(false);
     }
   };
 
   const handleUpdateProduct = async () => {
-    if (!editingProduct) return;
-    const { error } = await supabase
-      .from('products')
-      .update({
-        name: editingProduct.name,
-        description: editingProduct.description,
-        category_id: editingProduct.category_id,
-        base_price: editingProduct.base_price,
-        available: editingProduct.available,
-      })
-      .eq('id', editingProduct.id);
+    if (!editingProduct || updatingProduct) return;
 
-    if (error) {
-      alert('Error al actualizar producto');
-      return;
-    }
+    setUpdatingProduct(true);
+    try {
+      // Update product first
+      const { error } = await supabase
+        .from('products')
+        .update({
+          name: editingProduct.name,
+          description: editingProduct.description,
+          category_id: editingProduct.category_id,
+          base_price: editingProduct.base_price,
+          available: editingProduct.available,
+        })
+        .eq('id', editingProduct.id);
 
-    // Subir nueva imagen si se seleccionó
-    if (editingImage && editingProduct) {
-      const fileExt = editingImage.name.split('.').pop();
-      const filePath = `products/${editingProduct.id}/${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, editingImage, {
-          upsert: true,
-          contentType: editingImage.type,
-        });
+      if (error) {
+        toast.error('Error al actualizar producto');
+        return;
+      }
 
-      if (uploadError) {
-        console.error('Error subiendo imagen:', uploadError);
-        toast.error(`Error subiendo imagen: ${uploadError.message || ''}`);
-      } else {
-        const { data: publicData } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath);
+      // Upload new image if provided
+      if (editingImage && editingProduct) {
+        setUploadingImage(true);
+        try {
+          const fileExt = editingImage.name.split('.').pop();
+          const filePath = `products/${editingProduct.id}/${Date.now()}.${fileExt}`;
 
-        if (publicData?.publicUrl) {
-          await supabase
-            .from('products')
-            .update({ image_url: publicData.publicUrl })
-            .eq('id', editingProduct.id);
-        } else {
-          toast.error('No se pudo obtener la URL pública de la imagen.');
+          toast.loading('Subiendo imagen...', { id: 'image-edit-upload' });
+
+          const { error: uploadError } = await supabase.storage
+            .from('product-images')
+            .upload(filePath, editingImage, {
+              upsert: true,
+              contentType: editingImage.type,
+            });
+
+          if (uploadError) {
+            console.error('Error subiendo imagen:', uploadError);
+            toast.error(`Error subiendo imagen: ${uploadError.message || ''}`, { id: 'image-edit-upload' });
+          } else {
+            const { data: publicData } = supabase.storage
+              .from('product-images')
+              .getPublicUrl(filePath);
+
+            if (publicData?.publicUrl) {
+              await supabase
+                .from('products')
+                .update({ image_url: publicData.publicUrl })
+                .eq('id', editingProduct.id);
+
+              toast.success('Imagen subida correctamente', { id: 'image-edit-upload' });
+            } else {
+              toast.error('No se pudo obtener la URL pública de la imagen.', { id: 'image-edit-upload' });
+            }
+          }
+        } catch (uploadErr) {
+          console.error('Error during image upload:', uploadErr);
+          toast.error('Error durante la subida de imagen', { id: 'image-edit-upload' });
+        } finally {
+          setUploadingImage(false);
         }
       }
-    }
 
-    setEditingImage(null);
-    setEditingImagePreviewUrl(null);
-    setEditingProduct(null);
-    fetchProducts();
+      setEditingImage(null);
+      setEditingImagePreviewUrl(null);
+      setEditingProduct(null);
+      fetchProducts();
+      toast.success('Producto actualizado correctamente');
+    } catch (err) {
+      console.error('Error actualizando producto:', err);
+      toast.error('Error al actualizar producto');
+    } finally {
+      setUpdatingProduct(false);
+    }
   };
 
   const handleDeleteProduct = async (id: string) => {
@@ -341,28 +389,50 @@ export function ProductsManager() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Imagen (opcional)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={e => setNewProductImage(e.target.files?.[0] || null)}
-                  className="w-full"
-                />
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setNewProductImage(e.target.files?.[0] || null)}
+                    disabled={uploadingImage}
+                    className={`w-full ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  />
+                  {uploadingImage && (
+                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                      <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+                    </div>
+                  )}
+                </div>
                 {newProductPreviewUrl && (
-                  <div className="mt-2">
+                  <div className="mt-2 relative">
                     <img src={newProductPreviewUrl} alt="Vista previa" className="h-24 w-24 object-cover rounded border" />
+                    {uploadingImage && (
+                      <div className="absolute inset-0 bg-black bg-opacity-50 rounded flex items-center justify-center">
+                        <Loader2 className="w-6 h-6 text-white animate-spin" />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleCreateProduct}
-                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2 rounded-lg transition-colors"
+                  disabled={creatingProduct || uploadingImage}
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  Crear
+                  {creatingProduct || uploadingImage ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {uploadingImage ? 'Subiendo imagen...' : 'Creando...'}
+                    </>
+                  ) : (
+                    'Crear'
+                  )}
                 </button>
                 <button
                   onClick={() => setShowNewProduct(false)}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg transition-colors"
+                  disabled={creatingProduct || uploadingImage}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 text-gray-700 py-2 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
@@ -398,22 +468,37 @@ export function ProductsManager() {
                       />
                       <div className="mt-2 flex items-center gap-3">
                         {(editingImagePreviewUrl || product.image_url) && (
-                          <img
-                            src={editingImagePreviewUrl || product.image_url || ''}
-                            alt="Vista previa"
-                            className="h-16 w-16 object-cover rounded border"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
+                          <div className="relative">
+                            <img
+                              src={editingImagePreviewUrl || product.image_url || ''}
+                              alt="Vista previa"
+                              className="h-16 w-16 object-cover rounded border"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                            {uploadingImage && (
+                              <div className="absolute inset-0 bg-black bg-opacity-50 rounded flex items-center justify-center">
+                                <Loader2 className="w-4 h-4 text-white animate-spin" />
+                              </div>
+                            )}
+                          </div>
                         )}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={e => {
-                            const file = e.target.files?.[0] || null;
-                            setEditingImage(file);
-                          }}
-                          className="text-sm"
-                        />
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={uploadingImage}
+                            onChange={e => {
+                              const file = e.target.files?.[0] || null;
+                              setEditingImage(file);
+                            }}
+                            className={`text-sm ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          />
+                          {uploadingImage && (
+                            <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
+                              <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -470,13 +555,21 @@ export function ProductsManager() {
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={handleUpdateProduct}
-                        className="text-green-600 hover:text-green-800"
+                        disabled={updatingProduct || uploadingImage}
+                        className={`flex items-center gap-1 ${updatingProduct || uploadingImage ? 'text-green-400 cursor-not-allowed' : 'text-green-600 hover:text-green-800'}`}
+                        title={updatingProduct || uploadingImage ? (uploadingImage ? 'Subiendo imagen...' : 'Guardando cambios...') : 'Guardar cambios'}
                       >
-                        <Save className="w-5 h-5" />
+                        {updatingProduct || uploadingImage ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Save className="w-5 h-5" />
+                        )}
                       </button>
                       <button
                         onClick={() => setEditingProduct(null)}
-                        className="text-gray-600 hover:text-gray-800"
+                        disabled={updatingProduct || uploadingImage}
+                        className={`flex items-center gap-1 ${updatingProduct || uploadingImage ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:text-gray-800'}`}
+                        title={updatingProduct || uploadingImage ? 'Espera a que termine la operación' : 'Cancelar edición'}
                       >
                         <X className="w-5 h-5" />
                       </button>

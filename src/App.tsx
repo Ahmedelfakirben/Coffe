@@ -14,6 +14,7 @@ import { SupplierManager } from './components/SupplierManager';
 import { ExpenseManager } from './components/ExpenseManager';
 import { Analytics } from './components/Analytics';
 import { CashRegisterDashboard } from './components/CashRegisterDashboard';
+import { EmployeeTimeTracking } from './components/EmployeeTimeTracking';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -22,6 +23,13 @@ function AppContent() {
   const [showOpenCashModal, setShowOpenCashModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
   const [openingLoading, setOpeningLoading] = useState(false);
+
+  // Redirigir a Analíticas si el usuario es admin
+  useEffect(() => {
+    if (profile && profile.role === 'admin') {
+      setCurrentView('analytics');
+    }
+  }, [profile]);
 
   useEffect(() => {
     const checkOpenCashSession = async () => {
@@ -99,6 +107,7 @@ function AppContent() {
         {currentView === 'users' && profile.role === 'admin' && <UserManager />}
         {currentView === 'suppliers' && profile.role === 'admin' && <SupplierManager />}
         {currentView === 'expenses' && profile.role === 'admin' && <ExpenseManager />}
+        {currentView === 'time-tracking' && profile.role === 'admin' && <EmployeeTimeTracking />}
         {currentView === 'analytics' && profile.role === 'admin' && <Analytics />}
         {currentView === 'cash' && (profile.role === 'admin' || profile.role === 'cashier') && <CashRegisterDashboard />}
       </div>
