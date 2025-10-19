@@ -1,4 +1,4 @@
-import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock } from 'lucide-react';
+import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -29,35 +29,95 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   const [closingAmount, setClosingAmount] = useState('');
   const [closingLoading, setClosingLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userPermissions, setUserPermissions] = useState<{ [key: string]: boolean }>({});
 
   const navGroups: NavGroup[] = [
     {
       name: 'Ventas',
       items: [
-        { id: 'floor', label: 'Sala', icon: Users, roles: ['admin', 'cashier', 'barista'] },
-        { id: 'pos', label: 'Punto de Venta', icon: ShoppingCart, roles: ['admin', 'cashier', 'barista'] },
-        { id: 'orders', label: 'Órdenes', icon: ClipboardList, roles: ['admin', 'cashier', 'barista'] },
+        { id: 'floor', label: 'Sala', icon: Users, roles: ['admin', 'super_admin', 'cashier', 'barista', 'waiter'] },
+        { id: 'pos', label: 'Punto de Venta', icon: ShoppingCart, roles: ['admin', 'super_admin', 'cashier', 'barista'] },
+        { id: 'orders', label: 'Órdenes', icon: ClipboardList, roles: ['admin', 'super_admin', 'cashier', 'barista', 'waiter'] },
       ]
     },
     {
       name: 'Inventario',
       items: [
-        { id: 'products', label: 'Productos', icon: Package, roles: ['admin'] },
-        { id: 'categories', label: 'Categorías', icon: Tag, roles: ['admin'] },
-        { id: 'users', label: 'Usuarios', icon: Users, roles: ['admin'] },
+        { id: 'products', label: 'Productos', icon: Package, roles: ['admin', 'super_admin'] },
+        { id: 'categories', label: 'Categorías', icon: Tag, roles: ['admin', 'super_admin'] },
+        { id: 'users', label: 'Usuarios', icon: Users, roles: ['admin', 'super_admin'] },
       ]
     },
     {
       name: 'Finanzas',
       items: [
-        { id: 'cash', label: 'Caja', icon: Calculator, roles: ['admin', 'cashier'] },
-        { id: 'time-tracking', label: 'Tiempo Empleados', icon: Clock, roles: ['admin'] },
-        { id: 'suppliers', label: 'Proveedores', icon: Truck, roles: ['admin'] },
-        { id: 'expenses', label: 'Gastos', icon: DollarSign, roles: ['admin'] },
-        { id: 'analytics', label: 'Analíticas', icon: BarChart3, roles: ['admin'] },
+        { id: 'cash', label: 'Caja', icon: Calculator, roles: ['admin', 'super_admin', 'cashier'] },
+        { id: 'time-tracking', label: 'Tiempo Empleados', icon: Clock, roles: ['admin', 'super_admin'] },
+        { id: 'suppliers', label: 'Proveedores', icon: Truck, roles: ['admin', 'super_admin'] },
+        { id: 'expenses', label: 'Gastos', icon: DollarSign, roles: ['admin', 'super_admin'] },
+        { id: 'analytics', label: 'Analíticas', icon: BarChart3, roles: ['admin', 'super_admin'] },
+      ]
+    },
+    {
+      name: 'Sistema',
+      items: [
+        { id: 'role-management', label: 'Gestión de Roles', icon: Shield, roles: ['super_admin'] },
       ]
     }
   ];
+
+  // Cargar permisos del usuario desde la base de datos
+  useEffect(() => {
+    const fetchUserPermissions = async () => {
+      if (!profile?.role) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('role_permissions')
+          .select('page_id, can_access')
+          .eq('role', profile.role)
+          .eq('can_access', true);
+
+        if (error) {
+          console.error('Error fetching permissions:', error);
+          return;
+        }
+
+        // Crear un mapa de permisos por page_id
+        const permissionsMap: { [key: string]: boolean } = {};
+        data?.forEach(perm => {
+          permissionsMap[perm.page_id] = perm.can_access;
+        });
+
+        setUserPermissions(permissionsMap);
+      } catch (err) {
+        console.error('Error loading permissions:', err);
+      }
+    };
+
+    fetchUserPermissions();
+
+    // Suscribirse a cambios en permisos para actualizar en tiempo real
+    const channel = supabase
+      .channel('role-permissions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'role_permissions',
+          filter: `role=eq.${profile?.role}`
+        },
+        () => {
+          fetchUserPermissions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.role]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -111,8 +171,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   };
 
   const renderGroup = (group: NavGroup, isMobile: boolean = false) => {
-    const visibleItems = group.items.filter(item => 
-      profile && item.roles.includes(profile.role)
+    // Filtrar items basándose en permisos de la base de datos
+    const visibleItems = group.items.filter(item =>
+      userPermissions[item.id] === true
     );
 
     if (visibleItems.length === 0) return null;
@@ -427,42 +488,48 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         {/* Navegación móvil simplificada */}
         <div className="lg:hidden border-t border-gray-200 bg-gray-50">
           <div className="flex items-center justify-around px-4 py-2">
-            {profile?.role === 'cashier' || profile?.role === 'barista' ? (
-              // Vista simplificada para cajeros y baristas - Solo 3 botones
+            {profile?.role === 'cashier' || profile?.role === 'barista' || profile?.role === 'waiter' ? (
+              // Vista simplificada para cajeros, baristas y camareros - basado en permisos
               <>
-                <button
-                  onClick={() => onViewChange('pos')}
-                  className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-                    currentView === 'pos'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <ShoppingCart className="w-5 h-5" />
-                  <span className="text-xs font-medium">Punto de Venta</span>
-                </button>
-                <button
-                  onClick={() => onViewChange('floor')}
-                  className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-                    currentView === 'floor'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <Users className="w-5 h-5" />
-                  <span className="text-xs font-medium">Sala</span>
-                </button>
-                <button
-                  onClick={() => onViewChange('orders')}
-                  className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-                    currentView === 'orders'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <ClipboardList className="w-5 h-5" />
-                  <span className="text-xs font-medium">Pedidos</span>
-                </button>
+                {userPermissions['pos'] && (
+                  <button
+                    onClick={() => onViewChange('pos')}
+                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                      currentView === 'pos'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    <span className="text-xs font-medium">Punto de Venta</span>
+                  </button>
+                )}
+                {userPermissions['floor'] && (
+                  <button
+                    onClick={() => onViewChange('floor')}
+                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                      currentView === 'floor'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Users className="w-5 h-5" />
+                    <span className="text-xs font-medium">Sala</span>
+                  </button>
+                )}
+                {userPermissions['orders'] && (
+                  <button
+                    onClick={() => onViewChange('orders')}
+                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                      currentView === 'orders'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <ClipboardList className="w-5 h-5" />
+                    <span className="text-xs font-medium">Pedidos</span>
+                  </button>
+                )}
               </>
             ) : (
               // Vista para admin - Botón de menú hamburguesa centrado
@@ -480,8 +547,8 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         </div>
       </nav>
 
-      {/* Menú lateral móvil para admin */}
-      {mobileMenuOpen && profile?.role === 'admin' && (
+      {/* Menú lateral móvil para admin y super_admin */}
+      {mobileMenuOpen && (profile?.role === 'admin' || profile?.role === 'super_admin') && (
         <>
           {/* Overlay */}
           <div
@@ -510,7 +577,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               <div className="flex-1 overflow-y-auto p-4">
                 {navGroups.map(group => {
                   const visibleItems = group.items.filter(item =>
-                    profile && item.roles.includes(profile.role)
+                    userPermissions[item.id] === true
                   );
 
                   if (visibleItems.length === 0) return null;

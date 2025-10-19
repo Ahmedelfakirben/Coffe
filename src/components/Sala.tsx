@@ -16,7 +16,7 @@ interface Table {
 }
 
 export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { tableId, setTableId, setServiceType, setActiveOrderId } = useCart();
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
@@ -487,12 +487,14 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                       >
                         Continuar
                       </button>
-                      <button
-                        className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs"
-                        onClick={() => setShowPaymentSelector(order.id)}
-                      >
-                        Validar
-                      </button>
+                      {profile?.role !== 'waiter' && (
+                        <button
+                          className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs"
+                          onClick={() => setShowPaymentSelector(order.id)}
+                        >
+                          Validar
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

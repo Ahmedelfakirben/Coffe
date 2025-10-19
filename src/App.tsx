@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
@@ -15,6 +15,7 @@ import { ExpenseManager } from './components/ExpenseManager';
 import { Analytics } from './components/Analytics';
 import { CashRegisterDashboard } from './components/CashRegisterDashboard';
 import { EmployeeTimeTracking } from './components/EmployeeTimeTracking';
+import { RoleManagement } from './components/RoleManagement';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -23,13 +24,79 @@ function AppContent() {
   const [showOpenCashModal, setShowOpenCashModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
   const [openingLoading, setOpeningLoading] = useState(false);
+  const [userPermissions, setUserPermissions] = useState<{ [key: string]: boolean }>({});
+  const hasRedirectedRef = useRef(false);
 
-  // Redirigir a Analíticas si el usuario es admin
+  // Cargar permisos del usuario desde la base de datos
   useEffect(() => {
-    if (profile && profile.role === 'admin') {
-      setCurrentView('analytics');
+    const fetchUserPermissions = async () => {
+      if (!profile?.role) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('role_permissions')
+          .select('page_id, can_access')
+          .eq('role', profile.role)
+          .eq('can_access', true);
+
+        if (error) {
+          console.error('Error fetching permissions:', error);
+          return;
+        }
+
+        // Crear un mapa de permisos por page_id
+        const permissionsMap: { [key: string]: boolean } = {};
+        data?.forEach(perm => {
+          permissionsMap[perm.page_id] = perm.can_access;
+        });
+
+        setUserPermissions(permissionsMap);
+      } catch (err) {
+        console.error('Error loading permissions:', err);
+      }
+    };
+
+    fetchUserPermissions();
+
+    // Suscribirse a cambios en permisos
+    const channel = supabase
+      .channel('app-role-permissions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'role_permissions',
+          filter: `role=eq.${profile?.role}`
+        },
+        () => {
+          fetchUserPermissions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.role]);
+
+  // Redirigir a Analíticas SOLO en el login inicial (no en cada cambio de pestaña)
+  useEffect(() => {
+    // Si no hay perfil, resetear el flag para el próximo login
+    if (!profile) {
+      hasRedirectedRef.current = false;
+      return;
     }
-  }, [profile]);
+
+    // Solo redirigir si:
+    // 1. Tiene permiso para analytics
+    // 2. NO se ha redirigido antes en esta sesión
+    // 3. La vista actual es la por defecto ('pos')
+    if (userPermissions['analytics'] && !hasRedirectedRef.current && currentView === 'pos') {
+      setCurrentView('analytics');
+      hasRedirectedRef.current = true;
+    }
+  }, [profile, userPermissions, currentView]);
 
   useEffect(() => {
     const checkOpenCashSession = async () => {
@@ -99,17 +166,18 @@ function AppContent() {
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       <Navigation currentView={currentView} onViewChange={setCurrentView} />
       <div className="flex-1 overflow-auto p-6">
-        {currentView === 'floor' && <Sala onGoToPOS={() => setCurrentView('pos')} />}
-        {currentView === 'pos' && <POS />}
-        {currentView === 'orders' && <OrdersDashboard />}
-        {currentView === 'products' && profile.role === 'admin' && <ProductsManager />}
-        {currentView === 'categories' && profile.role === 'admin' && <CategoryManager />}
-        {currentView === 'users' && profile.role === 'admin' && <UserManager />}
-        {currentView === 'suppliers' && profile.role === 'admin' && <SupplierManager />}
-        {currentView === 'expenses' && profile.role === 'admin' && <ExpenseManager />}
-        {currentView === 'time-tracking' && profile.role === 'admin' && <EmployeeTimeTracking />}
-        {currentView === 'analytics' && profile.role === 'admin' && <Analytics />}
-        {currentView === 'cash' && (profile.role === 'admin' || profile.role === 'cashier') && <CashRegisterDashboard />}
+        {currentView === 'floor' && userPermissions['floor'] && <Sala onGoToPOS={() => setCurrentView('pos')} />}
+        {currentView === 'pos' && userPermissions['pos'] && <POS />}
+        {currentView === 'orders' && userPermissions['orders'] && <OrdersDashboard />}
+        {currentView === 'products' && userPermissions['products'] && <ProductsManager />}
+        {currentView === 'categories' && userPermissions['categories'] && <CategoryManager />}
+        {currentView === 'users' && userPermissions['users'] && <UserManager />}
+        {currentView === 'suppliers' && userPermissions['suppliers'] && <SupplierManager />}
+        {currentView === 'expenses' && userPermissions['expenses'] && <ExpenseManager />}
+        {currentView === 'time-tracking' && userPermissions['time-tracking'] && <EmployeeTimeTracking />}
+        {currentView === 'analytics' && userPermissions['analytics'] && <Analytics />}
+        {currentView === 'cash' && userPermissions['cash'] && <CashRegisterDashboard />}
+        {currentView === 'role-management' && userPermissions['role-management'] && <RoleManagement />}
       </div>
 
       {showOpenCashModal && (

@@ -10,8 +10,8 @@ import { toast } from 'react-hot-toast';
 const ITEMS_PER_PAGE = 12;
 
 export function POS() {
-  const { user } = useAuth();
-  const { 
+  const { user, profile } = useAuth();
+  const {
     items: cart,
     total,
     paymentMethod,
@@ -43,6 +43,8 @@ export function POS() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [existingItems, setExistingItems] = useState<Array<{ name: string; size?: string; quantity: number; price: number; subtotal: number }>>([]);
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
+  const [canConfirmOrder, setCanConfirmOrder] = useState(true);
+  const [canValidateOrder, setCanValidateOrder] = useState(true);
   const [ticket, setTicket] = useState<{
     orderDate: Date;
     orderNumber: string;
@@ -59,6 +61,36 @@ export function POS() {
       fetchSizes()
     ]).finally(() => setDataLoading(false));
   }, []);
+
+  // Cargar permisos granulares para POS
+  useEffect(() => {
+    const fetchPOSPermissions = async () => {
+      if (!profile?.role) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('role_permissions')
+          .select('can_confirm_order, can_validate_order')
+          .eq('role', profile.role)
+          .eq('page_id', 'pos')
+          .single();
+
+        if (error) {
+          console.error('Error fetching POS permissions:', error);
+          return;
+        }
+
+        if (data) {
+          setCanConfirmOrder(data.can_confirm_order ?? true);
+          setCanValidateOrder(data.can_validate_order ?? true);
+        }
+      } catch (err) {
+        console.error('Error loading POS permissions:', err);
+      }
+    };
+
+    fetchPOSPermissions();
+  }, [profile?.role]);
 
   const fetchTables = async () => {
     try {
@@ -286,6 +318,17 @@ export function POS() {
   const handleCheckout = async () => {
     if (cart.length === 0 || !user) {
       console.log('Carrito vacío o usuario no autenticado:', { cartLength: cart.length, userId: user?.id });
+      return;
+    }
+
+    // Verificar permisos granulares
+    if (validateDirectly && !canValidateOrder) {
+      toast.error('No tienes permiso para validar pedidos directamente');
+      return;
+    }
+
+    if (!validateDirectly && !canConfirmOrder) {
+      toast.error('No tienes permiso para confirmar pedidos');
       return;
     }
 
@@ -655,14 +698,16 @@ export function POS() {
         )}
 
         {/* Validar directamente */}
-        <button
-          onClick={() => setValidateDirectly(!validateDirectly)}
-          className={`w-full py-2 px-3 rounded-lg text-sm font-medium ${
-            validateDirectly ? 'bg-green-100 text-green-700 border-2 border-green-500' : 'bg-gray-100 text-gray-700'
-          }`}
-        >
-          {validateDirectly ? '✓ Validar directamente' : 'Validar directamente'}
-        </button>
+        {canValidateOrder && (
+          <button
+            onClick={() => setValidateDirectly(!validateDirectly)}
+            className={`w-full py-2 px-3 rounded-lg text-sm font-medium ${
+              validateDirectly ? 'bg-green-100 text-green-700 border-2 border-green-500' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {validateDirectly ? '✓ Validar directamente' : 'Validar directamente'}
+          </button>
+        )}
 
         {/* Botón confirmar */}
         <button
@@ -989,16 +1034,18 @@ export function POS() {
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-2">Opciones</label>
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                onClick={() => setValidateDirectly(!validateDirectly)}
-                className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${
-                  validateDirectly ? 'border-amber-600 bg-amber-50' : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                Validar directamente
-              </button>
-            </div>
+            {canValidateOrder && (
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  onClick={() => setValidateDirectly(!validateDirectly)}
+                  className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${
+                    validateDirectly ? 'border-amber-600 bg-amber-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  Validar directamente
+                </button>
+              </div>
+            )}
           </div>
 
           <button

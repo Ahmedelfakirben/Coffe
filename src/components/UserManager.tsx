@@ -3,16 +3,18 @@ import { Edit, Trash2, UserPlus, Mail, Phone, Shield, KeyRound } from 'lucide-re
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { EmployeeProfile } from '../types/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface NewEmployee {
   email: string;
   password: string;
   full_name: string;
-  role: 'admin' | 'cashier' | 'barista';
+  role: 'super_admin' | 'admin' | 'cashier' | 'barista' | 'waiter';
   phone: string;
 }
 
 export function UserManager() {
+  const { profile } = useAuth();
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,6 +53,13 @@ export function UserManager() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validar que solo super_admin pueda crear super_admins
+    if (newEmployee.role === 'super_admin' && profile?.role !== 'super_admin') {
+      toast.error('Solo un Super Administrador puede crear otros Super Administradores');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -178,14 +187,35 @@ export function UserManager() {
 
   const getRoleColor = (role: string) => {
     switch (role) {
+      case 'super_admin':
+        return 'bg-purple-100 text-purple-800';
       case 'admin':
         return 'bg-red-100 text-red-800';
       case 'cashier':
         return 'bg-blue-100 text-blue-800';
       case 'barista':
         return 'bg-green-100 text-green-800';
+      case 'waiter':
+        return 'bg-pink-100 text-pink-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getRoleName = (role: string) => {
+    switch (role) {
+      case 'super_admin':
+        return 'Super Administrador';
+      case 'admin':
+        return 'Administrador';
+      case 'cashier':
+        return 'Cajero';
+      case 'barista':
+        return 'Barista';
+      case 'waiter':
+        return 'Camarero';
+      default:
+        return role;
     }
   };
 
@@ -290,9 +320,13 @@ export function UserManager() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 required
               >
+                <option value="waiter">Camarero</option>
                 <option value="cashier">Cajero</option>
                 <option value="barista">Barista</option>
                 <option value="admin">Administrador</option>
+                {profile?.role === 'super_admin' && (
+                  <option value="super_admin">Super Administrador</option>
+                )}
               </select>
             </div>
           </div>
@@ -397,7 +431,7 @@ export function UserManager() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleColor(employee.role)}`}>
-                    {employee.role}
+                    {getRoleName(employee.role)}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
