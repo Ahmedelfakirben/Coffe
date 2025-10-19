@@ -15,6 +15,13 @@ interface Employee {
   created_at: string;
 }
 
+interface CompanySettings {
+  id: string;
+  company_name: string;
+  address: string;
+  phone: string;
+}
+
 interface WorkSession {
   id: string;
   opened_at: string;
@@ -51,9 +58,25 @@ export function EmployeeTimeTracking() {
   const [dayStats, setDayStats] = useState<DayStats[]>([]);
   const [monthStats, setMonthStats] = useState<MonthStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
 
   useEffect(() => {
     fetchEmployees();
+    fetchCompanySettings();
+
+    // Listen for company settings updates
+    const handleCompanySettingsUpdate = (event: any) => {
+      console.log('Company settings updated in EmployeeTimeTracking:', event.detail);
+      if (event.detail) {
+        setCompanySettings(event.detail);
+      }
+    };
+
+    window.addEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
+
+    return () => {
+      window.removeEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -76,6 +99,24 @@ export function EmployeeTimeTracking() {
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Error al cargar empleados');
+    }
+  };
+
+  const fetchCompanySettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setCompanySettings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching company settings:', error);
+      // Don't show error toast for company settings as it's not critical for the main functionality
     }
   };
 
@@ -203,6 +244,17 @@ export function EmployeeTimeTracking() {
 
       // Hoja 1: Resumen
       const summaryData = [
+        ['🏢 INFORMACIÓN DE LA EMPRESA'],
+        [''],
+        ...(companySettings ? [
+          ['EMPRESA', companySettings.company_name],
+          ['DIRECCIÓN', companySettings.address || 'No especificada'],
+          ['TELÉFONO', companySettings.phone || 'No especificado'],
+          [''],
+        ] : [
+          ['EMPRESA', 'No configurada'],
+          [''],
+        ]),
         ['📊 REPORTE DE TIEMPO Y RENDIMIENTO'],
         [''],
         ['EMPLEADO', selectedEmployee.full_name],
@@ -234,7 +286,21 @@ export function EmployeeTimeTracking() {
 
       // Hoja 2: Desglose Diario
       const dailyData = [
+        ['🏢 INFORMACIÓN DE LA EMPRESA'],
+        [''],
+        ...(companySettings ? [
+          ['EMPRESA', companySettings.company_name],
+          ['DIRECCIÓN', companySettings.address || 'No especificada'],
+          ['TELÉFONO', companySettings.phone || 'No especificado'],
+          [''],
+        ] : [
+          ['EMPRESA', 'No configurada'],
+          [''],
+        ]),
         ['📅 DESGLOSE DIARIO DE TRABAJO'],
+        [''],
+        ['EMPLEADO', selectedEmployee.full_name],
+        ['PERIODO', new Date(selectedMonth).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })],
         [''],
         ['FECHA', 'DÍA', 'ENTRADA', 'SALIDA', 'HORAS', 'SESIONES', 'VENTAS', 'PEDIDOS', 'VENTAS/HORA'],
       ];
@@ -267,7 +333,21 @@ export function EmployeeTimeTracking() {
 
       // Hoja 3: Detalle de Sesiones
       const sessionsData = [
+        ['🏢 INFORMACIÓN DE LA EMPRESA'],
+        [''],
+        ...(companySettings ? [
+          ['EMPRESA', companySettings.company_name],
+          ['DIRECCIÓN', companySettings.address || 'No especificada'],
+          ['TELÉFONO', companySettings.phone || 'No especificado'],
+          [''],
+        ] : [
+          ['EMPRESA', 'No configurada'],
+          [''],
+        ]),
         ['🕐 DETALLE DE SESIONES DE TRABAJO'],
+        [''],
+        ['EMPLEADO', selectedEmployee.full_name],
+        ['PERIODO', new Date(selectedMonth).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })],
         [''],
         ['FECHA', 'APERTURA', 'CIERRE', 'DURACIÓN', 'MONTO INICIAL', 'MONTO FINAL', 'DIFERENCIA', 'ESTADO'],
       ];

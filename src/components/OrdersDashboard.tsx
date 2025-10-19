@@ -794,7 +794,7 @@ export function OrdersDashboard() {
                     </div>
                   )}
 
-                  {order.status === 'completed' && profile?.role === 'admin' && (
+                  {order.status === 'completed' && (profile?.role === 'admin' || profile?.role === 'super_admin') && (
                     <button
                       onClick={() => {
                         setOrderToDelete(order);

@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 interface EmployeeProfile {
   id: string;
   full_name: string;
-  role: 'admin' | 'cashier' | 'barista';
+  role: 'super_admin' | 'admin' | 'cashier' | 'barista' | 'waiter';
   phone: string | null;
   active: boolean;
 }
@@ -92,8 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('id', data.user.id)
           .single();
 
-        if (profileData?.role === 'admin') {
-          // Force redirect to analytics for admin users
+        if (profileData?.role === 'admin' || profileData?.role === 'super_admin') {
+          // Force redirect to analytics for admin and super_admin users
           window.location.hash = '#/analytics';
         }
       }, 100);

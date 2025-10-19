@@ -38,9 +38,16 @@ export function POS() {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tables, setTables] = useState<{id:string; name:string; seats:number; status:string}[]>([]);
-  const [printAutomatically, setPrintAutomatically] = useState(false);
-  const [validateDirectly, setValidateDirectly] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [pendingOrderData, setPendingOrderData] = useState<{
+    orderDate: Date;
+    orderNumber: string;
+    items: Array<{ name: string; size?: string; quantity: number; price: number }>;
+    total: number;
+    paymentMethod: string;
+    cashierName: string;
+  } | null>(null);
   const [existingItems, setExistingItems] = useState<Array<{ name: string; size?: string; quantity: number; price: number; subtotal: number }>>([]);
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
   const [canConfirmOrder, setCanConfirmOrder] = useState(true);
@@ -136,8 +143,8 @@ export function POS() {
           name: it.products?.name || 'Producto',
           size: it.product_sizes?.size_name || undefined,
           quantity: it.quantity,
-          price: typeof it.unit_price === 'string' ? parseFloat(it.unit_price) : it.unit_price,
-          subtotal: typeof it.subtotal === 'string' ? parseFloat(it.subtotal) : it.subtotal,
+          price: typeof it.unit_price === 'string' ? parseFloat(it.unit_price) : (it.unit_price || 0),
+          subtotal: typeof it.subtotal === 'string' ? parseFloat(it.subtotal) : (it.subtotal || 0),
         }));
         setExistingItems(mapped);
       } catch (err) {
@@ -226,6 +233,17 @@ export function POS() {
 
   const productSizes = (productId: string) => sizes.filter(s => s.product_id === productId);
 
+  // Helper function to insert order items
+  const insertOrderItems = async (orderItemsPayload: any[], orderId: string) => {
+    const orderItems = orderItemsPayload.map(it => ({ ...it, order_id: orderId }));
+    const { data: items, error: itemsError } = await supabase
+      .from('order_items')
+      .insert(orderItems)
+      .select();
+    if (itemsError) throw itemsError;
+    return items;
+  };
+
   // Helpers para estado de mesas
   const updateTableStatus = async (id: string, status: 'available' | 'occupied') => {
     try {
@@ -295,7 +313,7 @@ export function POS() {
             employee_id: user.id,
             status: 'preparing',
             total: 0,
-            payment_method: paymentMethod || 'cash',
+            payment_method: 'cash', // Default payment method for preparation orders
             service_type: 'dine_in',
             table_id: tableId,
           })
@@ -322,12 +340,7 @@ export function POS() {
     }
 
     // Verificar permisos granulares
-    if (validateDirectly && !canValidateOrder) {
-      toast.error('No tienes permiso para validar pedidos directamente');
-      return;
-    }
-
-    if (!validateDirectly && !canConfirmOrder) {
+    if (!canConfirmOrder) {
       toast.error('No tienes permiso para confirmar pedidos');
       return;
     }
@@ -340,9 +353,8 @@ export function POS() {
         return;
       }
 
-      // Show payment method modal when validating directly
+      // Show payment method modal when no payment method selected
       console.log('Checkout flow check:', {
-        validateDirectly,
         paymentMethod,
         hasCart: cart.length > 0,
         showPaymentModal,
@@ -356,21 +368,18 @@ export function POS() {
         return;
       }
 
-      // ALWAYS show payment modal when validating directly if no payment method selected
-      if (validateDirectly && cart.length > 0 && !paymentMethod) {
-        console.log('Showing payment modal - validating directly, no payment method');
+      // Always show payment modal when there are items in cart
+      if (cart.length > 0 && !paymentMethod) {
+        console.log('Showing payment modal - no payment method selected');
         setShowPaymentModal(true);
         setLoading(false);
         return;
       }
 
-      // If validateDirectly is true and payment method is selected, continue with checkout
-      if (validateDirectly && cart.length > 0 && paymentMethod) {
-        console.log('Proceeding with validated checkout - payment method:', paymentMethod);
+      // If payment method is selected, continue with checkout
+      if (cart.length > 0 && paymentMethod) {
+        console.log('Proceeding with checkout - payment method:', paymentMethod);
         // Continue with normal checkout flow
-      } else if (!validateDirectly && cart.length > 0) {
-        console.log('Normal checkout flow - not validating directly');
-        // Continue with normal checkout flow (will use default 'cash' if no method selected)
       } else {
         console.log('No valid checkout conditions met, stopping');
         setLoading(false);
@@ -381,7 +390,6 @@ export function POS() {
       console.log('Continuing with checkout logic for:', {
         paymentMethod,
         cartLength: cart.length,
-        validateDirectly,
         activeOrderId
       });
 
@@ -425,7 +433,7 @@ export function POS() {
           .from('orders')
           .insert({
             employee_id: user.id,
-            status: validateDirectly ? 'completed' : 'preparing',
+            status: 'preparing', // Always start as preparing
             total,
             payment_method: paymentMethod || 'cash',
             service_type: serviceType,
@@ -436,31 +444,24 @@ export function POS() {
 
         if (orderError) throw orderError;
 
-        const orderItems = orderItemsPayload.map(it => ({ ...it, order_id: order.id }));
-        const { data: items, error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItems)
-          .select();
-        if (itemsError) throw itemsError;
+        await insertOrderItems(orderItemsPayload, order.id);
 
-        if (validateDirectly && paymentMethod) {
-          setTicket({
-            orderDate: new Date(order.created_at),
-            orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-3).toUpperCase()}`,
-            items: ticketItems,
-            total,
-            paymentMethod,
-            cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
-          });
-        }
+        // Store ticket data for later validation and printing
+        const ticketData = {
+          orderDate: new Date(order.created_at),
+          orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-3).toUpperCase()}`,
+          items: ticketItems,
+          total,
+          paymentMethod,
+          cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+        };
+
+        setPendingOrderData(ticketData);
+        setShowValidationModal(true);
 
         // Actualizar estado de mesa
         if (serviceType === 'dine_in' && tableId) {
-          if (validateDirectly) {
-            await refreshTableStatusBasedOnOrders(tableId);
-          } else {
-            await updateTableStatus(tableId, 'occupied');
-          }
+          await updateTableStatus(tableId, 'occupied');
         }
       } else {
         // Agregar productos a orden existente
@@ -471,13 +472,9 @@ export function POS() {
           .single();
         if (existingErr || !existingOrder) throw existingErr || new Error('Orden no encontrada');
 
-        const orderItems = orderItemsPayload.map(it => ({ ...it, order_id: activeOrderId }));
-        const { error: itemsErr } = await supabase
-          .from('order_items')
-          .insert(orderItems);
-        if (itemsErr) throw itemsErr;
+        await insertOrderItems(orderItemsPayload, activeOrderId);
 
-        const newStatus = validateDirectly ? 'completed' : 'preparing';
+        const newStatus = 'preparing'; // Always keep as preparing until validation
         const prevTotal = typeof existingOrder.total === 'string' ? parseFloat(existingOrder.total) : (existingOrder.total || 0);
         const newTotal = prevTotal + deltaTotal;
         const { error: updateErr } = await supabase
@@ -486,23 +483,21 @@ export function POS() {
           .eq('id', activeOrderId);
         if (updateErr) throw updateErr;
 
-        if (validateDirectly && paymentMethod) {
-          setTicket({
-            orderDate: new Date(),
-            orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
-            items: ticketItems,
-            total: newTotal,
-            paymentMethod,
-            cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
-          });
-        }
+        // Store ticket data for later validation and printing
+        const ticketData = {
+          orderDate: new Date(),
+          orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
+          items: ticketItems,
+          total: newTotal,
+          paymentMethod,
+          cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+        };
+
+        setPendingOrderData(ticketData);
+        setShowValidationModal(true);
 
         if (existingOrder.table_id) {
-          if (validateDirectly) {
-            await refreshTableStatusBasedOnOrders(existingOrder.table_id);
-          } else {
-            await updateTableStatus(existingOrder.table_id, 'occupied');
-          }
+          await updateTableStatus(existingOrder.table_id, 'occupied');
         }
 
         // Refrescar contenido del pedido activo tras añadir
@@ -516,23 +511,199 @@ export function POS() {
       // Ticket ya se establece dentro de cada rama
 
       clearCart();
-      toast.success(validateDirectly ? '¡Orden validada!' : (activeOrderId ? '¡Productos añadidos al pedido!' : '¡Orden creada exitosamente!'));
-      if (validateDirectly) {
+      toast.success(activeOrderId ? '¡Productos añadidos al pedido!' : '¡Orden creada exitosamente!');
+      // Don't reset anything yet - wait for validation
+      
+      // Forzar actualización inmediata - Nota: Canal removido para evitar memory leaks
+      // Si se necesita monitoreo en tiempo real, implementar con cleanup adecuado
+    } catch (err) {
+      console.error('Error creating order:', err);
+      toast.error('Error al crear la orden');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleValidateAndPrint = async () => {
+    if (pendingOrderData) {
+      console.log('Validating order and printing ticket');
+
+      try {
+        // Update order status to completed in database
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select('id')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) throw error;
+
+        if (orders && orders.length > 0) {
+          const { error: updateError } = await supabase
+            .from('orders')
+            .update({ status: 'completed' })
+            .eq('id', orders[0].id);
+
+          if (updateError) throw updateError;
+        }
+
+        // Set ticket for printing with autoPrint enabled
+        console.log('Setting ticket for auto-print:', pendingOrderData);
+        setTicket(pendingOrderData);
+        setShowValidationModal(false);
+        setPendingOrderData(null);
+
+        // Reset states after successful validation
         setActiveOrderId(null);
         setTableId(null);
         setServiceType('takeaway');
+        setPaymentMethod(null);
+
+        toast.success('¡Orden validada e impresa!');
+      } catch (error) {
+        console.error('Error validating order:', error);
+        toast.error('Error al validar la orden');
       }
-      
-      // Forzar actualización inmediata
-      const channel = supabase.channel('custom-insert-channel')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'orders' },
-          (payload) => {
-            console.log('Cambio detectado:', payload);
-          }
-        )
-        .subscribe();
+    }
+  };
+
+  const handleCheckoutWithPayment = async (selectedPaymentMethod: string) => {
+    if (cart.length === 0 || !user) {
+      console.log('Carrito vacío o usuario no autenticado:', { cartLength: cart.length, userId: user?.id });
+      return;
+    }
+
+    // Verificar permisos granulares
+    if (!canConfirmOrder) {
+      toast.error('No tienes permiso para confirmar pedidos');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (serviceType === 'dine_in' && !tableId) {
+        toast.error('Seleccione una mesa para servicio en sala');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Procesando pago con método seleccionado:', selectedPaymentMethod);
+
+      // ===== MAIN CHECKOUT PROCESSING =====
+      console.log('Iniciando checkout con método de pago:', selectedPaymentMethod);
+
+      // Preparar datos comunes
+      const orderItemsPayload = cart.map(item => ({
+        product_id: item.product.id,
+        size_id: item.size?.id || null,
+        quantity: item.quantity,
+        unit_price: Number(item.product.base_price) + Number(item.size?.price_modifier || 0),
+        subtotal: (Number(item.product.base_price) + Number(item.size?.price_modifier || 0)) * item.quantity,
+        notes: item.notes,
+      }));
+      const deltaTotal = orderItemsPayload.reduce((sum, it) => sum + Number(it.subtotal), 0);
+      const ticketItems = cart.map(ci => ({
+        name: ci.product.name,
+        size: ci.size?.size_name,
+        quantity: ci.quantity,
+        price: ci.product.base_price + (ci.size?.price_modifier || 0),
+      }));
+
+      // Store ticket data for later validation
+      const ticketData = {
+        orderDate: new Date(),
+        orderNumber: '',
+        items: ticketItems,
+        total,
+        paymentMethod,
+        cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+      };
+
+      if (!activeOrderId) {
+        // Crear nueva orden
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            employee_id: user.id,
+            status: 'preparing', // Always start as preparing
+            total,
+            payment_method: selectedPaymentMethod,
+            service_type: serviceType,
+            table_id: serviceType === 'dine_in' ? tableId : null,
+          })
+          .select('id,total,created_at,order_number')
+          .single();
+
+        if (orderError) throw orderError;
+
+        await insertOrderItems(orderItemsPayload, order.id);
+
+        // Store ticket data for later validation and printing
+        const ticketData = {
+          orderDate: new Date(order.created_at),
+          orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-3).toUpperCase()}`,
+          items: ticketItems,
+          total,
+          paymentMethod: selectedPaymentMethod,
+          cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+        };
+
+        setPendingOrderData(ticketData);
+        setShowValidationModal(true);
+
+        // Actualizar estado de mesa
+        if (serviceType === 'dine_in' && tableId) {
+          await updateTableStatus(tableId, 'occupied');
+        }
+      } else {
+        // Agregar productos a orden existente
+        const { data: existingOrder, error: existingErr } = await supabase
+          .from('orders')
+          .select('id,total,table_id,status,created_at,order_number')
+          .eq('id', activeOrderId)
+          .single();
+        if (existingErr || !existingOrder) throw existingErr || new Error('Orden no encontrada');
+
+        await insertOrderItems(orderItemsPayload, activeOrderId);
+
+        const newStatus = 'preparing'; // Always start as preparing
+        const prevTotal = typeof existingOrder.total === 'string' ? parseFloat(existingOrder.total) : (existingOrder.total || 0);
+        const newTotal = prevTotal + deltaTotal;
+        const { error: updateErr } = await supabase
+          .from('orders')
+          .update({ total: newTotal, status: newStatus, payment_method: selectedPaymentMethod })
+          .eq('id', activeOrderId);
+        if (updateErr) throw updateErr;
+
+        // Store ticket data for later validation and printing
+        const ticketData = {
+          orderDate: new Date(),
+          orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
+          items: ticketItems,
+          total: newTotal,
+          paymentMethod: selectedPaymentMethod,
+          cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+        };
+
+        setPendingOrderData(ticketData);
+        setShowValidationModal(true);
+
+        if (existingOrder.table_id) {
+          await updateTableStatus(existingOrder.table_id, 'occupied');
+        }
+
+        // Refrescar contenido del pedido activo tras añadir
+        setExistingOrderTotal(newTotal);
+        setExistingItems(prev => [
+          ...prev,
+          ...ticketItems.map(it => ({ ...it, subtotal: it.price * it.quantity }))
+        ]);
+      }
+
+      clearCart();
+      toast.success(activeOrderId ? '¡Productos añadidos al pedido!' : '¡Orden creada exitosamente!');
+      // Don't reset anything yet - wait for validation
+
     } catch (err) {
       console.error('Error creating order:', err);
       toast.error('Error al crear la orden');
@@ -697,17 +868,6 @@ export function POS() {
           </select>
         )}
 
-        {/* Validar directamente */}
-        {canValidateOrder && (
-          <button
-            onClick={() => setValidateDirectly(!validateDirectly)}
-            className={`w-full py-2 px-3 rounded-lg text-sm font-medium ${
-              validateDirectly ? 'bg-green-100 text-green-700 border-2 border-green-500' : 'bg-gray-100 text-gray-700'
-            }`}
-          >
-            {validateDirectly ? '✓ Validar directamente' : 'Validar directamente'}
-          </button>
-        )}
 
         {/* Botón confirmar */}
         <button
@@ -722,29 +882,73 @@ export function POS() {
         {cart.length > 0 && (
           <button
             onClick={() => {
-              // Scroll to top to show cart details
+              // Create cart details modal using React approach instead of innerHTML
               const modal = document.createElement('div');
-              modal.innerHTML = `
-                <div class="fixed inset-0 bg-black/50 z-50 flex items-end" onclick="this.remove()">
-                  <div class="bg-white w-full max-h-[70vh] rounded-t-2xl p-4 overflow-y-auto" onclick="event.stopPropagation()">
-                    <h3 class="text-lg font-bold mb-4">Carrito (${cart.length} items)</h3>
-                    ${cart.map((item, index) => `
-                      <div class="flex justify-between items-center py-2 border-b">
-                        <div class="flex-1">
-                          <p class="font-medium text-sm">${item.quantity}x ${item.product.name}${item.size ? ` (${item.size.size_name})` : ''}</p>
-                          <p class="text-xs text-gray-500">$${(item.product.base_price + (item.size?.price_modifier || 0)).toFixed(2)} c/u</p>
-                        </div>
-                        <p class="font-bold text-amber-600">$${((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity).toFixed(2)}</p>
-                      </div>
-                    `).join('')}
-                    <div class="mt-4 pt-4 border-t flex justify-between">
-                      <span class="font-bold">Total:</span>
-                      <span class="font-bold text-amber-600 text-xl">$${total.toFixed(2)}</span>
-                    </div>
-                    <button onclick="this.closest('.fixed').remove()" class="w-full mt-4 bg-gray-200 py-2 rounded-lg">Cerrar</button>
-                  </div>
-                </div>
-              `;
+              modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-end';
+              modal.onclick = () => modal.remove();
+
+              const modalContent = document.createElement('div');
+              modalContent.className = 'bg-white w-full max-h-[70vh] rounded-t-2xl p-4 overflow-y-auto';
+              modalContent.onclick = (e) => e.stopPropagation();
+
+              // Header
+              const header = document.createElement('h3');
+              header.className = 'text-lg font-bold mb-4';
+              header.textContent = `Carrito (${cart.length} items)`;
+
+              // Cart items
+              cart.forEach((item) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center py-2 border-b';
+
+                const itemInfo = document.createElement('div');
+                itemInfo.className = 'flex-1';
+
+                const itemName = document.createElement('p');
+                itemName.className = 'font-medium text-sm';
+                itemName.textContent = `${item.quantity}x ${item.product.name}${item.size ? ` (${item.size.size_name})` : ''}`;
+
+                const itemPrice = document.createElement('p');
+                itemPrice.className = 'text-xs text-gray-500';
+                itemPrice.textContent = `$${(item.product.base_price + (item.size?.price_modifier || 0)).toFixed(2)} c/u`;
+
+                const itemTotal = document.createElement('p');
+                itemTotal.className = 'font-bold text-amber-600';
+                itemTotal.textContent = `$${((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity).toFixed(2)}`;
+
+                itemInfo.appendChild(itemName);
+                itemInfo.appendChild(itemPrice);
+                itemDiv.appendChild(itemInfo);
+                itemDiv.appendChild(itemTotal);
+
+                modalContent.appendChild(itemDiv);
+              });
+
+              // Total section
+              const totalDiv = document.createElement('div');
+              totalDiv.className = 'mt-4 pt-4 border-t flex justify-between';
+
+              const totalLabel = document.createElement('span');
+              totalLabel.className = 'font-bold';
+              totalLabel.textContent = 'Total:';
+
+              const totalAmount = document.createElement('span');
+              totalAmount.className = 'font-bold text-amber-600 text-xl';
+              totalAmount.textContent = `$${total.toFixed(2)}`;
+
+              totalDiv.appendChild(totalLabel);
+              totalDiv.appendChild(totalAmount);
+
+              // Close button
+              const closeButton = document.createElement('button');
+              closeButton.className = 'w-full mt-4 bg-gray-200 py-2 rounded-lg';
+              closeButton.textContent = 'Cerrar';
+              closeButton.onclick = () => modal.remove();
+
+              modalContent.appendChild(header);
+              modalContent.appendChild(totalDiv);
+              modalContent.appendChild(closeButton);
+              modal.appendChild(modalContent);
               document.body.appendChild(modal);
             }}
             className="w-full bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium"
@@ -762,6 +966,22 @@ export function POS() {
       <div className="md:hidden">
         {renderMobileView()}
       </div>
+
+      {/* Ticket Auto-Print */}
+      {ticket && (
+        <div className="hidden">
+          <TicketPrinter
+            orderDate={ticket.orderDate}
+            orderNumber={ticket.orderNumber}
+            items={ticket.items}
+            total={ticket.total}
+            paymentMethod={ticket.paymentMethod}
+            cashierName={ticket.cashierName}
+            autoPrint={true}
+            hideButton={true}
+          />
+        </div>
+      )}
 
       {/* Vista Desktop */}
       <div className="hidden md:flex h-[calc(100vh-5rem)] bg-gray-50">
@@ -882,18 +1102,39 @@ export function POS() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">Pedido activo #{activeOrderId}</h3>
                 <p className="text-xs text-gray-600">Total actual: <span className="font-semibold">${existingOrderTotal.toFixed(2)}</span></p>
+                <p className="text-xs text-amber-600 font-medium">Pendiente de validación</p>
               </div>
-              <button
-                onClick={() => {
-                  setActiveOrderId(null);
-                  setTableId(null);
-                  setServiceType('takeaway');
-                  toast.success('Pedido finalizado');
-                }}
-                className="px-3 py-2 rounded-lg border-2 text-xs bg-white transition-colors hover:bg-gray-50 border-amber-600 text-amber-700"
-              >
-                Finalizar pedido
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    // Show validation modal for pending order
+                    const ticketData = {
+                      orderDate: new Date(),
+                      orderNumber: `#${activeOrderId.slice(-3).toUpperCase()}`,
+                      items: existingItems,
+                      total: existingOrderTotal,
+                      paymentMethod: 'Pendiente',
+                      cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+                    };
+                    setPendingOrderData(ticketData);
+                    setShowValidationModal(true);
+                  }}
+                  className="px-3 py-2 rounded-lg border-2 text-xs bg-amber-600 text-white transition-colors hover:bg-amber-700"
+                >
+                  Validar
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveOrderId(null);
+                    setTableId(null);
+                    setServiceType('takeaway');
+                    toast.success('Pedido finalizado');
+                  }}
+                  className="px-3 py-2 rounded-lg border-2 text-xs bg-white transition-colors hover:bg-gray-50 border-amber-600 text-amber-700"
+                >
+                  Finalizar
+                </button>
+              </div>
             </div>
             <div className="mt-2 space-y-2 max-h-32 overflow-auto">
               {existingItems.length === 0 ? (
@@ -1032,21 +1273,6 @@ export function POS() {
             )}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Opciones</label>
-            {canValidateOrder && (
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  onClick={() => setValidateDirectly(!validateDirectly)}
-                  className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${
-                    validateDirectly ? 'border-amber-600 bg-amber-50' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  Validar directamente
-                </button>
-              </div>
-            )}
-          </div>
 
           <button
             onClick={handleCheckout}
@@ -1068,20 +1294,6 @@ export function POS() {
             </span>
           </button>
 
-          {ticket && validateDirectly && (
-            <div className="mt-2">
-              <TicketPrinter
-                orderDate={ticket.orderDate}
-                orderNumber={ticket.orderNumber}
-                items={ticket.items}
-                total={ticket.total}
-                paymentMethod={ticket.paymentMethod}
-                cashierName={ticket.cashierName}
-                autoPrint={true}
-                hideButton={true}
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -1097,11 +1309,8 @@ export function POS() {
                   console.log('Selecting cash payment method');
                   setPaymentMethod('cash');
                   setShowPaymentModal(false);
-                  // Call handleCheckout after a brief delay to ensure state is updated
-                  setTimeout(() => {
-                    console.log('Calling handleCheckout for cash payment, paymentMethod:', paymentMethod);
-                    handleCheckout();
-                  }, 100);
+                  // Call handleCheckout immediately after state updates
+                  setTimeout(() => handleCheckoutWithPayment('cash'), 10);
                 }}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
@@ -1117,11 +1326,8 @@ export function POS() {
                   console.log('Selecting card payment method');
                   setPaymentMethod('card');
                   setShowPaymentModal(false);
-                  // Call handleCheckout after a brief delay to ensure state is updated
-                  setTimeout(() => {
-                    console.log('Calling handleCheckout for card payment, paymentMethod:', paymentMethod);
-                    handleCheckout();
-                  }, 100);
+                  // Call handleCheckout immediately after state updates
+                  setTimeout(() => handleCheckoutWithPayment('card'), 10);
                 }}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
@@ -1137,11 +1343,8 @@ export function POS() {
                   console.log('Selecting digital payment method');
                   setPaymentMethod('digital');
                   setShowPaymentModal(false);
-                  // Call handleCheckout after a brief delay to ensure state is updated
-                  setTimeout(() => {
-                    console.log('Calling handleCheckout for digital payment, paymentMethod:', paymentMethod);
-                    handleCheckout();
-                  }, 100);
+                  // Call handleCheckout immediately after state updates
+                  setTimeout(() => handleCheckoutWithPayment('digital'), 10);
                 }}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
@@ -1159,6 +1362,53 @@ export function POS() {
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Modal */}
+      {showValidationModal && pendingOrderData && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Confirmar Pedido</h2>
+
+            <div className="mb-6">
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-medium text-gray-900">Total del Pedido:</span>
+                  <span className="font-bold text-amber-600 text-xl">${pendingOrderData.total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-900">Método de Pago:</span>
+                  <span className="font-medium text-gray-700">{pendingOrderData.paymentMethod}</span>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-4">
+                El pedido se ha procesado correctamente. ¿Desea validar e imprimir el ticket ahora?
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  console.log('Order left pending - will be validated later');
+                  setShowValidationModal(false);
+                  setPendingOrderData(null);
+                  // Don't reset states - keep order active for later validation
+                  toast.success('Pedido pendiente de validación');
+                }}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+              >
+                Después
+              </button>
+              <button
+                onClick={handleValidateAndPrint}
+                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors"
+              >
+                Validar e Imprimir
               </button>
             </div>
           </div>

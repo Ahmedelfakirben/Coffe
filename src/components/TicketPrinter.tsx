@@ -1,5 +1,26 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Printer } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+
+// Add a function to refresh company info that can be called from outside
+export const refreshCompanyInfo = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('company_settings')
+      .select('company_name, address, phone')
+      .single();
+
+    if (error) {
+      console.error('Error refreshing company info:', error);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error refreshing company info:', err);
+    return null;
+  }
+};
 
 interface TicketProps {
   orderDate: Date;
@@ -15,6 +36,7 @@ interface TicketProps {
   cashierName: string;
   autoPrint?: boolean;
   hideButton?: boolean;
+  forceRefresh?: boolean;
 }
 
 export function TicketPrinter({
@@ -26,8 +48,76 @@ export function TicketPrinter({
   cashierName,
   autoPrint = false,
   hideButton = false,
+  forceRefresh = false,
 }: TicketProps) {
   const ticketRef = useRef<HTMLDivElement>(null);
+  const [companyInfo, setCompanyInfo] = useState({
+    company_name: 'El Fakir',
+    address: 'Calle Principal #123, Ciudad',
+    phone: '+34 000 000 000',
+  });
+
+  // Cargar información de la empresa
+  useEffect(() => {
+    const fetchCompanyInfo = async () => {
+      try {
+        console.log('🔍 TICKET PRINTER: Fetching company settings for ticket...', { forceRefresh, autoPrint });
+        const { data, error } = await supabase
+          .from('company_settings')
+          .select('company_name, address, phone')
+          .single();
+
+        if (error) {
+          console.error('❌ TICKET PRINTER: Error fetching company info:', error);
+          // Keep default values if fetch fails
+          return;
+        }
+
+        if (data) {
+          console.log('📋 TICKET PRINTER: Raw company settings loaded:', data);
+          // Validate and clean the data
+          const cleanData = {
+            company_name: data.company_name && data.company_name.trim() !== '' && data.company_name !== 'Coffee Shop' && data.company_name !== 'Mi Empresa' ? data.company_name : 'El Fakir',
+            address: data.address && data.address.trim() !== '' && !data.address.includes('www.') ? data.address : 'Calle Principal #123, Ciudad',
+            phone: data.phone && data.phone.trim() !== '' && data.phone !== '555-COFFEE' ? data.phone : '+34 000 000 000'
+          };
+          console.log('✅ TICKET PRINTER: Cleaned company data for ticket:', cleanData);
+          console.log('🏢 TICKET PRINTER: Final company info to display:', cleanData);
+          setCompanyInfo(cleanData);
+        } else {
+          console.log('⚠️ TICKET PRINTER: No company settings data found');
+        }
+      } catch (err) {
+        console.error('💥 TICKET PRINTER: Error loading company info:', err);
+        // Keep default values if fetch fails
+      }
+    };
+
+    fetchCompanyInfo();
+
+    // Listen for company settings updates
+    const handleCompanySettingsUpdate = (event: any) => {
+      console.log('🔄 TICKET PRINTER: Company settings updated event received:', event.detail);
+      if (event.detail) {
+        const updatedData = {
+          company_name: event.detail.company_name || 'El Fakir',
+          address: event.detail.address || 'Calle Principal #123, Ciudad',
+          phone: event.detail.phone || '+34 000 000 000'
+        };
+        console.log('🔄 TICKET PRINTER: Updating company info with new data:', updatedData);
+        setCompanyInfo(updatedData);
+      } else {
+        console.log('⚠️ TICKET PRINTER: Company settings update event received but no detail data');
+      }
+    };
+
+    console.log('👂 TICKET PRINTER: Listening for companySettingsUpdated events');
+    window.addEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
+
+    return () => {
+      window.removeEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
+    };
+  }, [forceRefresh, autoPrint]);
 
   const printTicket = () => {
     const printContent = ticketRef.current?.innerHTML || '';
@@ -155,7 +245,9 @@ export function TicketPrinter({
         <div className="ticket">
           {/* Header */}
           <div className="header">
-            <h1>☕ Coffee Shop</h1>
+            <h1>☕ {companyInfo.company_name}</h1>
+            {companyInfo.address && <p>{companyInfo.address}</p>}
+            {companyInfo.phone && <p>Tel: {companyInfo.phone}</p>}
             <p>Ticket de Venta</p>
             <p>═══════</p>
           </div>
@@ -210,8 +302,8 @@ export function TicketPrinter({
 
           {/* Footer */}
           <div className="footer">
-            <div>www.coffeeshop.com</div>
-            <div>Tel: 555-COFFEE</div>
+            <div>{new Date().toLocaleDateString('es-ES')}</div>
+            <div>{companyInfo.company_name}</div>
           </div>
         </div>
       </div>

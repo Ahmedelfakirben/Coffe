@@ -1,4 +1,4 @@
-import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield } from 'lucide-react';
+import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -35,33 +35,34 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     {
       name: 'Ventas',
       items: [
-        { id: 'floor', label: 'Sala', icon: Users, roles: ['admin', 'super_admin', 'cashier', 'barista', 'waiter'] },
-        { id: 'pos', label: 'Punto de Venta', icon: ShoppingCart, roles: ['admin', 'super_admin', 'cashier', 'barista'] },
-        { id: 'orders', label: 'Órdenes', icon: ClipboardList, roles: ['admin', 'super_admin', 'cashier', 'barista', 'waiter'] },
+        { id: 'floor', label: 'Sala', icon: Users, roles: ['super_admin', 'admin', 'cashier', 'barista', 'waiter'] },
+        { id: 'pos', label: 'Punto de Venta', icon: ShoppingCart, roles: ['super_admin', 'admin', 'cashier', 'barista'] },
+        { id: 'orders', label: 'Órdenes', icon: ClipboardList, roles: ['super_admin', 'admin', 'cashier', 'barista', 'waiter'] },
       ]
     },
     {
       name: 'Inventario',
       items: [
-        { id: 'products', label: 'Productos', icon: Package, roles: ['admin', 'super_admin'] },
-        { id: 'categories', label: 'Categorías', icon: Tag, roles: ['admin', 'super_admin'] },
-        { id: 'users', label: 'Usuarios', icon: Users, roles: ['admin', 'super_admin'] },
+        { id: 'products', label: 'Productos', icon: Package, roles: ['super_admin', 'admin'] },
+        { id: 'categories', label: 'Categorías', icon: Tag, roles: ['super_admin', 'admin'] },
+        { id: 'users', label: 'Usuarios', icon: Users, roles: ['super_admin', 'admin'] },
       ]
     },
     {
       name: 'Finanzas',
       items: [
-        { id: 'cash', label: 'Caja', icon: Calculator, roles: ['admin', 'super_admin', 'cashier'] },
-        { id: 'time-tracking', label: 'Tiempo Empleados', icon: Clock, roles: ['admin', 'super_admin'] },
-        { id: 'suppliers', label: 'Proveedores', icon: Truck, roles: ['admin', 'super_admin'] },
-        { id: 'expenses', label: 'Gastos', icon: DollarSign, roles: ['admin', 'super_admin'] },
-        { id: 'analytics', label: 'Analíticas', icon: BarChart3, roles: ['admin', 'super_admin'] },
+        { id: 'cash', label: 'Caja', icon: Calculator, roles: ['super_admin', 'admin', 'cashier'] },
+        { id: 'time-tracking', label: 'Tiempo Empleados', icon: Clock, roles: ['super_admin', 'admin'] },
+        { id: 'suppliers', label: 'Proveedores', icon: Truck, roles: ['super_admin', 'admin'] },
+        { id: 'expenses', label: 'Gastos', icon: DollarSign, roles: ['super_admin', 'admin'] },
+        { id: 'analytics', label: 'Analíticas', icon: BarChart3, roles: ['super_admin', 'admin'] },
       ]
     },
     {
       name: 'Sistema',
       items: [
         { id: 'role-management', label: 'Gestión de Roles', icon: Shield, roles: ['super_admin'] },
+        { id: 'company-settings', label: 'Información Empresa', icon: Building2, roles: ['super_admin'] },
       ]
     }
   ];
@@ -432,7 +433,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   const handleLogoutClick = () => {
     if (profile?.role === 'cashier') {
       setShowCloseCashModal(true);
-    } else if (profile?.role === 'admin') {
+    } else if (profile?.role === 'admin' || profile?.role === 'super_admin') {
       // Para administradores, mostrar opción de cerrar caja o salir directamente
       const confirmClose = window.confirm('¿Desea cerrar la sesión de caja antes de salir?');
       if (confirmClose) {
@@ -672,7 +673,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               >
                 Cancelar
               </button>
-              {profile?.role === 'admin' && (
+              {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
                 <button
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
                   onClick={async () => {

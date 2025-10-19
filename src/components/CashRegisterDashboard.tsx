@@ -286,7 +286,7 @@ export function CashRegisterDashboard() {
               <span>Fecha del Reporte</span>
             </div>
             <div class="info-item">
-              <strong>${profile?.role === 'admin' ? day.employee_profiles?.full_name || 'N/A' : 'Tú'}</strong>
+              <strong>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : 'Tú'}</strong>
               <span>Empleado</span>
             </div>
             <div class="info-item">
@@ -378,7 +378,7 @@ export function CashRegisterDashboard() {
           <div class="signature-section">
             <div class="signature-box">
               <p>Firma del Empleado</p>
-              <p>${profile?.role === 'admin' ? day.employee_profiles?.full_name || 'N/A' : profile?.full_name || 'Usuario'}</p>
+              <p>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : profile?.full_name || 'Usuario'}</p>
             </div>
             <div class="signature-box">
               <p>Firma del Administrador</p>
@@ -587,7 +587,7 @@ export function CashRegisterDashboard() {
           <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>Empleado:</strong> ${profile?.role === 'admin' ? session.employee_profiles?.full_name || 'N/A' : 'Tú'}
+            <strong>Empleado:</strong> ${profile?.role === 'admin' || profile?.role === 'super_admin' ? session.employee_profiles?.full_name || 'N/A' : 'Tú'}
           </div>
 
           <div style="margin-bottom: 10px;">
@@ -733,7 +733,7 @@ export function CashRegisterDashboard() {
       </div>
 
       {/* Filtros */}
-      {profile?.role === 'admin' && (
+      {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
         <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="w-5 h-5 text-gray-600" />
@@ -861,7 +861,7 @@ export function CashRegisterDashboard() {
                 {dailySessions.map((day: any) => (
                   <tr key={day.date} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile?.role === 'admin' ? day.employee_profiles?.full_name || 'N/A' : 'Tú'}
+                      {profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : 'Tú'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(day.date).toLocaleDateString('es-ES')}

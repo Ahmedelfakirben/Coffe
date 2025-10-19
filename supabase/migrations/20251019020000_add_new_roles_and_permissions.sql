@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 );
 
 -- Índices para mejorar rendimiento
-CREATE INDEX idx_role_permissions_role ON role_permissions(role);
-CREATE INDEX idx_role_permissions_page ON role_permissions(page_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_page ON role_permissions(page_id);
 
 -- Habilitar RLS
 ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;

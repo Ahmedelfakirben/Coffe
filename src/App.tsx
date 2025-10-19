@@ -16,6 +16,7 @@ import { Analytics } from './components/Analytics';
 import { CashRegisterDashboard } from './components/CashRegisterDashboard';
 import { EmployeeTimeTracking } from './components/EmployeeTimeTracking';
 import { RoleManagement } from './components/RoleManagement';
+import { CompanySettings } from './components/CompanySettings';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -80,7 +81,7 @@ function AppContent() {
     };
   }, [profile?.role]);
 
-  // Redirigir a Analíticas SOLO en el login inicial (no en cada cambio de pestaña)
+  // Redirigir a página apropiada según el rol SOLO en el login inicial
   useEffect(() => {
     // Si no hay perfil, resetear el flag para el próximo login
     if (!profile) {
@@ -88,12 +89,50 @@ function AppContent() {
       return;
     }
 
-    // Solo redirigir si:
-    // 1. Tiene permiso para analytics
-    // 2. NO se ha redirigido antes en esta sesión
-    // 3. La vista actual es la por defecto ('pos')
-    if (userPermissions['analytics'] && !hasRedirectedRef.current && currentView === 'pos') {
-      setCurrentView('analytics');
+    // Solo redirigir si NO se ha redirigido antes en esta sesión y la vista actual es la por defecto
+    if (!hasRedirectedRef.current && currentView === 'pos') {
+      let defaultView = 'pos'; // Default fallback
+
+      // Determinar página por defecto según el rol
+      switch (profile.role) {
+        case 'cashier':
+          defaultView = userPermissions['pos'] ? 'pos' :
+                       userPermissions['floor'] ? 'floor' :
+                       userPermissions['orders'] ? 'orders' :
+                       userPermissions['cash'] ? 'cash' : 'pos';
+          break;
+        case 'barista':
+          defaultView = userPermissions['pos'] ? 'pos' :
+                       userPermissions['orders'] ? 'orders' :
+                       userPermissions['floor'] ? 'floor' : 'pos';
+          break;
+        case 'waiter':
+          defaultView = userPermissions['floor'] ? 'floor' :
+                       userPermissions['orders'] ? 'orders' :
+                       userPermissions['pos'] ? 'pos' : 'floor';
+          break;
+        case 'admin':
+        case 'super_admin':
+          // Para admin y super_admin, mantener lógica existente pero más inteligente
+          if (userPermissions['analytics']) {
+            defaultView = 'analytics';
+          } else if (userPermissions['pos']) {
+            defaultView = 'pos';
+          } else if (userPermissions['orders']) {
+            defaultView = 'orders';
+          } else if (userPermissions['products']) {
+            defaultView = 'products';
+          } else {
+            // Encontrar la primera página disponible
+            const availablePages = ['pos', 'orders', 'products', 'categories', 'users', 'suppliers', 'expenses', 'time-tracking', 'cash', 'analytics'];
+            defaultView = availablePages.find(page => userPermissions[page]) || 'pos';
+          }
+          break;
+        default:
+          defaultView = 'pos';
+      }
+
+      setCurrentView(defaultView);
       hasRedirectedRef.current = true;
     }
   }, [profile, userPermissions, currentView]);
@@ -178,6 +217,7 @@ function AppContent() {
         {currentView === 'analytics' && userPermissions['analytics'] && <Analytics />}
         {currentView === 'cash' && userPermissions['cash'] && <CashRegisterDashboard />}
         {currentView === 'role-management' && userPermissions['role-management'] && <RoleManagement />}
+        {currentView === 'company-settings' && userPermissions['company-settings'] && <CompanySettings />}
       </div>
 
       {showOpenCashModal && (
