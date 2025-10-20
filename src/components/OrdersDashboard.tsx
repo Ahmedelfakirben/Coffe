@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { TicketPrinter } from './TicketPrinter';
 
 interface Order {
   id: string;
@@ -35,6 +36,8 @@ interface OrderHistory {
 interface OrderItem {
   id: string;
   quantity: number;
+  unit_price?: number;
+  subtotal?: number;
   products: {
     name: string;
   };
@@ -78,6 +81,19 @@ export function OrdersDashboard() {
   const [orderToDelete, setOrderToDelete] = useState<OrderWithItems | null>(null);
   const [deletionNote, setDeletionNote] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Estado para modal de pago y ticket
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [orderToComplete, setOrderToComplete] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [ticketData, setTicketData] = useState<{
+    orderDate: Date;
+    orderNumber: string;
+    items: Array<{ name: string; size?: string; quantity: number; price: number }>;
+    total: number;
+    paymentMethod: string;
+    cashierName: string;
+  } | null>(null);
 
   // Function to get the last 2 AM timestamp (24-hour window for cashiers)
   const getLast2AMTimestamp = () => {
@@ -130,6 +146,18 @@ export function OrdersDashboard() {
       fetchCashSessions();
     }
   }, [viewMode]);
+
+  // Limpiar ticketData después de imprimir
+  useEffect(() => {
+    if (ticketData) {
+      // Esperar 2 segundos antes de limpiar para asegurar que el ticket se imprimió
+      const timer = setTimeout(() => {
+        setTicketData(null);
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [ticketData]);
 
   const fetchEmployees = async () => {
     try {
@@ -203,6 +231,8 @@ export function OrdersDashboard() {
           order_items(
             id,
             quantity,
+            unit_price,
+            subtotal,
             products!product_id(
               name
             ),
@@ -331,10 +361,6 @@ export function OrdersDashboard() {
     fetchOrders();
   };
 
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [orderToComplete, setOrderToComplete] = useState<string | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
-
   const completeOrderWithPayment = async () => {
     if (!orderToComplete || !selectedPaymentMethod) return;
 
@@ -352,75 +378,38 @@ export function OrdersDashboard() {
       return;
     }
 
-    // Print ticket automatically
+    // Prepare ticket data for TicketPrinter component
     const order = orders.find(o => o.id === orderToComplete);
     if (order) {
-      const ticketContent = `
-        <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
-          <h2 style="text-align: center; margin-bottom: 10px;">TICKET DE COMPRA</h2>
-          <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
+      // Obtener información del cajero
+      const cashierName = order.employee_profiles?.full_name || user?.email || 'Usuario';
 
-          <div style="margin-bottom: 10px;">
-            <strong>Orden #${order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8)}</strong>
-          </div>
+      // Preparar items del pedido
+      const ticketItems = (order.order_items || []).map(item => {
+        // Usar unit_price si está disponible, sino calcular desde subtotal
+        const unitPrice = Number(item.unit_price || 0) || (item.quantity > 0 ? Number(item.subtotal || 0) / item.quantity : 0);
 
-          <div style="margin-bottom: 10px;">
-            <strong>Fecha:</strong> ${new Date(order.created_at).toLocaleString('es-ES')}
-          </div>
+        return {
+          name: item.products?.name || 'Producto',
+          size: item.product_sizes?.size_name || undefined,
+          quantity: item.quantity || 0,
+          price: unitPrice
+        };
+      });
 
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+      // Formatear método de pago
+      const paymentMethodText = selectedPaymentMethod === 'cash' ? 'Efectivo' :
+                                selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital';
 
-          <div style="margin-bottom: 10px;">
-            <strong>PRODUCTOS</strong>
-          </div>
-
-          ${order.order_items?.map(item => `
-            <div style="margin-bottom: 5px;">
-              ${item.quantity}x ${item.products?.name}${item.product_sizes ? ` (${item.product_sizes.size_name})` : ''}
-            </div>
-          `).join('')}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 5px;">
-            <strong>Total: $${order.total.toFixed(2)}</strong>
-          </div>
-
-          <div style="margin-bottom: 5px;">
-            <strong>Método de Pago: ${selectedPaymentMethod === 'cash' ? 'Efectivo' : selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital'}</strong>
-          </div>
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="text-align: center; margin-top: 20px; font-size: 12px;">
-            ¡Gracias por su compra!
-          </div>
-        </div>
-      `;
-
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Ticket de Compra</title>
-              <style>
-                @media print {
-                  body { margin: 0; }
-                  @page { size: auto; margin: 5mm; }
-                }
-              </style>
-            </head>
-            <body>
-              ${ticketContent}
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        printWindow.onafterprint = () => printWindow.close();
-      }
+      // Preparar datos del ticket
+      setTicketData({
+        orderDate: new Date(order.created_at),
+        orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
+        items: ticketItems,
+        total: order.total,
+        paymentMethod: paymentMethodText,
+        cashierName: cashierName
+      });
     }
 
     setShowPaymentModal(false);
@@ -1064,6 +1053,22 @@ export function OrdersDashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Ticket Auto-Print */}
+      {ticketData && (
+        <div className="hidden">
+          <TicketPrinter
+            orderDate={ticketData.orderDate}
+            orderNumber={ticketData.orderNumber}
+            items={ticketData.items}
+            total={ticketData.total}
+            paymentMethod={ticketData.paymentMethod}
+            cashierName={ticketData.cashierName}
+            autoPrint={true}
+            hideButton={true}
+          />
         </div>
       )}
     </div>

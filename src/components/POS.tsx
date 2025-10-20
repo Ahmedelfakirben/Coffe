@@ -50,6 +50,7 @@ export function POS() {
   } | null>(null);
   const [existingItems, setExistingItems] = useState<Array<{ name: string; size?: string; quantity: number; price: number; subtotal: number }>>([]);
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
+  const [existingOrderNumber, setExistingOrderNumber] = useState<number | null>(null);
   const [canConfirmOrder, setCanConfirmOrder] = useState(true);
   const [canValidateOrder, setCanValidateOrder] = useState(true);
   const [ticket, setTicket] = useState<{
@@ -116,23 +117,60 @@ export function POS() {
     fetchTables();
   }, []);
 
+  // Limpiar ticket después de imprimir
+  useEffect(() => {
+    if (ticket) {
+      console.log('🎫 POS: Ticket establecido, esperando impresión...', new Date().toISOString());
+
+      let cleaned = false;
+
+      // Escuchar evento de impresión completada
+      const handleTicketPrinted = () => {
+        if (!cleaned) {
+          console.log('🎫 POS: Evento ticketPrinted recibido, limpiando ticket', new Date().toISOString());
+          cleaned = true;
+          setTicket(null);
+        }
+      };
+
+      // Timeout de fallback de 10 segundos por si el evento no se dispara
+      const timer = setTimeout(() => {
+        if (!cleaned) {
+          console.log('🎫 POS: Timeout alcanzado, limpiando ticket (fallback)', new Date().toISOString());
+          cleaned = true;
+          setTicket(null);
+        }
+      }, 10000);
+
+      window.addEventListener('ticketPrinted', handleTicketPrinted);
+
+      return () => {
+        console.log('🎫 POS: Cleanup - removiendo listener y timer');
+        window.removeEventListener('ticketPrinted', handleTicketPrinted);
+        clearTimeout(timer);
+      };
+    }
+  }, [ticket]);
+
   // Cargar contenido de pedido activo si existe
   useEffect(() => {
     const loadActiveOrderContent = async () => {
       if (!activeOrderId) {
         setExistingItems([]);
         setExistingOrderTotal(0);
+        setExistingOrderNumber(null);
         return;
       }
       try {
         const { data: order, error: orderErr } = await supabase
           .from('orders')
-          .select('id,total')
+          .select('id, total, order_number')
           .eq('id', activeOrderId)
           .single();
         if (orderErr) throw orderErr;
         const currentTotal = typeof order.total === 'string' ? parseFloat(order.total) : (order.total || 0);
         setExistingOrderTotal(currentTotal);
+        setExistingOrderNumber(order.order_number || null);
 
         const { data: items, error: itemsErr } = await supabase
           .from('order_items')
@@ -353,38 +391,11 @@ export function POS() {
         return;
       }
 
-      // Show payment method modal when no payment method selected
+      // Crear orden como pendiente y mostrar modal de confirmación
       console.log('Checkout flow check:', {
-        paymentMethod,
         hasCart: cart.length > 0,
-        showPaymentModal,
-        step: 'initial_check'
+        step: 'creating_pending_order'
       });
-
-      // If payment modal is already showing, don't proceed with checkout yet
-      if (showPaymentModal) {
-        console.log('Payment modal is showing, waiting for user selection');
-        setLoading(false);
-        return;
-      }
-
-      // Always show payment modal when there are items in cart
-      if (cart.length > 0 && !paymentMethod) {
-        console.log('Showing payment modal - no payment method selected');
-        setShowPaymentModal(true);
-        setLoading(false);
-        return;
-      }
-
-      // If payment method is selected, continue with checkout
-      if (cart.length > 0 && paymentMethod) {
-        console.log('Proceeding with checkout - payment method:', paymentMethod);
-        // Continue with normal checkout flow
-      } else {
-        console.log('No valid checkout conditions met, stopping');
-        setLoading(false);
-        return;
-      }
 
       // Continue with the rest of the checkout logic...
       console.log('Continuing with checkout logic for:', {
@@ -428,14 +439,14 @@ export function POS() {
       // helpers están definidos fuera
 
       if (!activeOrderId) {
-        // Crear nueva orden
-        const { data: order, error: orderError } = await supabase
+        // Crear nueva orden como pendiente (sin payment_method todavía)
+        const { data: order, error: orderError} = await supabase
           .from('orders')
           .insert({
             employee_id: user.id,
-            status: 'preparing', // Always start as preparing
+            status: 'preparing', // Pendiente de validación
             total,
-            payment_method: paymentMethod || 'cash',
+            payment_method: null, // Se establecerá cuando valide
             service_type: serviceType,
             table_id: serviceType === 'dine_in' ? tableId : null,
           })
@@ -449,14 +460,15 @@ export function POS() {
         // Store ticket data for later validation and printing
         const ticketData = {
           orderDate: new Date(order.created_at),
-          orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-3).toUpperCase()}`,
+          orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
           items: ticketItems,
           total,
-          paymentMethod,
+          paymentMethod: 'Pendiente',
           cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
         };
 
         setPendingOrderData(ticketData);
+        setActiveOrderId(order.id); // Guardar el ID de la orden pendiente
         setShowValidationModal(true);
 
         // Actualizar estado de mesa
@@ -526,44 +538,58 @@ export function POS() {
 
   const handleValidateAndPrint = async () => {
     if (pendingOrderData) {
-      console.log('Validating order and printing ticket');
+      console.log('Usuario eligió validar e imprimir - mostrando modal de pago');
 
-      try {
-        // Update order status to completed in database
-        const { data: orders, error } = await supabase
-          .from('orders')
-          .select('id')
-          .order('created_at', { ascending: false })
-          .limit(1);
+      // Cerrar modal de validación y mostrar modal de método de pago
+      setShowValidationModal(false);
+      setShowPaymentModal(true);
+    }
+  };
 
-        if (error) throw error;
+  const handlePaymentMethodSelection = async (selectedPaymentMethod: string) => {
+    if (!pendingOrderData || !activeOrderId) {
+      console.error('No hay orden pendiente o activeOrderId');
+      return;
+    }
 
-        if (orders && orders.length > 0) {
-          const { error: updateError } = await supabase
-            .from('orders')
-            .update({ status: 'completed' })
-            .eq('id', orders[0].id);
+    try {
+      console.log('Validando orden con método de pago:', selectedPaymentMethod);
 
-          if (updateError) throw updateError;
-        }
+      // Actualizar la orden con el método de pago y completarla
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'completed',
+          payment_method: selectedPaymentMethod
+        })
+        .eq('id', activeOrderId);
 
-        // Set ticket for printing with autoPrint enabled
-        console.log('Setting ticket for auto-print:', pendingOrderData);
-        setTicket(pendingOrderData);
-        setShowValidationModal(false);
-        setPendingOrderData(null);
+      if (updateError) throw updateError;
 
-        // Reset states after successful validation
-        setActiveOrderId(null);
-        setTableId(null);
-        setServiceType('takeaway');
-        setPaymentMethod(null);
+      // Actualizar los datos del ticket con el método de pago
+      const updatedTicketData = {
+        ...pendingOrderData,
+        paymentMethod: selectedPaymentMethod === 'cash' ? 'Efectivo' :
+                      selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital'
+      };
 
-        toast.success('¡Orden validada e impresa!');
-      } catch (error) {
-        console.error('Error validating order:', error);
-        toast.error('Error al validar la orden');
-      }
+      // Imprimir ticket
+      console.log('Setting ticket for auto-print:', updatedTicketData);
+      setTicket(updatedTicketData);
+      setShowPaymentModal(false);
+      setPendingOrderData(null);
+
+      // Reset states after successful validation
+      setActiveOrderId(null);
+      setTableId(null);
+      setServiceType('takeaway');
+      setPaymentMethod(null);
+      clearCart();
+
+      toast.success('¡Orden validada e impresa!');
+    } catch (error) {
+      console.error('Error validating order:', error);
+      toast.error('Error al validar la orden');
     }
   };
 
@@ -1110,11 +1136,11 @@ export function POS() {
                     // Show validation modal for pending order
                     const ticketData = {
                       orderDate: new Date(),
-                      orderNumber: `#${activeOrderId.slice(-3).toUpperCase()}`,
+                      orderNumber: existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-8),
                       items: existingItems,
                       total: existingOrderTotal,
                       paymentMethod: 'Pendiente',
-                      cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+                      cashierName: user ? ((user.user_metadata as any)?.full_name || user.email || 'Usuario') : 'Usuario',
                     };
                     setPendingOrderData(ticketData);
                     setShowValidationModal(true);

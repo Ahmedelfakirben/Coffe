@@ -51,6 +51,41 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
     };
   }, []);
 
+  // Limpiar ticket después de imprimir
+  useEffect(() => {
+    if (ticket) {
+      console.log('🎫 SALA: Ticket establecido, esperando impresión...', new Date().toISOString());
+
+      let cleaned = false;
+
+      // Escuchar evento de impresión completada
+      const handleTicketPrinted = () => {
+        if (!cleaned) {
+          console.log('🎫 SALA: Evento ticketPrinted recibido, limpiando ticket', new Date().toISOString());
+          cleaned = true;
+          setTicket(null);
+        }
+      };
+
+      // Timeout de fallback de 10 segundos por si el evento no se dispara
+      const timer = setTimeout(() => {
+        if (!cleaned) {
+          console.log('🎫 SALA: Timeout alcanzado, limpiando ticket (fallback)', new Date().toISOString());
+          cleaned = true;
+          setTicket(null);
+        }
+      }, 10000);
+
+      window.addEventListener('ticketPrinted', handleTicketPrinted);
+
+      return () => {
+        console.log('🎫 SALA: Cleanup - removiendo listener y timer');
+        window.removeEventListener('ticketPrinted', handleTicketPrinted);
+        clearTimeout(timer);
+      };
+    }
+  }, [ticket]);
+
   const fetchTables = async () => {
     setLoading(true);
     try {
@@ -211,17 +246,28 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         price: item.unit_price,
       }));
 
-      setTicket({
+      // Formatear método de pago a español
+      const paymentMethodText = paymentMethod === 'cash' ? 'Efectivo' :
+                                paymentMethod === 'card' ? 'Tarjeta' : 'Digital';
+
+      console.log('🎫 SALA: Preparando ticket con datos:', {
+        orderNumber: orderData.order_number,
+        items: ticketItems.length,
+        total: orderData.total,
+        paymentMethod: paymentMethodText
+      });
+
+      const ticketDataToSet = {
         orderDate: new Date(orderData.created_at),
         orderNumber: orderData.order_number ? orderData.order_number.toString().padStart(3, '0') : orderId.slice(-8),
         items: ticketItems,
         total: typeof orderData.total === 'string' ? parseFloat(orderData.total) : orderData.total,
-        paymentMethod: paymentMethod,
+        paymentMethod: paymentMethodText,
         cashierName: (user as any)?.user_metadata?.full_name || user.email || 'Usuario',
-      });
+      };
 
-      // Clear ticket after a short delay to prevent duplicate printing
-      setTimeout(() => setTicket(null), 1000);
+      console.log('🎫 SALA: Estableciendo ticket para impresión');
+      setTicket(ticketDataToSet);
 
       // Liberar la mesa completamente después de completar el pedido
       await supabase
@@ -572,20 +618,23 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         </div>
       )}
 
-      {/* Ticket Printer para impresión automática */}
+      {/* Ticket Auto-Print */}
       {ticket && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <TicketPrinter
-            orderDate={ticket.orderDate}
-            orderNumber={ticket.orderNumber}
-            items={ticket.items}
-            total={ticket.total}
-            paymentMethod={ticket.paymentMethod}
-            cashierName={ticket.cashierName}
-            autoPrint={true}
-            hideButton={true}
-          />
-        </div>
+        <>
+          {console.log('🎫 SALA: Renderizando TicketPrinter con datos:', ticket)}
+          <div className="hidden">
+            <TicketPrinter
+              orderDate={ticket.orderDate}
+              orderNumber={ticket.orderNumber}
+              items={ticket.items}
+              total={ticket.total}
+              paymentMethod={ticket.paymentMethod}
+              cashierName={ticket.cashierName}
+              autoPrint={true}
+              hideButton={true}
+            />
+          </div>
+        </>
       )}
       </div>
     </>

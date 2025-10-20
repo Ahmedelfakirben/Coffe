@@ -56,40 +56,97 @@ export function TicketPrinter({
     address: 'Calle Principal #123, Ciudad',
     phone: '+34 000 000 000',
   });
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Cargar información de la empresa
   useEffect(() => {
+    // Resetear estado cuando cambie el ticket
+    setDataLoaded(false);
+
     const fetchCompanyInfo = async () => {
       try {
-        console.log('🔍 TICKET PRINTER: Fetching company settings for ticket...', { forceRefresh, autoPrint });
+        console.log('🔍 TICKET: Fetching company settings...');
         const { data, error } = await supabase
           .from('company_settings')
           .select('company_name, address, phone')
           .single();
 
         if (error) {
-          console.error('❌ TICKET PRINTER: Error fetching company info:', error);
-          // Keep default values if fetch fails
+          console.error('❌ TICKET: Error fetching company info:', error);
+          setDataLoaded(true);
+
+          // Si autoPrint está activo, imprimir con datos por defecto
+          if (autoPrint) {
+            console.log('🖨️ TICKET: Scheduling auto-print with default data after error');
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  console.log('🖨️ TICKET: Executing scheduled auto-print (after fetch error)');
+                  printTicket();
+                }, 300);
+              });
+            });
+          }
           return;
         }
 
         if (data) {
-          console.log('📋 TICKET PRINTER: Raw company settings loaded:', data);
-          // Validate and clean the data
-          const cleanData = {
-            company_name: data.company_name && data.company_name.trim() !== '' && data.company_name !== 'Coffee Shop' && data.company_name !== 'Mi Empresa' ? data.company_name : 'El Fakir',
-            address: data.address && data.address.trim() !== '' && !data.address.includes('www.') ? data.address : 'Calle Principal #123, Ciudad',
-            phone: data.phone && data.phone.trim() !== '' && data.phone !== '555-COFFEE' ? data.phone : '+34 000 000 000'
-          };
-          console.log('✅ TICKET PRINTER: Cleaned company data for ticket:', cleanData);
-          console.log('🏢 TICKET PRINTER: Final company info to display:', cleanData);
-          setCompanyInfo(cleanData);
+          console.log('✅ TICKET: Company settings loaded successfully:', data);
+          // Use data from database, fallback to defaults only if empty
+          setCompanyInfo({
+            company_name: data.company_name?.trim() || 'El Fakir',
+            address: data.address?.trim() || 'Calle Principal #123, Ciudad',
+            phone: data.phone?.trim() || '+34 000 000 000'
+          });
+          console.log('📍 TICKET: Setting dataLoaded = true');
+          setDataLoaded(true);
+
+          // Si autoPrint está activo, imprimir después de que React actualice el DOM
+          if (autoPrint) {
+            console.log('🖨️ TICKET: Scheduling auto-print with company data', new Date().toISOString());
+            // Usar doble requestAnimationFrame + setTimeout para asegurar que React renderice
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  console.log('🖨️ TICKET: Executing scheduled auto-print', new Date().toISOString());
+                  printTicket();
+                }, 300);
+              });
+            });
+          }
         } else {
-          console.log('⚠️ TICKET PRINTER: No company settings data found');
+          console.log('⚠️ TICKET: No company data found');
+          setDataLoaded(true);
+
+          // Si autoPrint está activo, imprimir con datos por defecto
+          if (autoPrint) {
+            console.log('🖨️ TICKET: Scheduling auto-print with default data');
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  console.log('🖨️ TICKET: Executing scheduled auto-print (default)');
+                  printTicket();
+                }, 300);
+              });
+            });
+          }
         }
       } catch (err) {
-        console.error('💥 TICKET PRINTER: Error loading company info:', err);
-        // Keep default values if fetch fails
+        console.error('💥 TICKET: Error loading company info:', err);
+        setDataLoaded(true);
+
+        // Si autoPrint está activo, imprimir incluso si falla
+        if (autoPrint) {
+          console.log('🖨️ TICKET: Scheduling auto-print despite error');
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                console.log('🖨️ TICKET: Executing scheduled auto-print (after error)');
+                printTicket();
+              }, 300);
+            });
+          });
+        }
       }
     };
 
@@ -97,21 +154,16 @@ export function TicketPrinter({
 
     // Listen for company settings updates
     const handleCompanySettingsUpdate = (event: any) => {
-      console.log('🔄 TICKET PRINTER: Company settings updated event received:', event.detail);
+      console.log('🔄 Company settings updated event received');
       if (event.detail) {
-        const updatedData = {
-          company_name: event.detail.company_name || 'El Fakir',
-          address: event.detail.address || 'Calle Principal #123, Ciudad',
-          phone: event.detail.phone || '+34 000 000 000'
-        };
-        console.log('🔄 TICKET PRINTER: Updating company info with new data:', updatedData);
-        setCompanyInfo(updatedData);
-      } else {
-        console.log('⚠️ TICKET PRINTER: Company settings update event received but no detail data');
+        setCompanyInfo({
+          company_name: event.detail.company_name?.trim() || 'El Fakir',
+          address: event.detail.address?.trim() || 'Calle Principal #123, Ciudad',
+          phone: event.detail.phone?.trim() || '+34 000 000 000'
+        });
       }
     };
 
-    console.log('👂 TICKET PRINTER: Listening for companySettingsUpdated events');
     window.addEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
 
     return () => {
@@ -121,6 +173,14 @@ export function TicketPrinter({
 
   const printTicket = () => {
     const printContent = ticketRef.current?.innerHTML || '';
+    console.log('🖨️ TICKET: printTicket called, content length:', printContent.length);
+    console.log('🖨️ TICKET: Company info at print time:', companyInfo);
+
+    if (!printContent || printContent.length < 100) {
+      console.error('❌ TICKET: Content too short or empty, skipping print');
+      return;
+    }
+
     const printWindow = window.open('', '', 'height=800,width=400');
 
     if (printWindow) {
@@ -229,15 +289,27 @@ export function TicketPrinter({
       printWindow.focus();
       printWindow.print();
       printWindow.close();
+
+      // Disparar evento de impresión completada
+      console.log('✅ TICKET: Print completed, dispatching event');
+      window.dispatchEvent(new CustomEvent('ticketPrinted'));
+    } else {
+      console.error('❌ TICKET: Failed to open print window');
+      // Disparar evento incluso si falla
+      window.dispatchEvent(new CustomEvent('ticketPrinted'));
     }
   };
 
   useEffect(() => {
-    if (autoPrint) {
-      // Slight delay to ensure content is ready
-      setTimeout(() => printTicket(), 50);
+    console.log('🔍 TICKET: autoPrint useEffect triggered - autoPrint:', autoPrint, 'dataLoaded:', dataLoaded);
+    if (autoPrint && dataLoaded) {
+      console.log('🖨️ TICKET: Auto-printing with company data:', companyInfo);
+      // Small delay to ensure DOM is updated with company info
+      setTimeout(() => printTicket(), 100);
+    } else {
+      console.log('⏳ TICKET: Not printing yet - autoPrint:', autoPrint, 'dataLoaded:', dataLoaded);
     }
-  }, [autoPrint]);
+  }, [autoPrint, dataLoaded]);
 
   return (
     <div>

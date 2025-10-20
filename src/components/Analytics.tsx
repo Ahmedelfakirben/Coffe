@@ -43,6 +43,13 @@ interface FinancialSummary {
   profit_margin: number;
 }
 
+interface CompanySettings {
+  id: string;
+  company_name: string;
+  address: string;
+  phone: string;
+}
+
 export function Analytics() {
   const { profile } = useAuth();
   const [stats, setStats] = useState({
@@ -58,6 +65,7 @@ export function Analytics() {
   const [recentNotifications, setRecentNotifications] = useState<any[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<number>(0);
   const [occupiedTables, setOccupiedTables] = useState<number>(0);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -67,7 +75,21 @@ export function Analytics() {
     fetchFinancialSummary();
     fetchRecentNotifications();
     fetchOccupiedTables();
+    fetchCompanySettings();
     setupRealtimeSubscriptions();
+
+    // Listen for company settings updates
+    const handleCompanySettingsUpdate = (event: any) => {
+      if (event.detail) {
+        setCompanySettings(event.detail);
+      }
+    };
+
+    window.addEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
+
+    return () => {
+      window.removeEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
+    };
   }, []);
 
   const fetchStats = async () => {
@@ -481,7 +503,17 @@ export function Analytics() {
 
       // Company Header Sheet
       const headerData = [
-        ['🏪 COFFEE SHOP MANAGEMENT SYSTEM'],
+        ['🏢 INFORMACIÓN DE LA EMPRESA'],
+        [''],
+        ...(companySettings ? [
+          ['EMPRESA', companySettings.company_name],
+          ['DIRECCIÓN', companySettings.address || 'No especificada'],
+          ['TELÉFONO', companySettings.phone || 'No especificado'],
+          [''],
+        ] : [
+          ['EMPRESA', 'No configurada'],
+          [''],
+        ]),
         ['📊 REPORTE DIARIO DE OPERACIONES'],
         [''],
         ['📅 FECHA DEL REPORTE:', today.toLocaleDateString('es-ES', {
@@ -684,7 +716,17 @@ export function Analytics() {
 
       // Company Header Sheet
       const headerData = [
-        ['🏪 COFFEE SHOP MANAGEMENT SYSTEM'],
+        ['🏢 INFORMACIÓN DE LA EMPRESA'],
+        [''],
+        ...(companySettings ? [
+          ['EMPRESA', companySettings.company_name],
+          ['DIRECCIÓN', companySettings.address || 'No especificada'],
+          ['TELÉFONO', companySettings.phone || 'No especificado'],
+          [''],
+        ] : [
+          ['EMPRESA', 'No configurada'],
+          [''],
+        ]),
         ['📊 REPORTE SEMANAL DE OPERACIONES'],
         [''],
         ['📅 PERIODO DEL REPORTE:', `${weekStart.toLocaleDateString('es-ES')} - ${weekEnd.toLocaleDateString('es-ES')}`],
@@ -875,7 +917,17 @@ export function Analytics() {
 
       // Company Header Sheet
       const headerData = [
-        ['🏪 COFFEE SHOP MANAGEMENT SYSTEM'],
+        ['🏢 INFORMACIÓN DE LA EMPRESA'],
+        [''],
+        ...(companySettings ? [
+          ['EMPRESA', companySettings.company_name],
+          ['DIRECCIÓN', companySettings.address || 'No especificada'],
+          ['TELÉFONO', companySettings.phone || 'No especificado'],
+          [''],
+        ] : [
+          ['EMPRESA', 'No configurada'],
+          [''],
+        ]),
         ['📊 REPORTE MENSUAL DE OPERACIONES'],
         [''],
         ['📅 PERIODO DEL REPORTE:', `${monthStart.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`],
@@ -1050,6 +1102,40 @@ export function Analytics() {
       // Create workbook
       const wb = XLSX.utils.book_new();
 
+      // Company Header Sheet
+      const currentDate = new Date();
+      const headerData = [
+        ['🏢 INFORMACIÓN DE LA EMPRESA'],
+        [''],
+        ...(companySettings ? [
+          ['EMPRESA', companySettings.company_name],
+          ['DIRECCIÓN', companySettings.address || 'No especificada'],
+          ['TELÉFONO', companySettings.phone || 'No especificado'],
+          [''],
+        ] : [
+          ['EMPRESA', 'No configurada'],
+          [''],
+        ]),
+        ['📊 EXPORTACIÓN COMPLETA DE DATOS'],
+        [''],
+        ['📅 FECHA DE EXPORTACIÓN:', currentDate.toLocaleDateString('es-ES')],
+        ['⏰ HORA:', currentDate.toLocaleTimeString('es-ES')],
+        ['👤 GENERADO POR:', profile?.full_name || 'Sistema'],
+        [''],
+        ['═'.repeat(60)],
+        ['📋 INFORMACIÓN GENERAL'],
+        ['═'.repeat(60)],
+        [''],
+        ['Este archivo contiene todos los datos del sistema'],
+        ['Hojas incluidas: Pedidos, Sesiones de Caja, Gastos, Empleados, Productos']
+      ];
+
+      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
+      wsHeader['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      ];
+      XLSX.utils.book_append_sheet(wb, wsHeader, 'Información');
+
       // Orders sheet
       if (ordersData.data) {
         const ordersFormatted = ordersData.data.map(order => ({
@@ -1177,6 +1263,23 @@ export function Analytics() {
       setOccupiedTables(tables?.length || 0);
     } catch (error) {
       console.error('Error fetching occupied tables:', error);
+    }
+  };
+
+  const fetchCompanySettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setCompanySettings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching company settings:', error);
     }
   };
 
