@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Category, Product, ProductSize } from '../types/supabase';
 import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
@@ -11,6 +12,7 @@ const ITEMS_PER_PAGE = 12;
 
 export function POS() {
   const { user, profile } = useAuth();
+  const { t } = useLanguage();
   const {
     items: cart,
     total,
@@ -52,7 +54,6 @@ export function POS() {
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
   const [existingOrderNumber, setExistingOrderNumber] = useState<number | null>(null);
   const [canConfirmOrder, setCanConfirmOrder] = useState(true);
-  const [canValidateOrder, setCanValidateOrder] = useState(true);
   const [ticket, setTicket] = useState<{
     orderDate: Date;
     orderNumber: string;
@@ -295,82 +296,6 @@ export function POS() {
     }
   };
 
-  const refreshTableStatusBasedOnOrders = async (id: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('table_id', id)
-        .eq('status', 'preparing');
-      if (error) throw error;
-      await updateTableStatus(id, (data && data.length > 0) ? 'occupied' : 'available');
-    } catch (err) {
-      console.error('Error refrescando estado de mesa:', err);
-    }
-  };
-
-  // Abrir/confirmar mesa sin productos: crea pedido en preparación o continúa el existente
-  const handleOpenOrderWithoutItems = async () => {
-    if (!user) {
-      toast.error('Debe iniciar sesión para abrir un pedido');
-      return;
-    }
-    if (serviceType !== 'dine_in') {
-      toast.error('Seleccione servicio En sala');
-      return;
-    }
-    if (!tableId) {
-      toast.error('Seleccione una mesa');
-      return;
-    }
-
-    if (activeOrderId) {
-      toast('Ya hay un pedido activo');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Verificar si ya existe un pedido en preparación para esta mesa
-      const { data: existingPreparing, error: checkErr } = await supabase
-        .from('orders')
-        .select('id, created_at')
-        .eq('table_id', tableId)
-        .eq('status', 'preparing')
-        .order('created_at', { ascending: false });
-      if (checkErr) throw checkErr;
-
-      if (existingPreparing && existingPreparing.length > 0) {
-        setActiveOrderId(existingPreparing[0].id);
-        toast.success('Continuando pedido existente para la mesa');
-      } else {
-        // Crear pedido vacío en preparación
-        const { data: order, error: orderErr } = await supabase
-          .from('orders')
-          .insert({
-            employee_id: user.id,
-            status: 'preparing',
-            total: 0,
-            payment_method: 'cash', // Default payment method for preparation orders
-            service_type: 'dine_in',
-            table_id: tableId,
-          })
-          .select()
-          .single();
-        if (orderErr) throw orderErr;
-
-        setActiveOrderId(order.id);
-        await updateTableStatus(tableId, 'occupied');
-        toast.success('Mesa confirmada. Pedido abierto.');
-      }
-    } catch (err) {
-      console.error('Error abriendo pedido sin productos:', err);
-      toast.error('No se pudo abrir el pedido');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCheckout = async () => {
     if (cart.length === 0 || !user) {
       console.log('Carrito vacío o usuario no autenticado:', { cartLength: cart.length, userId: user?.id });
@@ -501,7 +426,7 @@ export function POS() {
           orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
           items: ticketItems,
           total: newTotal,
-          paymentMethod,
+          paymentMethod: 'Pendiente',
           cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
         };
 
@@ -520,9 +445,6 @@ export function POS() {
         ]);
       }
 
-      // Ticket ya se establece dentro de cada rama
-
-      clearCart();
       toast.success(activeOrderId ? '¡Productos añadidos al pedido!' : '¡Orden creada exitosamente!');
       // Don't reset anything yet - wait for validation
       
@@ -593,157 +515,12 @@ export function POS() {
     }
   };
 
-  const handleCheckoutWithPayment = async (selectedPaymentMethod: string) => {
-    if (cart.length === 0 || !user) {
-      console.log('Carrito vacío o usuario no autenticado:', { cartLength: cart.length, userId: user?.id });
-      return;
-    }
-
-    // Verificar permisos granulares
-    if (!canConfirmOrder) {
-      toast.error('No tienes permiso para confirmar pedidos');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (serviceType === 'dine_in' && !tableId) {
-        toast.error('Seleccione una mesa para servicio en sala');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Procesando pago con método seleccionado:', selectedPaymentMethod);
-
-      // ===== MAIN CHECKOUT PROCESSING =====
-      console.log('Iniciando checkout con método de pago:', selectedPaymentMethod);
-
-      // Preparar datos comunes
-      const orderItemsPayload = cart.map(item => ({
-        product_id: item.product.id,
-        size_id: item.size?.id || null,
-        quantity: item.quantity,
-        unit_price: Number(item.product.base_price) + Number(item.size?.price_modifier || 0),
-        subtotal: (Number(item.product.base_price) + Number(item.size?.price_modifier || 0)) * item.quantity,
-        notes: item.notes,
-      }));
-      const deltaTotal = orderItemsPayload.reduce((sum, it) => sum + Number(it.subtotal), 0);
-      const ticketItems = cart.map(ci => ({
-        name: ci.product.name,
-        size: ci.size?.size_name,
-        quantity: ci.quantity,
-        price: ci.product.base_price + (ci.size?.price_modifier || 0),
-      }));
-
-      // Store ticket data for later validation
-      const ticketData = {
-        orderDate: new Date(),
-        orderNumber: '',
-        items: ticketItems,
-        total,
-        paymentMethod,
-        cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
-      };
-
-      if (!activeOrderId) {
-        // Crear nueva orden
-        const { data: order, error: orderError } = await supabase
-          .from('orders')
-          .insert({
-            employee_id: user.id,
-            status: 'preparing', // Always start as preparing
-            total,
-            payment_method: selectedPaymentMethod,
-            service_type: serviceType,
-            table_id: serviceType === 'dine_in' ? tableId : null,
-          })
-          .select('id,total,created_at,order_number')
-          .single();
-
-        if (orderError) throw orderError;
-
-        await insertOrderItems(orderItemsPayload, order.id);
-
-        // Store ticket data for later validation and printing
-        const ticketData = {
-          orderDate: new Date(order.created_at),
-          orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-3).toUpperCase()}`,
-          items: ticketItems,
-          total,
-          paymentMethod: selectedPaymentMethod,
-          cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
-        };
-
-        setPendingOrderData(ticketData);
-        setShowValidationModal(true);
-
-        // Actualizar estado de mesa
-        if (serviceType === 'dine_in' && tableId) {
-          await updateTableStatus(tableId, 'occupied');
-        }
-      } else {
-        // Agregar productos a orden existente
-        const { data: existingOrder, error: existingErr } = await supabase
-          .from('orders')
-          .select('id,total,table_id,status,created_at,order_number')
-          .eq('id', activeOrderId)
-          .single();
-        if (existingErr || !existingOrder) throw existingErr || new Error('Orden no encontrada');
-
-        await insertOrderItems(orderItemsPayload, activeOrderId);
-
-        const newStatus = 'preparing'; // Always start as preparing
-        const prevTotal = typeof existingOrder.total === 'string' ? parseFloat(existingOrder.total) : (existingOrder.total || 0);
-        const newTotal = prevTotal + deltaTotal;
-        const { error: updateErr } = await supabase
-          .from('orders')
-          .update({ total: newTotal, status: newStatus, payment_method: selectedPaymentMethod })
-          .eq('id', activeOrderId);
-        if (updateErr) throw updateErr;
-
-        // Store ticket data for later validation and printing
-        const ticketData = {
-          orderDate: new Date(),
-          orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
-          items: ticketItems,
-          total: newTotal,
-          paymentMethod: selectedPaymentMethod,
-          cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
-        };
-
-        setPendingOrderData(ticketData);
-        setShowValidationModal(true);
-
-        if (existingOrder.table_id) {
-          await updateTableStatus(existingOrder.table_id, 'occupied');
-        }
-
-        // Refrescar contenido del pedido activo tras añadir
-        setExistingOrderTotal(newTotal);
-        setExistingItems(prev => [
-          ...prev,
-          ...ticketItems.map(it => ({ ...it, subtotal: it.price * it.quantity }))
-        ]);
-      }
-
-      clearCart();
-      toast.success(activeOrderId ? '¡Productos añadidos al pedido!' : '¡Orden creada exitosamente!');
-      // Don't reset anything yet - wait for validation
-
-    } catch (err) {
-      console.error('Error creating order:', err);
-      toast.error('Error al crear la orden');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (dataLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando productos...</p>
+          <p className="text-gray-600">{t('Cargando productos...')}</p>
         </div>
       </div>
     );
@@ -759,7 +536,7 @@ export function POS() {
             onClick={() => window.location.reload()}
             className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded transition-colors"
           >
-            Reintentar
+            {t('Reintentar')}
           </button>
         </div>
       </div>
@@ -780,7 +557,7 @@ export function POS() {
                 : 'bg-gray-100 text-gray-700'
             }`}
           >
-            Todos
+            {t('Todos')}
           </button>
           {categories.map(cat => (
             <button
@@ -836,7 +613,7 @@ export function POS() {
                     onClick={() => addItem(product)}
                     className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg font-semibold mt-2 text-sm"
                   >
-                    Agregar
+                    {t('Agregar')}
                   </button>
                 )}
               </div>
@@ -867,7 +644,7 @@ export function POS() {
               serviceType === 'takeaway' ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-700'
             }`}
           >
-            Para llevar
+            {t('Para llevar')}
           </button>
           <button
             onClick={() => setServiceType('dine_in')}
@@ -875,7 +652,7 @@ export function POS() {
               serviceType === 'dine_in' ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-700'
             }`}
           >
-            En sala
+            {t('En sala')}
           </button>
         </div>
 
@@ -885,7 +662,7 @@ export function POS() {
             onChange={(e) => setTableId(e.target.value || null)}
             className="w-full px-3 py-2 rounded-lg border bg-white text-sm"
           >
-            <option value="">Seleccione mesa</option>
+            <option value="">{t('Seleccione mesa')}</option>
             {tables.map(t => (
               <option key={t.id} value={t.id}>
                 {t.name} • {t.status === 'available' ? 'Disponible' : 'Ocupada'}
@@ -1087,7 +864,7 @@ export function POS() {
                   >
                     <span className="flex items-center justify-center gap-2">
                       <span className="text-sm">➕</span>
-                      Agregar al carrito
+                      {t('Agregar al carrito')}
                     </span>
                   </button>
                 )}
@@ -1102,7 +879,7 @@ export function POS() {
                 onClick={handleLoadMore}
                 className="bg-white hover:bg-gray-50 text-amber-600 font-medium py-3 px-6 rounded-lg shadow-sm transition-colors"
               >
-                Cargar más productos
+                {t('Cargar más productos')}
               </button>
             </div>
           )}
@@ -1116,7 +893,7 @@ export function POS() {
               <ShoppingCart className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">Carrito de Compras</h2>
+              <h2 className="text-lg font-bold">{t('Carrito de Compras')}</h2>
               <p className="text-xs opacity-90">{cart.length} productos</p>
             </div>
           </div>
@@ -1188,8 +965,8 @@ export function POS() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                 <ShoppingCart className="w-8 h-8 text-gray-400" />
               </div>
-              <p className="text-gray-500 text-sm font-medium">El carrito está vacío</p>
-              <p className="text-gray-400 text-xs mt-1">Selecciona productos para comenzar</p>
+              <p className="text-gray-500 text-sm font-medium">{t('El carrito está vacío')}</p>
+              <p className="text-gray-400 text-xs mt-1">{t('Selecciona productos para comenzar')}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1314,7 +1091,7 @@ export function POS() {
               ) : (
                 <>
                   <span className="text-base">✅</span>
-                  Confirmar Pedido
+                  {t('Confirmar Pedido')}
                 </>
               )}
             </span>
@@ -1327,57 +1104,39 @@ export function POS() {
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Seleccionar Método de Pago</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Seleccionar Método de Pago')}</h2>
 
             <div className="grid grid-cols-1 gap-3 mb-6">
               <button
-                onClick={() => {
-                  console.log('Selecting cash payment method');
-                  setPaymentMethod('cash');
-                  setShowPaymentModal(false);
-                  // Call handleCheckout immediately after state updates
-                  setTimeout(() => handleCheckoutWithPayment('cash'), 10);
-                }}
+                onClick={() => handlePaymentMethodSelection('cash')}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
                 <Banknote className="w-6 h-6 text-green-600" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">Efectivo</div>
-                  <div className="text-sm text-gray-600">Pago en efectivo</div>
+                  <div className="font-medium text-gray-900">{t('Efectivo')}</div>
+                  <div className="text-sm text-gray-600">{t('Pago en efectivo')}</div>
                 </div>
               </button>
 
               <button
-                onClick={() => {
-                  console.log('Selecting card payment method');
-                  setPaymentMethod('card');
-                  setShowPaymentModal(false);
-                  // Call handleCheckout immediately after state updates
-                  setTimeout(() => handleCheckoutWithPayment('card'), 10);
-                }}
+                onClick={() => handlePaymentMethodSelection('card')}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
                 <CreditCard className="w-6 h-6 text-blue-600" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">Tarjeta</div>
-                  <div className="text-sm text-gray-600">Pago con tarjeta</div>
+                  <div className="font-medium text-gray-900">{t('Tarjeta')}</div>
+                  <div className="text-sm text-gray-600">{t('Pago con tarjeta')}</div>
                 </div>
               </button>
 
               <button
-                onClick={() => {
-                  console.log('Selecting digital payment method');
-                  setPaymentMethod('digital');
-                  setShowPaymentModal(false);
-                  // Call handleCheckout immediately after state updates
-                  setTimeout(() => handleCheckoutWithPayment('digital'), 10);
-                }}
+                onClick={() => handlePaymentMethodSelection('digital')}
                 className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
               >
                 <Smartphone className="w-6 h-6 text-purple-600" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">Digital</div>
-                  <div className="text-sm text-gray-600">Pago digital</div>
+                  <div className="font-medium text-gray-900">{t('Digital')}</div>
+                  <div className="text-sm text-gray-600">{t('Pago digital')}</div>
                 </div>
               </button>
             </div>
@@ -1387,7 +1146,7 @@ export function POS() {
                 onClick={() => setShowPaymentModal(false)}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           </div>
@@ -1398,16 +1157,16 @@ export function POS() {
       {showValidationModal && pendingOrderData && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Confirmar Pedido</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Confirmar Pedido')}</h2>
 
             <div className="mb-6">
               <div className="bg-gray-50 rounded-lg p-4 mb-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium text-gray-900">Total del Pedido:</span>
+                  <span className="font-medium text-gray-900">{t('Total del Pedido:')}</span>
                   <span className="font-bold text-amber-600 text-xl">${pendingOrderData.total.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="font-medium text-gray-900">Método de Pago:</span>
+                  <span className="font-medium text-gray-900">{t('Método de Pago:')}</span>
                   <span className="font-medium text-gray-700">{pendingOrderData.paymentMethod}</span>
                 </div>
               </div>
@@ -1423,18 +1182,25 @@ export function POS() {
                   console.log('Order left pending - will be validated later');
                   setShowValidationModal(false);
                   setPendingOrderData(null);
-                  // Don't reset states - keep order active for later validation
+
+                  // Reset states after leaving order pending
+                  setActiveOrderId(null);
+                  setTableId(null);
+                  setServiceType('takeaway');
+                  setPaymentMethod(null);
+                  clearCart();
+
                   toast.success('Pedido pendiente de validación');
                 }}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
               >
-                Después
+                {t('Después')}
               </button>
               <button
                 onClick={handleValidateAndPrint}
                 className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors"
               >
-                Validar e Imprimir
+                {t('Validar e Imprimir')}
               </button>
             </div>
           </div>

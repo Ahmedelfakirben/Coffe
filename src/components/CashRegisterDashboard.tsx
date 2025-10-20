@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Calendar, DollarSign, Filter, RefreshCw, Printer } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -30,6 +31,7 @@ interface Order {
 
 export function CashRegisterDashboard() {
   const { user, profile } = useAuth();
+  const { t } = useLanguage();
   const [sessions, setSessions] = useState<CashSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({

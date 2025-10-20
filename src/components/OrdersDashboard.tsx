@@ -13,6 +13,8 @@ interface Order {
   created_at: string;
   employee_id: string;
   order_number?: number;
+  table_id?: string | null;
+  service_type?: string;
   employee_profiles?: {
     full_name: string;
     role: string;
@@ -109,10 +111,16 @@ export function OrdersDashboard() {
   };
 
   useEffect(() => {
-    fetchOrders();
-    fetchOrderHistory();
+    // Solo cargar lo que se necesita según el viewMode
+    if (viewMode === 'current' || viewMode === 'history') {
+      fetchOrders();
+    }
+    if (viewMode === 'history') {
+      fetchOrderHistory();
+    }
     fetchEmployees();
 
+    // Suscripción en tiempo real optimizada
     const channel = supabase
       .channel('orders-changes')
       .on(
@@ -123,8 +131,13 @@ export function OrdersDashboard() {
           table: 'orders'
         },
         () => {
-          fetchOrders();
-          fetchOrderHistory();
+          // Solo refrescar según el modo actual
+          if (viewMode === 'current' || viewMode === 'history') {
+            fetchOrders();
+          }
+          if (viewMode === 'history') {
+            fetchOrderHistory();
+          }
         }
       )
       .subscribe();
@@ -147,15 +160,38 @@ export function OrdersDashboard() {
     }
   }, [viewMode]);
 
-  // Limpiar ticketData después de imprimir
+  // Limpiar ticketData después de imprimir usando eventos
   useEffect(() => {
     if (ticketData) {
-      // Esperar 2 segundos antes de limpiar para asegurar que el ticket se imprimió
-      const timer = setTimeout(() => {
-        setTicketData(null);
-      }, 2000);
+      console.log('🎫 ORDERS: Ticket establecido, esperando impresión...');
 
-      return () => clearTimeout(timer);
+      let cleaned = false;
+
+      // Escuchar evento de impresión completada
+      const handleTicketPrinted = () => {
+        if (!cleaned) {
+          console.log('🎫 ORDERS: Evento ticketPrinted recibido, limpiando ticket');
+          cleaned = true;
+          setTicketData(null);
+        }
+      };
+
+      // Timeout de fallback de 10 segundos por si el evento no se dispara
+      const timer = setTimeout(() => {
+        if (!cleaned) {
+          console.log('🎫 ORDERS: Timeout alcanzado, limpiando ticket (fallback)');
+          cleaned = true;
+          setTicketData(null);
+        }
+      }, 10000);
+
+      window.addEventListener('ticketPrinted', handleTicketPrinted);
+
+      return () => {
+        console.log('🎫 ORDERS: Cleanup - removiendo listener y timer');
+        window.removeEventListener('ticketPrinted', handleTicketPrinted);
+        clearTimeout(timer);
+      };
     }
   }, [ticketData]);
 
@@ -175,12 +211,7 @@ export function OrdersDashboard() {
     try {
       let query = supabase
         .from('order_history')
-        .select(`
-          *,
-          employee_profiles!employee_id(
-            full_name
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       // Aplicar filtro de fecha personalizado
@@ -197,23 +228,42 @@ export function OrdersDashboard() {
       const { data, error } = await query;
 
       if (error) throw error;
-      if (data) {
-        // Get order numbers for each history item
-        const historyWithOrderNumbers = await Promise.all(
-          data.map(async (history) => {
-            const { data: orderData } = await supabase
-              .from('orders')
-              .select('order_number')
-              .eq('id', history.order_id)
-              .single();
 
-            return {
-              ...history,
-              order_number: orderData?.order_number
-            };
-          })
+      if (data && data.length > 0) {
+        // Obtener IDs únicos de empleados y orders
+        const uniqueEmployeeIds = [...new Set(data.map(h => h.employee_id).filter(Boolean))];
+        const uniqueOrderIds = [...new Set(data.map(h => h.order_id).filter(Boolean))];
+
+        // Hacer queries en paralelo para empleados y orders
+        const [employeesResult, ordersResult] = await Promise.all([
+          supabase
+            .from('employee_profiles')
+            .select('id, full_name')
+            .in('id', uniqueEmployeeIds),
+          supabase
+            .from('orders')
+            .select('id, order_number')
+            .in('id', uniqueOrderIds)
+        ]);
+
+        // Crear mapas para búsqueda rápida O(1)
+        const employeesMap = new Map(
+          (employeesResult.data || []).map(emp => [emp.id, emp])
         );
-        setOrderHistory(historyWithOrderNumbers);
+        const ordersMap = new Map(
+          (ordersResult.data || []).map(order => [order.id, order])
+        );
+
+        // Mapear los datos a history
+        const historyWithData = data.map((history: any) => ({
+          ...history,
+          employee_profiles: history.employee_id ? employeesMap.get(history.employee_id) : null,
+          order_number: ordersMap.get(history.order_id)?.order_number
+        }));
+
+        setOrderHistory(historyWithData);
+      } else {
+        setOrderHistory([]);
       }
     } catch (err) {
       console.error('Error al obtener historial:', err);
@@ -223,7 +273,7 @@ export function OrdersDashboard() {
   const fetchOrders = async () => {
     try {
       console.log('Iniciando búsqueda de órdenes...');
-      
+
       let query = supabase
         .from('orders')
         .select(`
@@ -250,38 +300,41 @@ export function OrdersDashboard() {
       }
 
       query = query.limit(50);
-      
-      const { data, error } = await query;
 
-      // Si tenemos datos, busquemos la información del empleado para cada orden
-      if (data) {
-        const ordersWithEmployees = await Promise.all(
-          data.map(async (order) => {
-            if (order.employee_id) {
-              const { data: employeeData } = await supabase
-                .from('employee_profiles')
-                .select('full_name, role')
-                .eq('id', order.employee_id)
-                .single();
-              
-              return {
-                ...order,
-                employee_profiles: employeeData
-              };
-            }
-            return order;
-          })
-        );
-        
-        console.log('Órdenes con empleados:', ordersWithEmployees);
-        setOrders(ordersWithEmployees as OrderWithItems[]);
-      }
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error al obtener órdenes:', error);
         return;
       }
-      
+
+      if (data && data.length > 0) {
+        // Obtener IDs únicos de empleados
+        const uniqueEmployeeIds = [...new Set(data.map(order => order.employee_id).filter(Boolean))];
+
+        // Hacer una sola query para todos los empleados
+        const { data: employeesData } = await supabase
+          .from('employee_profiles')
+          .select('id, full_name, role')
+          .in('id', uniqueEmployeeIds);
+
+        // Crear un mapa de empleados para búsqueda rápida O(1)
+        const employeesMap = new Map(
+          (employeesData || []).map(emp => [emp.id, emp])
+        );
+
+        // Mapear los datos de empleados a las órdenes
+        const ordersWithEmployees = data.map(order => ({
+          ...order,
+          employee_profiles: order.employee_id ? employeesMap.get(order.employee_id) : null
+        }));
+
+        console.log('Órdenes con empleados:', ordersWithEmployees);
+        setOrders(ordersWithEmployees as OrderWithItems[]);
+      } else {
+        setOrders([]);
+      }
+
     } catch (err) {
       console.error('Error en fetchOrders:', err);
     }
@@ -364,58 +417,83 @@ export function OrdersDashboard() {
   const completeOrderWithPayment = async () => {
     if (!orderToComplete || !selectedPaymentMethod) return;
 
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        status: 'completed',
-        payment_method: selectedPaymentMethod
-      })
-      .eq('id', orderToComplete);
+    try {
+      // Primero obtener la orden para saber si tiene mesa asignada
+      const order = orders.find(o => o.id === orderToComplete);
 
-    if (error) {
-      console.error('Error updating order:', error);
-      alert('Error al completar la orden: ' + error.message);
-      return;
+      // Actualizar el pedido a completado con el método de pago
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'completed',
+          payment_method: selectedPaymentMethod
+        })
+        .eq('id', orderToComplete);
+
+      if (error) {
+        console.error('Error updating order:', error);
+        alert('Error al completar la orden: ' + error.message);
+        return;
+      }
+
+      // Si la orden tiene mesa asignada, liberar la mesa
+      if (order?.table_id) {
+        console.log('Liberando mesa:', order.table_id);
+        const { error: tableError } = await supabase
+          .from('tables')
+          .update({ status: 'available' })
+          .eq('id', order.table_id);
+
+        if (tableError) {
+          console.error('Error al liberar la mesa:', tableError);
+          // No bloqueamos el flujo si falla la actualización de la mesa
+        } else {
+          console.log('Mesa liberada exitosamente');
+        }
+      }
+
+      // Prepare ticket data for TicketPrinter component
+      if (order) {
+        // Obtener información del cajero
+        const cashierName = order.employee_profiles?.full_name || user?.email || 'Usuario';
+
+        // Preparar items del pedido
+        const ticketItems = (order.order_items || []).map(item => {
+          // Usar unit_price si está disponible, sino calcular desde subtotal
+          const unitPrice = Number(item.unit_price || 0) || (item.quantity > 0 ? Number(item.subtotal || 0) / item.quantity : 0);
+
+          return {
+            name: item.products?.name || 'Producto',
+            size: item.product_sizes?.size_name || undefined,
+            quantity: item.quantity || 0,
+            price: unitPrice
+          };
+        });
+
+        // Formatear método de pago
+        const paymentMethodText = selectedPaymentMethod === 'cash' ? 'Efectivo' :
+                                  selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital';
+
+        // Preparar datos del ticket
+        setTicketData({
+          orderDate: new Date(order.created_at),
+          orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
+          items: ticketItems,
+          total: order.total,
+          paymentMethod: paymentMethodText,
+          cashierName: cashierName
+        });
+      }
+
+      setShowPaymentModal(false);
+      setOrderToComplete(null);
+      setSelectedPaymentMethod('');
+      fetchOrders();
+      toast.success('Orden completada exitosamente');
+    } catch (err) {
+      console.error('Error al completar orden:', err);
+      toast.error('Error al completar la orden');
     }
-
-    // Prepare ticket data for TicketPrinter component
-    const order = orders.find(o => o.id === orderToComplete);
-    if (order) {
-      // Obtener información del cajero
-      const cashierName = order.employee_profiles?.full_name || user?.email || 'Usuario';
-
-      // Preparar items del pedido
-      const ticketItems = (order.order_items || []).map(item => {
-        // Usar unit_price si está disponible, sino calcular desde subtotal
-        const unitPrice = Number(item.unit_price || 0) || (item.quantity > 0 ? Number(item.subtotal || 0) / item.quantity : 0);
-
-        return {
-          name: item.products?.name || 'Producto',
-          size: item.product_sizes?.size_name || undefined,
-          quantity: item.quantity || 0,
-          price: unitPrice
-        };
-      });
-
-      // Formatear método de pago
-      const paymentMethodText = selectedPaymentMethod === 'cash' ? 'Efectivo' :
-                                selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital';
-
-      // Preparar datos del ticket
-      setTicketData({
-        orderDate: new Date(order.created_at),
-        orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
-        items: ticketItems,
-        total: order.total,
-        paymentMethod: paymentMethodText,
-        cashierName: cashierName
-      });
-    }
-
-    setShowPaymentModal(false);
-    setOrderToComplete(null);
-    setSelectedPaymentMethod('');
-    fetchOrders();
   };
 
   const handleDeleteOrder = async () => {

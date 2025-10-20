@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Coffee, Eye, EyeOff } from 'lucide-react';
 
 export function LoginForm() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,7 +19,7 @@ export function LoginForm() {
 
     // Basic input validation
     if (!email.trim()) {
-      setError('El correo electrónico es obligatorio.');
+      setError(t('El correo electrónico es obligatorio.'));
       setLoading(false);
       return;
     }
@@ -74,7 +76,7 @@ export function LoginForm() {
             <Coffee className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Coffee Shop</h1>
-          <p className="text-gray-600">Sistema de Gestión</p>
+          <p className="text-gray-600">{t('Sistema de Gestión')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -86,7 +88,7 @@ export function LoginForm() {
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Correo Electrónico
+              {t('Correo Electrónico')}
             </label>
             <input
               id="email"
@@ -105,7 +107,7 @@ export function LoginForm() {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Contraseña
+              {t('Contraseña')}
             </label>
             <div className="relative">
               <input
@@ -136,7 +138,7 @@ export function LoginForm() {
             disabled={loading}
             className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
           >
-            {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            {loading ? t('Iniciando sesión...') : t('Iniciar Sesión')}
           </button>
         </form>
 

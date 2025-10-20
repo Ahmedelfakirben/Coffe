@@ -1,5 +1,6 @@
-import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2 } from 'lucide-react';
+import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -23,6 +24,7 @@ interface NavGroup {
 
 export function Navigation({ currentView, onViewChange }: NavigationProps) {
   const { user, profile, signOut } = useAuth();
+  const { t } = useLanguage();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [showCloseCashModal, setShowCloseCashModal] = useState(false);
@@ -33,36 +35,37 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
   const navGroups: NavGroup[] = [
     {
-      name: 'Ventas',
+      name: t('nav.sales'),
       items: [
-        { id: 'floor', label: 'Sala', icon: Users, roles: ['super_admin', 'admin', 'cashier', 'barista', 'waiter'] },
-        { id: 'pos', label: 'Punto de Venta', icon: ShoppingCart, roles: ['super_admin', 'admin', 'cashier', 'barista'] },
-        { id: 'orders', label: 'Órdenes', icon: ClipboardList, roles: ['super_admin', 'admin', 'cashier', 'barista', 'waiter'] },
+        { id: 'floor', label: t('nav.floor'), icon: Users, roles: ['super_admin', 'admin', 'cashier', 'barista', 'waiter'] },
+        { id: 'pos', label: t('nav.pos'), icon: ShoppingCart, roles: ['super_admin', 'admin', 'cashier', 'barista'] },
+        { id: 'orders', label: t('nav.orders'), icon: ClipboardList, roles: ['super_admin', 'admin', 'cashier', 'barista', 'waiter'] },
       ]
     },
     {
-      name: 'Inventario',
+      name: t('nav.inventory'),
       items: [
-        { id: 'products', label: 'Productos', icon: Package, roles: ['super_admin', 'admin'] },
-        { id: 'categories', label: 'Categorías', icon: Tag, roles: ['super_admin', 'admin'] },
-        { id: 'users', label: 'Usuarios', icon: Users, roles: ['super_admin', 'admin'] },
+        { id: 'products', label: t('nav.products'), icon: Package, roles: ['super_admin', 'admin'] },
+        { id: 'categories', label: t('nav.categories'), icon: Tag, roles: ['super_admin', 'admin'] },
+        { id: 'users', label: t('nav.users'), icon: Users, roles: ['super_admin', 'admin'] },
       ]
     },
     {
-      name: 'Finanzas',
+      name: t('nav.finance'),
       items: [
-        { id: 'cash', label: 'Caja', icon: Calculator, roles: ['super_admin', 'admin', 'cashier'] },
-        { id: 'time-tracking', label: 'Tiempo Empleados', icon: Clock, roles: ['super_admin', 'admin'] },
-        { id: 'suppliers', label: 'Proveedores', icon: Truck, roles: ['super_admin', 'admin'] },
-        { id: 'expenses', label: 'Gastos', icon: DollarSign, roles: ['super_admin', 'admin'] },
-        { id: 'analytics', label: 'Analíticas', icon: BarChart3, roles: ['super_admin', 'admin'] },
+        { id: 'cash', label: t('nav.cash'), icon: Calculator, roles: ['super_admin', 'admin', 'cashier'] },
+        { id: 'time-tracking', label: t('nav.time-tracking'), icon: Clock, roles: ['super_admin', 'admin'] },
+        { id: 'suppliers', label: t('nav.suppliers'), icon: Truck, roles: ['super_admin', 'admin'] },
+        { id: 'expenses', label: t('nav.expenses'), icon: DollarSign, roles: ['super_admin', 'admin'] },
+        { id: 'analytics', label: t('nav.analytics'), icon: BarChart3, roles: ['super_admin', 'admin'] },
       ]
     },
     {
-      name: 'Sistema',
+      name: t('nav.system'),
       items: [
-        { id: 'role-management', label: 'Gestión de Roles', icon: Shield, roles: ['super_admin'] },
-        { id: 'company-settings', label: 'Información Empresa', icon: Building2, roles: ['super_admin'] },
+        { id: 'role-management', label: t('nav.role-management'), icon: Shield, roles: ['super_admin'] },
+        { id: 'company-settings', label: t('nav.company-settings'), icon: Building2, roles: ['super_admin'] },
+        { id: 'app-settings', label: t('nav.app-settings'), icon: Settings, roles: ['super_admin', 'admin'] },
       ]
     }
   ];
@@ -457,7 +460,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Coffee Shop</h1>
-                <p className="text-sm text-gray-500">Sistema de Gestión</p>
+                <p className="text-sm text-gray-500">{t('Sistema de Gestión')}</p>
               </div>
             </div>
 
@@ -479,7 +482,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 className="flex items-center gap-2 px-4 py-2.5 text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
               >
                 <LogOut className="w-5 h-5" />
-                <span>Salir</span>
+                <span>{t('Salir')}</span>
               </button>
             </div>
 
@@ -502,7 +505,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                     }`}
                   >
                     <ShoppingCart className="w-5 h-5" />
-                    <span className="text-xs font-medium">Punto de Venta</span>
+                    <span className="text-xs font-medium">{t('Punto de Venta')}</span>
                   </button>
                 )}
                 {userPermissions['floor'] && (
@@ -515,7 +518,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                     }`}
                   >
                     <Users className="w-5 h-5" />
-                    <span className="text-xs font-medium">Sala</span>
+                    <span className="text-xs font-medium">{t('Sala')}</span>
                   </button>
                 )}
                 {userPermissions['orders'] && (
@@ -528,7 +531,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                     }`}
                   >
                     <ClipboardList className="w-5 h-5" />
-                    <span className="text-xs font-medium">Pedidos</span>
+                    <span className="text-xs font-medium">{t('Pedidos')}</span>
                   </button>
                 )}
               </>
@@ -540,7 +543,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                   className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors shadow-md"
                 >
                   <Menu className="w-5 h-5" />
-                  <span className="font-medium">Menú de Navegación</span>
+                  <span className="font-medium">{t('Menú de Navegación')}</span>
                 </button>
               </div>
             )}
@@ -564,7 +567,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-amber-500 to-orange-500">
                 <div className="flex items-center gap-2 text-white">
                   <Coffee className="w-6 h-6" />
-                  <span className="font-bold text-lg">Menú Admin</span>
+                  <span className="font-bold text-lg">{t('Menú Admin')}</span>
                 </div>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
@@ -641,7 +644,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
                 >
                   <LogOut className="w-5 h-5" />
-                  <span>Cerrar Sesión</span>
+                  <span>{t('Cerrar Sesión')}</span>
                 </button>
               </div>
             </div>
@@ -652,9 +655,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       {showCloseCashModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Cierre de Caja</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">{t('Cierre de Caja')}</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Indique el monto final en caja antes de cerrar sesión.
+              {t('Indique el monto final en caja antes de cerrar sesión.')}
             </p>
             <label className="block text-sm font-medium text-gray-700 mb-1">Monto de cierre</label>
             <input

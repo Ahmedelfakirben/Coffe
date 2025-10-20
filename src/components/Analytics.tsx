@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { TrendingUp, DollarSign, ShoppingBag, Users, Clock, Activity, AlertTriangle, Bell, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -52,6 +53,7 @@ interface CompanySettings {
 
 export function Analytics() {
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [stats, setStats] = useState({
     todaySales: 0,
     todayOrders: 0,
@@ -207,7 +209,7 @@ export function Analytics() {
                 total_sessions_today: sessions?.length || 0,
                 total_orders_today: orders?.length || 0,
                 total_sales_today: totalSales,
-                is_online: isOnline,
+                is_online: isOnline ?? false,
               };
             } catch (empError) {
               console.error('Error processing employee:', emp.id, empError);
@@ -1340,22 +1342,22 @@ export function Analytics() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Analíticas y Reportes</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t('Analíticas y Reportes')}</h2>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span>{onlineUsers} usuarios conectados</span>
+            <span>{onlineUsers} {t('usuarios conectados')}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-            <span>{occupiedTables} mesas ocupadas</span>
+            <span>{occupiedTables} {t('mesas ocupadas')}</span>
           </div>
           <button
             onClick={exportToExcel}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>Exportar Excel</span>
+            <span>{t('Exportar Excel')}</span>
           </button>
           <Bell className="w-5 h-5 text-gray-400" />
         </div>
@@ -1368,7 +1370,7 @@ export function Analytics() {
             <span className="text-xs font-medium opacity-90">Hoy</span>
           </div>
           <p className="text-2xl font-bold mb-1">${stats.todaySales.toFixed(2)}</p>
-          <p className="text-xs opacity-90">Ventas del día</p>
+          <p className="text-xs opacity-90">{t('Ventas del día')}</p>
         </div>
 
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 text-white">
@@ -1377,7 +1379,7 @@ export function Analytics() {
             <span className="text-xs font-medium opacity-90">Hoy</span>
           </div>
           <p className="text-2xl font-bold mb-1">{stats.todayOrders}</p>
-          <p className="text-xs opacity-90">Órdenes completadas</p>
+          <p className="text-xs opacity-90">{t('Órdenes completadas')}</p>
         </div>
 
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-4 text-white">
@@ -1386,7 +1388,7 @@ export function Analytics() {
             <span className="text-xs font-medium opacity-90">Total</span>
           </div>
           <p className="text-2xl font-bold mb-1">{stats.totalProducts}</p>
-          <p className="text-xs opacity-90">Productos activos</p>
+          <p className="text-xs opacity-90">{t('Productos activos')}</p>
         </div>
 
 
@@ -1416,21 +1418,21 @@ export function Analytics() {
             <h3 className="text-lg font-bold text-gray-900 mb-4">{summary.period}</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Ventas:</span>
+                <span className="text-sm text-gray-600">{t('Ventas:')}</span>
                 <span className="font-semibold text-green-600">${summary.sales.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Gastos:</span>
+                <span className="text-sm text-gray-600">{t('Gastos:')}</span>
                 <span className="font-semibold text-red-600">${summary.expenses.toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-t pt-2">
-                <span className="text-sm font-medium text-gray-900">Beneficio:</span>
+                <span className="text-sm font-medium text-gray-900">{t('Beneficio:')}</span>
                 <span className={`font-bold ${summary.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   ${summary.profit.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Margen:</span>
+                <span className="text-sm text-gray-600">{t('Margen:')}</span>
                 <span className={`font-semibold ${summary.profit_margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {summary.profit_margin.toFixed(1)}%
                 </span>
@@ -1472,7 +1474,7 @@ export function Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Employee Activity */}
         <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Actividad de Empleados</h3>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">{t('Actividad de Empleados')}</h3>
           {employeeActivity.length > 0 ? (
             <div className="space-y-3 max-h-80 overflow-y-auto">
               {employeeActivity.map((emp) => (
@@ -1492,14 +1494,14 @@ export function Analytics() {
             </div>
           ) : (
             <p className="text-gray-500 text-center py-8">
-              No hay datos de empleados disponibles
+              {t('No hay datos de empleados disponibles')}
             </p>
           )}
         </div>
 
         {/* Recent Notifications */}
         <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Notificaciones Recientes</h3>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">{t('Notificaciones Recientes')}</h3>
           {recentNotifications.length > 0 ? (
             <div className="space-y-3 max-h-80 overflow-y-auto">
               {recentNotifications.map((notif: any) => (
@@ -1534,7 +1536,7 @@ export function Analytics() {
             </div>
           ) : (
             <p className="text-gray-500 text-center py-8">
-              No hay notificaciones recientes
+              {t('No hay notificaciones recientes')}
             </p>
           )}
         </div>
@@ -1542,7 +1544,7 @@ export function Analytics() {
         {/* Sales and Products */}
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Ventas Diarias (Últimos 7 días)</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">{t('Ventas Diarias (Últimos 7 días)')}</h3>
             {dailySales.length > 0 ? (
               <div className="space-y-3">
                 {dailySales.map((day, index) => (
@@ -1563,13 +1565,13 @@ export function Analytics() {
               </div>
             ) : (
               <p className="text-gray-500 text-center py-8">
-                No hay datos de ventas disponibles
+                {t('No hay datos de ventas disponibles')}
               </p>
             )}
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Productos Más Vendidos</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">{t('Productos Más Vendidos')}</h3>
             {topProducts.length > 0 ? (
               <div className="space-y-3">
                 {topProducts.map((product, index) => (
@@ -1589,7 +1591,7 @@ export function Analytics() {
               </div>
             ) : (
               <p className="text-gray-500 text-center py-8">
-                No hay datos de productos disponibles
+                {t('No hay datos de productos disponibles')}
               </p>
             )}
           </div>
@@ -1600,7 +1602,7 @@ export function Analytics() {
       <div className="mt-8 bg-white rounded-xl shadow-sm p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-amber-500" />
-          Insights de Rendimiento
+          {t('Insights de Rendimiento')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {financialSummary.length > 0 && (

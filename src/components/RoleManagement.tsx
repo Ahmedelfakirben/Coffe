@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Shield, Check, X, Save, RotateCcw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -54,6 +55,7 @@ const SECTIONS = {
 };
 
 export function RoleManagement() {
+  const { t } = useLanguage();
   const [selectedRole, setSelectedRole] = useState<string>('admin');
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [originalPermissions, setOriginalPermissions] = useState<Permission[]>([]);
@@ -198,8 +200,8 @@ export function RoleManagement() {
               <Shield className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Gestión de Roles y Permisos</h2>
-              <p className="text-sm text-gray-600">Configure los accesos para cada rol del sistema</p>
+              <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Roles y Permisos')}</h2>
+              <p className="text-sm text-gray-600">{t('Configure los accesos para cada rol del sistema')}</p>
             </div>
           </div>
 
@@ -210,7 +212,7 @@ export function RoleManagement() {
                 className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
               >
                 <RotateCcw className="w-4 h-4" />
-                Deshacer
+                {t('Deshacer')}
               </button>
               <button
                 onClick={savePermissions}
@@ -225,7 +227,7 @@ export function RoleManagement() {
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    Guardar Cambios
+                    {t('Guardar Cambios')}
                   </>
                 )}
               </button>
@@ -258,7 +260,7 @@ export function RoleManagement() {
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Cargando permisos...</p>
+            <p className="text-gray-600">{t('Cargando permisos...')}</p>
           </div>
         </div>
       ) : (

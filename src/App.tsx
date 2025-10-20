@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { LoginForm } from './components/LoginForm';
 import { Navigation } from './components/Navigation';
 import { POS } from './components/POS';
@@ -17,6 +18,7 @@ import { CashRegisterDashboard } from './components/CashRegisterDashboard';
 import { EmployeeTimeTracking } from './components/EmployeeTimeTracking';
 import { RoleManagement } from './components/RoleManagement';
 import { CompanySettings } from './components/CompanySettings';
+import { AppSettings } from './components/AppSettings';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -218,6 +220,7 @@ function AppContent() {
         {currentView === 'cash' && userPermissions['cash'] && <CashRegisterDashboard />}
         {currentView === 'role-management' && userPermissions['role-management'] && <RoleManagement />}
         {currentView === 'company-settings' && userPermissions['company-settings'] && <CompanySettings />}
+        {currentView === 'app-settings' && userPermissions['app-settings'] && <AppSettings />}
       </div>
 
       {showOpenCashModal && (
@@ -288,7 +291,9 @@ function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <AppContent />
+        <LanguageProvider>
+          <AppContent />
+        </LanguageProvider>
       </CartProvider>
     </AuthProvider>
   );

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Building2, MapPin, Phone, Save, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface CompanySettings {
   id: string;
@@ -11,6 +12,7 @@ interface CompanySettings {
 }
 
 export function CompanySettings() {
+  const { t } = useLanguage();
   const [settings, setSettings] = useState<CompanySettings>({
     id: '',
     company_name: '',
@@ -318,8 +320,8 @@ export function CompanySettings() {
               <Building2 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Información de la Empresa</h2>
-              <p className="text-sm text-gray-600">Configure los datos que aparecen en tickets y reportes</p>
+              <h2 className="text-2xl font-bold text-gray-900">{t('Información de la Empresa')}</h2>
+              <p className="text-sm text-gray-600">{t('Configure los datos que aparecen en tickets y reportes')}</p>
             </div>
           </div>
 
@@ -329,7 +331,7 @@ export function CompanySettings() {
                 onClick={handleReset}
                 className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
               >
-                Deshacer
+                {t('Deshacer')}
               </button>
               <button
                 onClick={handleSave}
@@ -344,7 +346,7 @@ export function CompanySettings() {
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    Guardar Cambios
+                    {t('Guardar Cambios')}
                   </>
                 )}
               </button>
@@ -358,12 +360,12 @@ export function CompanySettings() {
         <div className="flex gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800">
-            <p className="font-semibold mb-1">Esta información aparecerá en:</p>
+            <p className="font-semibold mb-1">{t('Esta información aparecerá en:')}</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li>Todos los tickets de venta impresos</li>
-              <li>Reportes Excel exportados desde Analíticas</li>
-              <li>Reportes de tiempo de empleados</li>
-              <li>Cualquier documento generado por el sistema</li>
+              <li>{t('Todos los tickets de venta impresos')}</li>
+              <li>{t('Reportes Excel exportados desde Analíticas')}</li>
+              <li>{t('Reportes de tiempo de empleados')}</li>
+              <li>{t('Cualquier documento generado por el sistema')}</li>
             </ul>
           </div>
         </div>
@@ -435,7 +437,7 @@ export function CompanySettings() {
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <Building2 className="w-4 h-4 text-gray-500" />
-              Nombre de la Empresa *
+              {t('Nombre de la Empresa')} *
             </label>
             <input
               type="text"
@@ -452,7 +454,7 @@ export function CompanySettings() {
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <MapPin className="w-4 h-4 text-gray-500" />
-              Dirección
+              {t('Dirección')}
             </label>
             <textarea
               value={settings.address}
@@ -468,7 +470,7 @@ export function CompanySettings() {
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <Phone className="w-4 h-4 text-gray-500" />
-              Número de Teléfono
+              {t('Número de Teléfono')}
             </label>
             <input
               type="tel"
