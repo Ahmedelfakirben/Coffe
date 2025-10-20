@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { PlusCircle, Edit, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface Category {
   id: string;
@@ -11,6 +12,7 @@ interface Category {
 }
 
 export function CategoryManager() {
+  const { t } = useLanguage();
   const [categories, setCategories] = useState<Category[]>([]);
   const [newCategory, setNewCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -39,7 +41,7 @@ export function CategoryManager() {
       setCategories(data || []);
     } catch (err: any) {
       console.error('Error fetching categories:', err);
-      toast.error(`Error al cargar categorías: ${err.message || 'Error desconocido'}`);
+      toast.error(`${t('Error al cargar categorías:')} ${err.message || t('Error desconocido')}`);
       setCategories([]);
     } finally {
       setLoadingCategories(false);
@@ -68,7 +70,7 @@ export function CategoryManager() {
         }
 
         console.log('Update successful:', data);
-        toast.success('Categoría actualizada correctamente');
+        toast.success(t('Categoría actualizada correctamente'));
       } else {
         console.log('Creating new category:', newCategory);
         const { data, error } = await supabase
@@ -82,7 +84,7 @@ export function CategoryManager() {
         }
 
         console.log('Insert successful:', data);
-        toast.success('Categoría creada correctamente');
+        toast.success(t('Categoría creada correctamente'));
       }
 
       setNewCategory('');
@@ -90,7 +92,7 @@ export function CategoryManager() {
       await fetchCategories();
     } catch (err: any) {
       console.error('Error saving category:', err);
-      toast.error(`Error al guardar la categoría: ${err.message || 'Error desconocido'}`);
+      toast.error(`${t('Error al guardar la categoría:')} ${err.message || t('Error desconocido')}`);
     } finally {
       setLoading(false);
     }
@@ -106,7 +108,7 @@ export function CategoryManager() {
     const category = categories.find(c => c.id === id);
     if (!category) return;
 
-    if (!confirm(`¿Estás seguro de eliminar la categoría "${category.name}"?\n\nEsta acción no se puede deshacer.`)) return;
+    if (!confirm(`${t('¿Estás seguro de eliminar la categoría')} "${category.name}"?\n\n${t('Esta acción no se puede deshacer.')}`)) return;
 
     try {
       // First check if category is being used by products
@@ -118,12 +120,12 @@ export function CategoryManager() {
 
       if (checkError) {
         console.error('Error checking category usage:', checkError);
-        toast.error('Error al verificar el uso de la categoría');
+        toast.error(t('Error al verificar el uso de la categoría'));
         return;
       }
 
       if (products && products.length > 0) {
-        toast.error(`No se puede eliminar la categoría porque está siendo usada por ${products.length} producto(s). Elimine o reasigne los productos primero.`);
+        toast.error(`${t('No se puede eliminar la categoría porque está siendo usada por')} ${products.length} ${t('producto(s). Elimine o reasigne los productos primero.')}`);
         return;
       }
 
@@ -138,25 +140,25 @@ export function CategoryManager() {
         throw error;
       }
 
-      toast.success('Categoría eliminada correctamente');
+      toast.success(t('Categoría eliminada correctamente'));
       await fetchCategories();
     } catch (err: any) {
       console.error('Error deleting category:', err);
-      toast.error(`Error al eliminar la categoría: ${err.message || 'Error desconocido'}`);
+      toast.error(`${t('Error al eliminar la categoría:')} ${err.message || t('Error desconocido')}`);
     }
   };
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Categorías</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Categorías')}</h2>
         <button
           onClick={fetchCategories}
           className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-          title="Actualizar lista"
+          title={t('Actualizar lista')}
         >
           <RefreshCw className="w-4 h-4" />
-          Actualizar
+          {t('Actualizar')}
         </button>
       </div>
 
@@ -164,13 +166,13 @@ export function CategoryManager() {
         <div className="flex gap-4 items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              {editingCategory ? 'Editando Categoría' : 'Nueva Categoría'}
+              {editingCategory ? t('Editando Categoría') : t('Nueva Categoría')}
             </label>
             <input
               type="text"
               value={newCategory}
               onChange={(e) => setNewCategory(e.target.value)}
-              placeholder={editingCategory ? `Editando: ${editingCategory.name}` : "Nombre de la categoría"}
+              placeholder={editingCategory ? `${t('Editando:')} ${editingCategory.name}` : t("Nombre de la categoría")}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               required
             />
@@ -180,7 +182,7 @@ export function CategoryManager() {
             disabled={loading || !newCategory.trim()}
             className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
-            {loading ? 'Guardando...' : editingCategory ? 'Actualizar' : 'Crear'}
+            {loading ? t('Guardando...') : editingCategory ? t('Actualizar') : t('Crear')}
           </button>
           {editingCategory && (
             <button
@@ -191,13 +193,13 @@ export function CategoryManager() {
               }}
               className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
           )}
         </div>
         {editingCategory && (
           <div className="mt-2 text-sm text-gray-600">
-            Modificando categoría: <span className="font-medium">{editingCategory.name}</span>
+            {t('Modificando categoría:')} <span className="font-medium">{editingCategory.name}</span>
           </div>
         )}
       </form>
@@ -205,13 +207,13 @@ export function CategoryManager() {
       <div className="bg-white rounded-lg shadow">
         <div className="px-4 py-3 border-b border-gray-200">
           <h3 className="text-lg font-medium text-gray-900">
-            Categorías Existentes {categories.length > 0 && `(${categories.length})`}
+            {t('Categorías Existentes')} {categories.length > 0 && `(${categories.length})`}
           </h3>
         </div>
         {loadingCategories ? (
           <div className="px-4 py-8 text-center text-gray-500">
             <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            Cargando categorías...
+            {t('Cargando categorías...')}
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
@@ -220,21 +222,21 @@ export function CategoryManager() {
                 <div className="flex-1">
                   <span className="text-gray-900 font-medium">{category.name}</span>
                   <div className="text-sm text-gray-500 mt-1">
-                    Creada: {new Date(category.created_at).toLocaleDateString('es-ES')}
+                    {t('Creada:')} {new Date(category.created_at).toLocaleDateString('es-ES')}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEdit(category)}
                     className="text-amber-600 hover:text-amber-800 hover:bg-amber-50 p-2 rounded-lg transition-colors"
-                    title="Editar categoría"
+                    title={t('Editar categoría')}
                   >
                     <Edit className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(category.id)}
                     className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                    title="Eliminar categoría"
+                    title={t('Eliminar categoría')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -244,7 +246,7 @@ export function CategoryManager() {
             {categories.length === 0 && (
               <li className="px-4 py-8 text-gray-500 text-center">
                 <div className="text-lg mb-2">📂</div>
-                No hay categorías creadas
+                {t('No hay categorías creadas')}
               </li>
             )}
           </ul>

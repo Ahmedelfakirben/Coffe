@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { EmployeeProfile } from '../types/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface NewEmployee {
   email: string;
@@ -14,6 +15,7 @@ interface NewEmployee {
 }
 
 export function UserManager() {
+  const { t } = useLanguage();
   const { profile } = useAuth();
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -47,7 +49,7 @@ export function UserManager() {
       setEmployees(data || []);
     } catch (err) {
       console.error('Error fetching employees:', err);
-      toast.error('Error al cargar empleados');
+      toast.error(t('Error al cargar empleados'));
     }
   };
 
@@ -56,7 +58,7 @@ export function UserManager() {
 
     // Validar que solo super_admin pueda crear super_admins
     if (newEmployee.role === 'super_admin' && profile?.role !== 'super_admin') {
-      toast.error('Solo un Super Administrador puede crear otros Super Administradores');
+      toast.error(t('Solo un Super Administrador puede crear otros Super Administradores'));
       return;
     }
 
@@ -70,7 +72,7 @@ export function UserManager() {
       } as any);
 
       if (authError) throw authError;
-      if (!authData.user) throw new Error('No se pudo crear el usuario');
+      if (!authData.user) throw new Error(t('No se pudo crear el usuario'));
 
       // 2. Create employee profile (store email for admin ops)
       const { error: profileError } = await supabase
@@ -86,7 +88,7 @@ export function UserManager() {
 
       if (profileError) throw profileError;
 
-      toast.success('Empleado creado exitosamente. Si la confirmación por email está habilitada, el usuario debe confirmar su correo.');
+      toast.success(t('Empleado creado exitosamente. Si la confirmación por email está habilitada, el usuario debe confirmar su correo.'));
       setShowForm(false);
       setNewEmployee({
         email: '',
@@ -98,7 +100,7 @@ export function UserManager() {
       await fetchEmployees();
     } catch (err) {
       console.error('Error creating employee:', err);
-      toast.error('Error al crear empleado');
+      toast.error(t('Error al crear empleado'));
     } finally {
       setLoading(false);
     }
@@ -112,11 +114,11 @@ export function UserManager() {
         .eq('id', employee.id);
 
       if (error) throw error;
-      toast.success(`Usuario ${employee.active ? 'desactivado' : 'activado'}`);
+      toast.success(`${t('Usuario')} ${employee.active ? t('desactivado') : t('activado')}`);
       await fetchEmployees();
     } catch (err) {
       console.error('Error toggling employee status:', err);
-      toast.error('Error al actualizar estado del empleado');
+      toast.error(t('Error al actualizar estado del empleado'));
     }
   };
 
@@ -141,12 +143,12 @@ export function UserManager() {
         .update({ email: value || null })
         .eq('id', editingEmailId);
       if (error) throw error;
-      toast.success('Correo actualizado');
+      toast.success(t('Correo actualizado'));
       cancelEmailEdit();
       await fetchEmployees();
     } catch (err) {
       console.error('Error actualizando correo:', err);
-      toast.error('No se pudo actualizar el correo');
+      toast.error(t('No se pudo actualizar el correo'));
     }
   };
 
@@ -154,34 +156,34 @@ export function UserManager() {
   const handleResetPassword = async (employee: EmployeeProfile) => {
     try {
       if (!employee.email) {
-        toast.error('Este usuario no tiene correo guardado');
+        toast.error(t('Este usuario no tiene correo guardado'));
         return;
       }
       const { error } = await supabase.auth.resetPasswordForEmail(employee.email, {
         redirectTo: window.location.origin,
       } as any);
       if (error) throw error;
-      toast.success('Email de restablecimiento enviado');
+      toast.success(t('Email de restablecimiento enviado'));
     } catch (err) {
       console.error('Error enviando reset de contraseña:', err);
-      toast.error('No se pudo enviar el email de restablecimiento');
+      toast.error(t('No se pudo enviar el email de restablecimiento'));
     }
   };
 
   const handleSoftDelete = async (employee: EmployeeProfile) => {
     try {
-      const confirmed = window.confirm(`Eliminar lógicamente a ${employee.full_name}?`);
+      const confirmed = window.confirm(`${t('Eliminar lógicamente a')} ${employee.full_name}?`);
       if (!confirmed) return;
       const { error } = await supabase
         .from('employee_profiles')
         .update({ active: false, deleted_at: new Date().toISOString() })
         .eq('id', employee.id);
       if (error) throw error;
-      toast.success('Usuario eliminado (borrado lógico)');
+      toast.success(t('Usuario eliminado (borrado lógico)'));
       await fetchEmployees();
     } catch (err) {
       console.error('Error eliminando usuario:', err);
-      toast.error('No se pudo eliminar el usuario');
+      toast.error(t('No se pudo eliminar el usuario'));
     }
   };
 
@@ -205,15 +207,15 @@ export function UserManager() {
   const getRoleName = (role: string) => {
     switch (role) {
       case 'super_admin':
-        return 'Super Administrador';
+        return t('Super Administrador');
       case 'admin':
-        return 'Administrador';
+        return t('Administrador');
       case 'cashier':
-        return 'Cajero';
+        return t('Cajero');
       case 'barista':
-        return 'Barista';
+        return t('Barista');
       case 'waiter':
-        return 'Camarero';
+        return t('Camarero');
       default:
         return role;
     }
@@ -225,13 +227,13 @@ export function UserManager() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Usuarios</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Usuarios')}</h2>
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <UserPlus className="w-5 h-5" />
-          Nuevo Empleado
+          {t('Nuevo Empleado')}
         </button>
       </div>
 
@@ -243,7 +245,7 @@ export function UserManager() {
             checked={showDeleted}
             onChange={(e) => setShowDeleted(e.target.checked)}
           />
-          Mostrar eliminados
+          {t('Mostrar eliminados')}
         </label>
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
@@ -251,7 +253,7 @@ export function UserManager() {
             checked={showInactive}
             onChange={(e) => setShowInactive(e.target.checked)}
           />
-          Mostrar inactivos
+          {t('Mostrar inactivos')}
         </label>
       </div>
 
@@ -260,7 +262,7 @@ export function UserManager() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre Completo
+                {t('Nombre Completo')}
               </label>
               <input
                 type="text"
@@ -273,7 +275,7 @@ export function UserManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Correo Electrónico
+                {t('Correo Electrónico')}
               </label>
               <input
                 type="email"
@@ -286,7 +288,7 @@ export function UserManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Contraseña
+                {t('Contraseña')}
               </label>
               <input
                 type="password"
@@ -300,7 +302,7 @@ export function UserManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Teléfono
+                {t('Teléfono')}
               </label>
               <input
                 type="tel"
@@ -312,7 +314,7 @@ export function UserManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Rol
+                {t('Rol')}
               </label>
               <select
                 value={newEmployee.role}
@@ -320,12 +322,12 @@ export function UserManager() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 required
               >
-                <option value="waiter">Camarero</option>
-                <option value="cashier">Cajero</option>
-                <option value="barista">Barista</option>
-                <option value="admin">Administrador</option>
+                <option value="waiter">{t('Camarero')}</option>
+                <option value="cashier">{t('Cajero')}</option>
+                <option value="barista">{t('Barista')}</option>
+                <option value="admin">{t('Administrador')}</option>
                 {profile?.role === 'super_admin' && (
-                  <option value="super_admin">Super Administrador</option>
+                  <option value="super_admin">{t('Super Administrador')}</option>
                 )}
               </select>
             </div>
@@ -337,14 +339,14 @@ export function UserManager() {
               onClick={() => setShowForm(false)}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
             >
-              {loading ? 'Creando...' : 'Crear Empleado'}
+              {loading ? t('Creando...') : t('Crear Empleado')}
             </button>
           </div>
         </form>
@@ -355,22 +357,22 @@ export function UserManager() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Empleado
+                {t('Empleado')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Contacto
+                {t('Contacto')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Correo
+                {t('Correo')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Rol
+                {t('Rol')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Estado
+                {t('Estado')}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
+                {t('Acciones')}
               </th>
             </tr>
           </thead>
@@ -384,7 +386,7 @@ export function UserManager() {
                   <div className="flex flex-col text-sm text-gray-600">
                     <div className="flex items-center gap-1">
                       <Phone className="w-4 h-4" />
-                      {employee.phone || 'No registrado'}
+                      {employee.phone || t('No registrado')}
                     </div>
                   </div>
                 </td>
@@ -397,31 +399,31 @@ export function UserManager() {
                         value={editingEmailValue}
                         onChange={(e) => setEditingEmailValue(e.target.value)}
                         className="px-2 py-1 border border-gray-300 rounded"
-                        placeholder="correo@ejemplo.com"
+                        placeholder={t('correo@ejemplo.com')}
                       />
                       <button
                         onClick={handleUpdateEmail}
                         className="text-green-600 hover:text-green-800"
-                        title="Guardar correo"
+                        title={t('Guardar correo')}
                       >
-                        Guardar
+                        {t('Guardar')}
                       </button>
                       <button
                         onClick={cancelEmailEdit}
                         className="text-gray-600 hover:text-gray-800"
-                        title="Cancelar edición"
+                        title={t('Cancelar edición')}
                       >
-                        Cancelar
+                        {t('Cancelar')}
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4" />
-                      <span>{employee.email || 'No registrado'}</span>
+                      <span>{employee.email || t('No registrado')}</span>
                       <button
                         onClick={() => startEmailEdit(employee)}
                         className="text-gray-500 hover:text-gray-700"
-                        title={employee.deleted_at ? 'Usuario eliminado' : 'Editar correo'}
+                        title={employee.deleted_at ? t('Usuario eliminado') : t('Editar correo')}
                         disabled={!!employee.deleted_at}
                       >
                         <Edit className="w-4 h-4" />
@@ -442,7 +444,7 @@ export function UserManager() {
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                   }`}>
-                    {employee.deleted_at ? 'Eliminado' : employee.active ? 'Activo' : 'Inactivo'}
+                    {employee.deleted_at ? t('Eliminado') : employee.active ? t('Activo') : t('Inactivo')}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -452,22 +454,22 @@ export function UserManager() {
                       className={`text-${employee.active ? 'red' : 'green'}-600 hover:text-${employee.active ? 'red' : 'green'}-900`}
                       disabled={!!employee.deleted_at}
                     >
-                      {employee.active ? 'Desactivar' : 'Activar'}
+                      {employee.active ? t('Desactivar') : t('Activar')}
                     </button>
                     <button
                       onClick={() => handleResetPassword(employee)}
                       className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
                       disabled={!employee.email}
-                      title={employee.email ? 'Enviar reset de contraseña' : 'Sin correo'}
+                      title={employee.email ? t('Enviar reset de contraseña') : t('Sin correo')}
                     >
-                      <KeyRound className="w-4 h-4" /> Reset
+                      <KeyRound className="w-4 h-4" /> {t('Reset')}
                     </button>
                     <button
                       onClick={() => handleSoftDelete(employee)}
                       className="text-red-600 hover:text-red-900 flex items-center gap-1"
                       disabled={!!employee.deleted_at}
                     >
-                      <Trash2 className="w-4 h-4" /> Eliminar
+                      <Trash2 className="w-4 h-4" /> {t('Eliminar')}
                     </button>
                   </div>
                 </td>

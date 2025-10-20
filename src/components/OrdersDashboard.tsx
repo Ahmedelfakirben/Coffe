@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface Order {
   id: string;
@@ -64,6 +65,7 @@ interface CashEvent {
 
 export function OrdersDashboard() {
   const { profile, user } = useAuth();
+  const { t } = useLanguage();
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('preparing');
@@ -408,7 +410,7 @@ export function OrdersDashboard() {
       .eq('id', orderId);
 
     if (error) {
-      alert('Error al actualizar el estado');
+      toast.error(t('Error al actualizar el estado'));
       return;
     }
     fetchOrders();
@@ -432,7 +434,7 @@ export function OrdersDashboard() {
 
       if (error) {
         console.error('Error updating order:', error);
-        alert('Error al completar la orden: ' + error.message);
+        toast.error(`${t('Error al completar la orden:')} ${error.message}`);
         return;
       }
 
@@ -489,16 +491,16 @@ export function OrdersDashboard() {
       setOrderToComplete(null);
       setSelectedPaymentMethod('');
       fetchOrders();
-      toast.success('Orden completada exitosamente');
+      toast.success(t('Orden completada exitosamente'));
     } catch (err) {
       console.error('Error al completar orden:', err);
-      toast.error('Error al completar la orden');
+      toast.error(t('Error al completar la orden'));
     }
   };
 
   const handleDeleteOrder = async () => {
     if (!orderToDelete || !user || !deletionNote.trim()) {
-      toast.error('Debe ingresar una nota de eliminación');
+      toast.error(t('Debe ingresar una nota de eliminación'));
       return;
     }
 
@@ -533,14 +535,14 @@ export function OrdersDashboard() {
 
       if (deleteError) throw deleteError;
 
-      toast.success('Pedido eliminado correctamente');
+      toast.success(t('Pedido eliminado correctamente'));
       setShowDeleteModal(false);
       setOrderToDelete(null);
       setDeletionNote('');
       fetchOrders();
     } catch (error: any) {
       console.error('Error eliminando pedido:', error);
-      toast.error(`Error al eliminar pedido: ${error.message}`);
+      toast.error(`${t('Error al eliminar pedido:')} ${error.message}`);
     } finally {
       setDeleteLoading(false);
     }
@@ -638,16 +640,16 @@ export function OrdersDashboard() {
   };
 
   const statusLabels = {
-    preparing: 'En Preparación',
-    completed: 'Completado',
-    cancelled: 'Cancelado',
+    preparing: t('En Preparación'),
+    completed: t('Completado'),
+    cancelled: t('Cancelado'),
   };
 
   return (
     <div className="p-3 md:p-6">
       <div className="mb-4 md:mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Panel de Órdenes</h2>
-        
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('Panel de Órdenes')}</h2>
+
         {/* Selector de vista */}
         <div className="flex gap-4 mb-4">
           <button
@@ -658,7 +660,7 @@ export function OrdersDashboard() {
                 : 'bg-white text-gray-700 hover:bg-gray-100'
             }`}
           >
-            Órdenes Actuales
+            {t('Órdenes Actuales')}
           </button>
           {/* Hide Historial button for cashier users */}
           {profile?.role !== 'cashier' && (
@@ -670,7 +672,7 @@ export function OrdersDashboard() {
                   : 'bg-white text-gray-700 hover:bg-gray-100'
               }`}
             >
-              Historial
+              {t('Historial')}
             </button>
           )}
         </div>
@@ -695,7 +697,7 @@ export function OrdersDashboard() {
           <div className="flex gap-4 flex-wrap items-center mb-6">
             <div className="flex gap-4 items-center">
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Desde:</label>
+                <label className="text-sm font-medium text-gray-700">{t('Desde:')}</label>
                 <input
                   type="date"
                   value={startDate}
@@ -704,7 +706,7 @@ export function OrdersDashboard() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Hasta:</label>
+                <label className="text-sm font-medium text-gray-700">{t('Hasta:')}</label>
                 <input
                   type="date"
                   value={endDate}
@@ -716,7 +718,7 @@ export function OrdersDashboard() {
                 onClick={fetchOrderHistory}
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
               >
-                Filtrar
+                {t('Filtrar')}
               </button>
             </div>
 
@@ -725,7 +727,7 @@ export function OrdersDashboard() {
               onChange={(e) => setSelectedUserId(e.target.value)}
               className="px-4 py-2 rounded-lg border border-gray-200 bg-white"
             >
-              <option value="all">Todos los usuarios</option>
+              <option value="all">{t('Todos los usuarios')}</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>{emp.full_name}</option>
               ))}
@@ -738,20 +740,20 @@ export function OrdersDashboard() {
                 onChange={(e) => setShowLatestOnly(e.target.checked)}
                 className="rounded border-gray-300"
               />
-              Mostrar últimas por orden
+              {t('Mostrar últimas por orden')}
             </label>
 
             <div className="flex gap-2 items-center ml-auto">
               <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
-                <span className="font-medium text-gray-700">Hoy:</span>
+                <span className="font-medium text-gray-700">{t('Hoy:')}</span>
                 <span className="font-bold text-amber-600 ml-1">${totals.day.toFixed(2)}</span>
               </div>
               <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
-                <span className="font-medium text-gray-700">Semana:</span>
+                <span className="font-medium text-gray-700">{t('Semana:')}</span>
                 <span className="font-bold text-amber-600 ml-1">${totals.week.toFixed(2)}</span>
               </div>
               <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
-                <span className="font-medium text-gray-700">Mes:</span>
+                <span className="font-medium text-gray-700">{t('Mes:')}</span>
                 <span className="font-bold text-amber-600 ml-1">${totals.month.toFixed(2)}</span>
               </div>
             </div>
@@ -763,16 +765,16 @@ export function OrdersDashboard() {
               onChange={(e) => setSelectedCashType(e.target.value as any)}
               className="px-4 py-2 rounded-lg border"
             >
-              <option value="all">Todos</option>
-              <option value="open">Aperturas</option>
-              <option value="close">Cierres</option>
+              <option value="all">{t('Todos')}</option>
+              <option value="open">{t('Aperturas')}</option>
+              <option value="close">{t('Cierres')}</option>
             </select>
             <select
               value={selectedCashUserId}
               onChange={(e) => setSelectedCashUserId(e.target.value)}
               className="px-4 py-2 rounded-lg border"
             >
-              <option value="all">Todos los usuarios</option>
+              <option value="all">{t('Todos los usuarios')}</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>{emp.full_name}</option>
               ))}
@@ -787,10 +789,10 @@ export function OrdersDashboard() {
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                {range === 'today' && 'Hoy'}
-                {range === 'week' && 'Esta Semana'}
-                {range === 'month' && 'Este Mes'}
-                {range === 'all' && 'Todo'}
+                {range === 'today' && t('Hoy')}
+                {range === 'week' && t('Esta Semana')}
+                {range === 'month' && t('Este Mes')}
+                {range === 'all' && t('Todo')}
               </button>
             ))}
           </div>
@@ -800,7 +802,7 @@ export function OrdersDashboard() {
       {viewMode === 'current' ? (
         filteredOrders.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No hay órdenes para mostrar</p>
+            <p className="text-gray-500 text-lg">{t('No hay órdenes para mostrar')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -841,7 +843,7 @@ export function OrdersDashboard() {
 
                 <div className="border-t pt-3 space-y-2">
                   <p className="text-xs text-gray-600">
-                    Empleado: {order.employee_profiles?.full_name || profile?.full_name || (user?.email ?? 'N/A')}
+                    {t('Empleado:')} {order.employee_profiles?.full_name || profile?.full_name || (user?.email ?? 'N/A')}
                   </p>
 
                   {order.status === 'preparing' && (
@@ -850,13 +852,13 @@ export function OrdersDashboard() {
                         onClick={() => updateOrderStatus(order.id, 'completed')}
                         className="flex-1 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
                       >
-                        Completar
+                        {t('Completar')}
                       </button>
                       <button
                         onClick={() => updateOrderStatus(order.id, 'cancelled')}
                         className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                       >
-                        Cancelar
+                        {t('Cancelar')}
                       </button>
                     </div>
                   )}
@@ -870,7 +872,7 @@ export function OrdersDashboard() {
                       className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
-                      Eliminar Pedido
+                      {t('Eliminar Pedido')}
                     </button>
                   )}
                 </div>
@@ -881,7 +883,7 @@ export function OrdersDashboard() {
       ) : viewMode === 'history' ? (
         orderHistory.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No hay historial de órdenes para mostrar</p>
+            <p className="text-gray-500 text-lg">{t('No hay historial de órdenes para mostrar')}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -890,22 +892,22 @@ export function OrdersDashboard() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Orden
+                      {t('Orden')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha
+                      {t('Fecha')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estado
+                      {t('Estado')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acción
+                      {t('Acción')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
+                      {t('Total')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Empleado
+                      {t('Empleado')}
                     </th>
                   </tr>
                 </thead>
@@ -924,10 +926,10 @@ export function OrdersDashboard() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {history.action === 'created' && 'Creada'}
-                        {history.action === 'updated' && 'Actualizada'}
-                        {history.action === 'completed' && 'Completada'}
-                        {history.action === 'cancelled' && 'Cancelada'}
+                        {history.action === 'created' && t('Creada')}
+                        {history.action === 'updated' && t('Actualizada')}
+                        {history.action === 'completed' && t('Completada')}
+                        {history.action === 'cancelled' && t('Cancelada')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600">
                         ${history.total.toFixed(2)}
@@ -945,7 +947,7 @@ export function OrdersDashboard() {
       ) : (
         filteredCashEvents.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No hay eventos de caja para mostrar</p>
+            <p className="text-gray-500 text-lg">{t('No hay eventos de caja')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -963,7 +965,7 @@ export function OrdersDashboard() {
                         <XCircle className="w-5 h-5 text-amber-600" />
                       )}
                       <span className="font-semibold">
-                        {event.type === 'open' ? 'Apertura de caja' : 'Cierre de caja'}
+                        {event.type === 'open' ? t('Apertura') : t('Cierre')}
                       </span>
                     </div>
                     <p className="text-xs text-gray-600">
@@ -979,11 +981,11 @@ export function OrdersDashboard() {
 
                 <div className="border-t pt-3">
                   <p className="text-sm">
-                    <span className="font-medium">Empleado:</span> {event.employee_name}
+                    <span className="font-medium">{t('Empleado:')}</span> {event.employee_name}
                   </p>
                   {event.note && (
                     <p className="text-xs text-gray-600 mt-2">
-                      Nota: {event.note}
+                      {t('Nota:')} {event.note}
                     </p>
                   )}
                 </div>
@@ -997,13 +999,13 @@ export function OrdersDashboard() {
       {showDeleteModal && orderToDelete && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Eliminar Pedido</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">{t('Eliminar Pedido')}</h2>
             <p className="text-sm text-gray-600 mb-4">
-              ¿Está seguro de eliminar el pedido #{orderToDelete.order_number?.toString().padStart(3, '0') || orderToDelete.id.slice(-8)}?
+              {t('¿Está seguro de eliminar el pedido')} #{orderToDelete.order_number?.toString().padStart(3, '0') || orderToDelete.id.slice(-8)}?
             </p>
 
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-              <p className="text-sm font-medium text-amber-800 mb-2">Detalles del pedido:</p>
+              <p className="text-sm font-medium text-amber-800 mb-2">{t('Detalles del pedido:')}</p>
               <div className="space-y-1 text-sm text-gray-700">
                 {orderToDelete.order_items.map((item, idx) => (
                   <div key={idx}>
@@ -1012,25 +1014,25 @@ export function OrdersDashboard() {
                   </div>
                 ))}
                 <div className="font-bold text-amber-600 pt-2 border-t border-amber-300">
-                  Total: ${orderToDelete.total.toFixed(2)}
+                  {t('Total:')} ${orderToDelete.total.toFixed(2)}
                 </div>
               </div>
             </div>
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nota de eliminación *
+                {t('Nota de eliminación (obligatoria):')}
               </label>
               <textarea
                 value={deletionNote}
                 onChange={(e) => setDeletionNote(e.target.value)}
-                placeholder="Ingrese la razón de la eliminación..."
+                placeholder={t('Ingrese la razón de la eliminación...')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 rows={3}
                 maxLength={500}
               />
               <p className="text-xs text-gray-500 mt-1">
-                {deletionNote.length}/500 caracteres
+                {deletionNote.length}/500 {t('caracteres')}
               </p>
             </div>
 
@@ -1044,7 +1046,7 @@ export function OrdersDashboard() {
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                 disabled={deleteLoading}
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button
                 onClick={handleDeleteOrder}
@@ -1054,12 +1056,12 @@ export function OrdersDashboard() {
                 {deleteLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Eliminando...
+                    {t('Eliminando...')}
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    Eliminar Pedido
+                    {t('Eliminar Pedido')}
                   </>
                 )}
               </button>
@@ -1072,7 +1074,7 @@ export function OrdersDashboard() {
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Seleccionar Método de Pago</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Seleccionar Método de Pago')}</h2>
 
             <div className="grid grid-cols-1 gap-3 mb-6">
               <button
@@ -1084,8 +1086,8 @@ export function OrdersDashboard() {
               >
                 <Banknote className="w-6 h-6 text-green-600" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">Efectivo</div>
-                  <div className="text-sm text-gray-600">Pago en efectivo</div>
+                  <div className="font-medium text-gray-900">{t('Efectivo')}</div>
+                  <div className="text-sm text-gray-600">{t('Pago en efectivo')}</div>
                 </div>
               </button>
 
@@ -1098,8 +1100,8 @@ export function OrdersDashboard() {
               >
                 <CreditCard className="w-6 h-6 text-blue-600" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">Tarjeta</div>
-                  <div className="text-sm text-gray-600">Pago con tarjeta</div>
+                  <div className="font-medium text-gray-900">{t('Tarjeta')}</div>
+                  <div className="text-sm text-gray-600">{t('Pago con tarjeta')}</div>
                 </div>
               </button>
 
@@ -1112,8 +1114,8 @@ export function OrdersDashboard() {
               >
                 <Smartphone className="w-6 h-6 text-purple-600" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">Digital</div>
-                  <div className="text-sm text-gray-600">Pago digital</div>
+                  <div className="font-medium text-gray-900">{t('Digital')}</div>
+                  <div className="text-sm text-gray-600">{t('Pago digital')}</div>
                 </div>
               </button>
             </div>
@@ -1127,7 +1129,7 @@ export function OrdersDashboard() {
                 }}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           </div>

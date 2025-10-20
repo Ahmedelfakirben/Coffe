@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
+import { useLanguage } from '../contexts/LanguageContext';
 
 type TableStatus = 'available' | 'occupied' | 'reserved' | 'dirty';
 
@@ -18,6 +19,7 @@ interface Table {
 export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   const { user, profile } = useAuth();
   const { tableId, setTableId, setServiceType, setActiveOrderId } = useCart();
+  const { t } = useLanguage();
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,8 +99,8 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       setTables(data || []);
     } catch (err) {
       console.error('Error al cargar mesas:', err);
-      setError('No se pudieron cargar las mesas');
-      toast.error('Error al cargar mesas');
+      setError(t('No se pudieron cargar las mesas'));
+      toast.error(t('Error al cargar mesas'));
     } finally {
       setLoading(false);
     }
@@ -107,7 +109,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   const seedTables = async () => {
     try {
       const defaultTables = Array.from({ length: 6 }).map((_, i) => ({
-        name: `Mesa ${i + 1}`,
+        name: `${t('Mesa')} ${i + 1}`,
         seats: 4,
         status: 'available' as TableStatus,
       }));
@@ -115,11 +117,11 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         .from('tables')
         .upsert(defaultTables, { onConflict: 'name' });
       if (error) throw error;
-      toast.success('Se agregaron 6 mesas por defecto');
+      toast.success(t('Se agregaron 6 mesas por defecto'));
       fetchTables();
     } catch (err) {
       console.error('Error al agregar mesas:', err);
-      toast.error('No se pudieron agregar las mesas (requiere rol admin)');
+      toast.error(t('No se pudieron agregar las mesas (requiere rol admin)'));
     }
   };
 
@@ -135,7 +137,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       setOrdersForTable(data || []);
     } catch (err) {
       console.error('Error al cargar órdenes de mesa:', err);
-      toast.error('No se pudieron cargar los pedidos de la mesa');
+      toast.error(t('No se pudieron cargar los pedidos de la mesa'));
     }
   };
 
@@ -170,13 +172,13 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           }
         }
         setActiveOrderId(null);
-        toast.success('Mesa seleccionada para la orden');
+        toast.success(t('Mesa seleccionada para la orden'));
         // Always redirect to POS when selecting a table
         onGoToPOS?.();
       }
     } catch (err) {
       console.error('Error verificando pedidos de la mesa:', err);
-      toast.error('No se pudo verificar el estado de la mesa');
+      toast.error(t('No se pudo verificar el estado de la mesa'));
     }
   };
 
@@ -203,7 +205,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   // Validar un pedido desde Sala: pasa de 'preparing' a 'completed' y libera mesa si corresponde
   const validateOrderFromSala = async (orderId: string, paymentMethod: 'cash' | 'card' | 'digital') => {
     if (!tableId || !user) {
-      toast.error('Seleccione una mesa primero');
+      toast.error(t('Seleccione una mesa primero'));
       return;
     }
     try {
@@ -246,9 +248,9 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         price: item.unit_price,
       }));
 
-      // Formatear método de pago a español
-      const paymentMethodText = paymentMethod === 'cash' ? 'Efectivo' :
-                                paymentMethod === 'card' ? 'Tarjeta' : 'Digital';
+      // Formatear método de pago
+      const paymentMethodText = paymentMethod === 'cash' ? t('Efectivo') :
+                                paymentMethod === 'card' ? t('Tarjeta') : t('Digital');
 
       console.log('🎫 SALA: Preparando ticket con datos:', {
         orderNumber: orderData.order_number,
@@ -275,21 +277,21 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         .update({ status: 'available' })
         .eq('id', tableId);
 
-      toast.success('Pedido validado correctamente');
+      toast.success(t('Pedido validado correctamente'));
       setShowOrdersModal(false);
       setShowPaymentSelector(null);
       setActiveOrderId(null);
       await fetchTables();
     } catch (err) {
       console.error('Error validando pedido desde Sala:', err);
-      toast.error('No se pudo validar el pedido');
+      toast.error(t('No se pudo validar el pedido'));
     }
   };
 
   const clearSelection = () => {
     setTableId(null);
     setServiceType('takeaway');
-    toast('Orden marcada como para llevar');
+    toast(t('Orden marcada como para llevar'));
   };
 
   const statusColor = (status: TableStatus) => {
@@ -309,7 +311,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">Cargando mesas...</div>
+      <div className="min-h-[60vh] flex items-center justify-center">{t('Cargando mesas...')}</div>
     );
   }
 
@@ -324,10 +326,10 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
     <div className="min-h-[calc(100vh-8rem)] bg-gray-50">
       {/* Header móvil */}
       <div className="bg-white p-4 border-b sticky top-0 z-10">
-        <h2 className="text-xl font-bold text-gray-900">Gestión de Sala</h2>
+        <h2 className="text-xl font-bold text-gray-900">{t('Gestión de Sala')}</h2>
         {tableId && (
           <p className="text-sm text-amber-600 mt-1">
-            Mesa seleccionada: {tables.find(t => t.id === tableId)?.name}
+            {t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}
           </p>
         )}
       </div>
@@ -338,14 +340,14 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           onClick={clearSelection}
           className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
         >
-          Para llevar
+          {t('Para llevar')}
         </button>
         {tables.length === 0 && (
           <button
             onClick={seedTables}
             className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
           >
-            Añadir 6 mesas
+            {t('Añadir 6 mesas')}
           </button>
         )}
       </div>
@@ -354,7 +356,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       <div className="p-4 space-y-3">
         {tables.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500">No hay mesas configuradas</p>
+            <p className="text-gray-500">{t('No hay mesas configuradas')}</p>
           </div>
         ) : (
           tables.map((table) => (
@@ -376,7 +378,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                   <div>
                     <h3 className="font-bold text-gray-900 text-lg">{table.name}</h3>
                     <p className="text-sm text-gray-600">
-                      👥 {table.seats} personas
+                      👥 {table.seats} {t('personas')}
                     </p>
                   </div>
                 </div>
@@ -387,9 +389,9 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                     table.status === 'reserved' ? 'bg-blue-100 text-blue-700' :
                     'bg-red-100 text-red-700'
                   }`}>
-                    {table.status === 'available' ? 'Disponible' :
-                     table.status === 'occupied' ? 'Ocupada' :
-                     table.status === 'reserved' ? 'Reservada' : 'Sucia'}
+                    {table.status === 'available' ? t('Disponible') :
+                     table.status === 'occupied' ? t('Ocupada') :
+                     table.status === 'reserved' ? t('Reservada') : t('Sucia')}
                   </span>
                 </div>
               </div>
@@ -403,11 +405,11 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         <div className="flex justify-around text-xs">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span className="text-gray-600">Disponible</span>
+            <span className="text-gray-600">{t('Disponible')}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-            <span className="text-gray-600">Ocupada</span>
+            <span className="text-gray-600">{t('Ocupada')}</span>
           </div>
         </div>
       </div>
@@ -424,23 +426,23 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       {/* Vista Desktop */}
       <div className="hidden md:block min-h-screen bg-gray-50 p-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-900">Sala</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t('Sala')}</h2>
         <div className="flex gap-2 items-center">
           <button
             onClick={clearSelection}
             className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
           >
-            Para llevar
+            {t('Para llevar')}
           </button>
           {tableId && (
-            <span className="px-3 py-2 bg-amber-50 text-amber-700 rounded-lg">Mesa seleccionada: {tables.find(t => t.id === tableId)?.name}</span>
+            <span className="px-3 py-2 bg-amber-50 text-amber-700 rounded-lg">{t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}</span>
           )}
           {tables.length === 0 && (
             <button
               onClick={seedTables}
               className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
             >
-              Añadir 6 mesas
+              {t('Añadir 6 mesas')}
             </button>
           )}
         </div>
@@ -481,7 +483,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                 <div className="text-sm font-bold text-gray-800">{table.name}</div>
                 <div className="text-xs text-gray-600 flex items-center justify-center gap-1">
                   <span>👥</span>
-                  {table.seats} personas
+                  {table.seats} {t('personas')}
                 </div>
               </div>
 
@@ -498,27 +500,27 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         <div className="mt-8 flex flex-wrap justify-center gap-4 relative z-10">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm border border-green-200 shadow-sm">
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span className="text-sm font-medium text-green-700">Disponible</span>
+            <span className="text-sm font-medium text-green-700">{t('Disponible')}</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm border border-yellow-200 shadow-sm">
             <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-            <span className="text-sm font-medium text-yellow-700">Ocupada</span>
+            <span className="text-sm font-medium text-yellow-700">{t('Ocupada')}</span>
           </div>
         </div>
       </div>
       {showOrdersModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Pedidos en {selectedTableName}</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-3">{t('Pedidos en')} {selectedTableName}</h3>
             {ordersForTable.length === 0 ? (
-              <p className="text-sm text-gray-600 mb-4">No hay pedidos en preparación para esta mesa.</p>
+              <p className="text-sm text-gray-600 mb-4">{t('No hay pedidos en preparación para esta mesa.')}</p>
             ) : (
               <div className="space-y-2 mb-4">
                 {ordersForTable.map(order => (
                   <div key={order.id} className="border rounded-lg p-2 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold">Pedido #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(0,8)}</p>
-                      <p className="text-xs text-gray-600">Total: ${order.total?.toFixed?.(2) ?? Number(order.total).toFixed(2)}</p>
+                      <p className="text-sm font-semibold">{t('Pedido')} #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(0,8)}</p>
+                      <p className="text-xs text-gray-600">{t('Total:')} ${order.total?.toFixed?.(2) ?? Number(order.total).toFixed(2)}</p>
                       <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
                     </div>
                     <div className="flex gap-2">
@@ -527,18 +529,18 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                         onClick={() => {
                           setActiveOrderId(order.id);
                           setShowOrdersModal(false);
-                          toast.success('Continuando pedido existente');
+                          toast.success(t('Continuando pedido existente'));
                           onGoToPOS?.();
                         }}
                       >
-                        Continuar
+                        {t('Continuar')}
                       </button>
                       {profile?.role !== 'waiter' && (
                         <button
                           className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs"
                           onClick={() => setShowPaymentSelector(order.id)}
                         >
-                          Validar
+                          {t('Validar')}
                         </button>
                       )}
                     </div>
@@ -550,7 +552,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
             {/* Selector de método de pago */}
             {showPaymentSelector && (
               <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Método de Pago</h4>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">{t('Método de Pago')}</h4>
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   <button
                     onClick={() => setSelectedPaymentMethod('cash')}
@@ -561,7 +563,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                     }`}
                   >
                     <Banknote className="w-4 h-4 mx-auto mb-1" />
-                    <span className="text-xs">Efectivo</span>
+                    <span className="text-xs">{t('Efectivo')}</span>
                   </button>
                   <button
                     onClick={() => setSelectedPaymentMethod('card')}
@@ -572,7 +574,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                     }`}
                   >
                     <CreditCard className="w-4 h-4 mx-auto mb-1" />
-                    <span className="text-xs">Tarjeta</span>
+                    <span className="text-xs">{t('Tarjeta')}</span>
                   </button>
                   <button
                     onClick={() => setSelectedPaymentMethod('digital')}
@@ -583,7 +585,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                     }`}
                   >
                     <Smartphone className="w-4 h-4 mx-auto mb-1" />
-                    <span className="text-xs">Digital</span>
+                    <span className="text-xs">{t('Digital')}</span>
                   </button>
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -591,13 +593,13 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                     className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs"
                     onClick={() => setShowPaymentSelector(null)}
                   >
-                    Cancelar
+                    {t('Cancelar')}
                   </button>
                   <button
                     className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs"
                     onClick={() => validateOrderFromSala(showPaymentSelector, selectedPaymentMethod)}
                   >
-                    Confirmar Validación
+                    {t('Confirmar Validación')}
                   </button>
                 </div>
               </div>
@@ -611,7 +613,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                   setShowPaymentSelector(null);
                 }}
               >
-                Cerrar
+                {t('Cerrar')}
               </button>
             </div>
           </div>
