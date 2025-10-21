@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Supplier } from '../types/expenses';
 
 export function SupplierManager() {
+  const { t } = useLanguage();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,7 +34,7 @@ export function SupplierManager() {
       setSuppliers(data || []);
     } catch (err) {
       console.error('Error fetching suppliers:', err);
-      toast.error('Error al cargar proveedores');
+      toast.error(t('Error al cargar proveedores'));
     }
   };
 
@@ -48,14 +50,14 @@ export function SupplierManager() {
           .eq('id', editingSupplier.id);
 
         if (error) throw error;
-        toast.success('Proveedor actualizado');
+        toast.success(t('Proveedor actualizado'));
       } else {
         const { error } = await supabase
           .from('suppliers')
           .insert([formData]);
 
         if (error) throw error;
-        toast.success('Proveedor creado');
+        toast.success(t('Proveedor creado'));
       }
 
       setShowForm(false);
@@ -70,7 +72,7 @@ export function SupplierManager() {
       await fetchSuppliers();
     } catch (err) {
       console.error('Error saving supplier:', err);
-      toast.error('Error al guardar proveedor');
+      toast.error(t('Error al guardar proveedor'));
     } finally {
       setLoading(false);
     }
@@ -98,24 +100,24 @@ export function SupplierManager() {
         .eq('id', id);
 
       if (error) throw error;
-      toast.success('Proveedor eliminado');
+      toast.success(t('Proveedor eliminado'));
       await fetchSuppliers();
     } catch (err) {
       console.error('Error deleting supplier:', err);
-      toast.error('Error al eliminar proveedor');
+      toast.error(t('Error al eliminar proveedor'));
     }
   };
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Proveedores</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Proveedores')}</h2>
         <button
           onClick={() => setShowForm(true)}
           className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="w-5 h-5" />
-          Nuevo Proveedor
+          {t('Nuevo Proveedor')}
         </button>
       </div>
 
@@ -124,7 +126,7 @@ export function SupplierManager() {
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-gray-900">
-                {editingSupplier ? 'Editar Proveedor' : 'Nuevo Proveedor'}
+                {editingSupplier ? t('Editar Proveedor') : t('Nuevo Proveedor')}
               </h3>
               <button
                 onClick={() => {
@@ -147,7 +149,7 @@ export function SupplierManager() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre *
+                  {t('Nombre')} *
                 </label>
                 <input
                   type="text"
@@ -160,7 +162,7 @@ export function SupplierManager() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Persona de Contacto
+                  {t('Persona de Contacto')}
                 </label>
                 <input
                   type="text"
@@ -172,7 +174,7 @@ export function SupplierManager() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Correo Electrónico
+                  {t('Correo Electrónico')}
                 </label>
                 <input
                   type="email"
@@ -184,7 +186,7 @@ export function SupplierManager() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Teléfono
+                  {t('Teléfono')}
                 </label>
                 <input
                   type="tel"
@@ -196,7 +198,7 @@ export function SupplierManager() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dirección
+                  {t('Dirección')}
                 </label>
                 <textarea
                   value={formData.address}
@@ -215,14 +217,14 @@ export function SupplierManager() {
                   }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
                   className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
                 >
-                  {loading ? 'Guardando...' : editingSupplier ? 'Actualizar' : 'Crear'}
+                  {loading ? t('Guardando...') : editingSupplier ? t('Actualizar') : t('Crear')}
                 </button>
               </div>
             </form>
@@ -235,19 +237,19 @@ export function SupplierManager() {
           <thead className="bg-gray-50">
             <tr>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre
+                {t('Nombre')}
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Contacto
+                {t('Contacto')}
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email/Teléfono
+                {t('Email/Teléfono')}
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Dirección
+                {t('Dirección')}
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
+                {t('Acciones')}
               </th>
             </tr>
           </thead>
@@ -286,7 +288,7 @@ export function SupplierManager() {
             {suppliers.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                  No hay proveedores registrados
+                  {t('No hay proveedores registrados')}
                 </td>
               </tr>
             )}

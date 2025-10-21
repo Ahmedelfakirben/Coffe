@@ -25,7 +25,7 @@ export function LoginForm() {
     }
 
     if (!password.trim()) {
-      setError('La contraseña es obligatoria.');
+      setError(t('La contraseña es obligatoria.'));
       setLoading(false);
       return;
     }
@@ -33,14 +33,14 @@ export function LoginForm() {
     // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError('Por favor ingresa un correo electrónico válido.');
+      setError(t('Por favor ingresa un correo electrónico válido.'));
       setLoading(false);
       return;
     }
 
     // Password strength check (minimum 6 characters)
     if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+      setError(t('La contraseña debe tener al menos 6 caracteres.'));
       setLoading(false);
       return;
     }
@@ -48,15 +48,15 @@ export function LoginForm() {
     try {
       await signIn(email, password);
     } catch (err: any) {
-      let message = 'Credenciales inválidas. Por favor intenta de nuevo.';
+      let message = t('Credenciales inválidas. Por favor intenta de nuevo.');
 
       // Handle specific Supabase errors
       if (err?.message?.includes('Invalid login credentials')) {
-        message = 'Correo electrónico o contraseña incorrectos.';
+        message = t('Correo electrónico o contraseña incorrectos.');
       } else if (err?.message?.includes('Email not confirmed')) {
-        message = 'Por favor confirma tu correo electrónico antes de iniciar sesión.';
+        message = t('Por favor confirma tu correo electrónico antes de iniciar sesión.');
       } else if (err?.message?.includes('Too many requests')) {
-        message = 'Demasiados intentos. Por favor espera unos minutos.';
+        message = t('Demasiados intentos. Por favor espera unos minutos.');
       } else if (err?.message) {
         message = err.message;
       }
@@ -75,7 +75,7 @@ export function LoginForm() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-600 rounded-full mb-4">
             <Coffee className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Coffee Shop</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">LIN-Caisse</h1>
           <p className="text-gray-600">{t('Sistema de Gestión')}</p>
         </div>
 
@@ -96,7 +96,7 @@ export function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-              placeholder="empleado@cafeteria.com"
+              placeholder={t('empleado@cafeteria.com')}
               required
               autoComplete="email"
               autoCapitalize="none"
@@ -126,7 +126,7 @@ export function LoginForm() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1"
-                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                aria-label={showPassword ? t("Ocultar contraseña") : t("Mostrar contraseña")}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>

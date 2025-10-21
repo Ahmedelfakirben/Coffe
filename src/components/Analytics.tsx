@@ -125,7 +125,7 @@ export function Analytics() {
     try {
       console.log('Fetching employee activity...');
 
-      // Fetch only active employees who haven't been deleted
+      // Fetch only active employees who haven't been deleted (exclude super_admin)
       const { data: employees, error } = await supabase
         .from('employee_profiles')
         .select(`
@@ -137,7 +137,8 @@ export function Analytics() {
           created_at
         `)
         .eq('active', true)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .neq('role', 'super_admin'); // Ocultar super_admin
 
       if (error) {
         console.error('Error fetching employees:', error);
@@ -192,12 +193,15 @@ export function Analytics() {
                 ?.filter(order => order.status === 'completed')
                 .reduce((sum, order) => sum + order.total, 0) || 0;
 
-              // User is online if they have an open cash session
-              const isOnline = openSessions && openSessions.length > 0;
+              // User is online if they have an open cash session OR have created orders today
+              // This allows waiters/baristas to appear as online even without cash sessions
+              const hasOpenSession = openSessions && openSessions.length > 0;
+              const hasOrdersToday = orders && orders.length > 0;
+              const isOnline = hasOpenSession || hasOrdersToday;
 
               const lastLogin = openSessions && openSessions.length > 0
                 ? openSessions[0].opened_at
-                : emp.created_at;
+                : (orders && orders.length > 0 ? orders[0].created_at : emp.created_at);
 
               console.log(`Employee ${emp.full_name}: open sessions: ${openSessions?.length || 0}, isOnline: ${isOnline}, sessions today: ${sessions?.length || 0}, orders today: ${orders?.length || 0}`);
 
@@ -1086,15 +1090,14 @@ export function Analytics() {
       const [ordersData, sessionsData, expensesData, employeesData, productsData] = await Promise.all([
         supabase.from('orders').select(`
           id, total, status, created_at, employee_id,
-          employee_profiles!inner(full_name),
-          order_items(quantity, unit_price, subtotal, products!inner(name))
-        `).order('created_at', { ascending: false }),
+          employee_profiles!inner(full_name, role)
+        `).neq('employee_profiles.role', 'super_admin').order('created_at', { ascending: false }),
         supabase.from('cash_register_sessions').select(`
           id, opening_amount, closing_amount, opened_at, closed_at, status, employee_id,
-          employee_profiles!inner(full_name)
-        `).order('opened_at', { ascending: false }),
+          employee_profiles!inner(full_name, role)
+        `).neq('employee_profiles.role', 'super_admin').order('opened_at', { ascending: false }),
         supabase.from('expenses').select('*').order('created_at', { ascending: false }),
-        supabase.from('employee_profiles').select('*'),
+        supabase.from('employee_profiles').select('*').neq('role', 'super_admin'),
         supabase.from('products').select(`
           id, name, base_price, available, created_at,
           categories!inner(name)
@@ -1367,7 +1370,7 @@ export function Analytics() {
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <DollarSign className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">Hoy</span>
+            <span className="text-xs font-medium opacity-90">{t('Hoy')}</span>
           </div>
           <p className="text-2xl font-bold mb-1">${stats.todaySales.toFixed(2)}</p>
           <p className="text-xs opacity-90">{t('Ventas del día')}</p>
@@ -1376,7 +1379,7 @@ export function Analytics() {
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <ShoppingBag className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">Hoy</span>
+            <span className="text-xs font-medium opacity-90">{t('Hoy')}</span>
           </div>
           <p className="text-2xl font-bold mb-1">{stats.todayOrders}</p>
           <p className="text-xs opacity-90">{t('Órdenes completadas')}</p>
@@ -1385,7 +1388,7 @@ export function Analytics() {
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <TrendingUp className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">Total</span>
+            <span className="text-xs font-medium opacity-90">{t('Total')}</span>
           </div>
           <p className="text-2xl font-bold mb-1">{stats.totalProducts}</p>
           <p className="text-xs opacity-90">{t('Productos activos')}</p>
@@ -1395,19 +1398,19 @@ export function Analytics() {
         <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <Activity className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">Activos</span>
+            <span className="text-xs font-medium opacity-90">{t('Activos')}</span>
           </div>
           <p className="text-2xl font-bold mb-1">{onlineUsers}</p>
-          <p className="text-xs opacity-90">Usuarios conectados</p>
+          <p className="text-xs opacity-90">{t('Usuarios conectados')}</p>
         </div>
 
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg p-4 text-white">
           <div className="flex items-center justify-between mb-2">
             <Clock className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">Ahora</span>
+            <span className="text-xs font-medium opacity-90">{t('Ahora')}</span>
           </div>
           <p className="text-2xl font-bold mb-1">{new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
-          <p className="text-xs opacity-90">Hora actual</p>
+          <p className="text-xs opacity-90">{t('Hora actual')}</p>
         </div>
       </div>
 
@@ -1438,31 +1441,31 @@ export function Analytics() {
                 </span>
               </div>
               <div className="mt-4 pt-4 border-t">
-                {summary.period === 'Hoy' && (
+                {summary.period === t('Hoy') && (
                   <button
                     onClick={() => generateDailyReport(summary)}
                     className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <FileSpreadsheet className="w-4 h-4" />
-                    Generar Reporte Diario
+                    {t('Generar Reporte Diario')}
                   </button>
                 )}
-                {summary.period === 'Esta Semana' && (
+                {summary.period === t('Esta Semana') && (
                   <button
                     onClick={() => generateWeeklyReport(summary)}
                     className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <FileSpreadsheet className="w-4 h-4" />
-                    Generar Reporte Semanal
+                    {t('Generar Reporte Semanal')}
                   </button>
                 )}
-                {summary.period === 'Este Mes' && (
+                {summary.period === t('Este Mes') && (
                   <button
                     onClick={() => generateMonthlyReport(summary)}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <FileSpreadsheet className="w-4 h-4" />
-                    Generar Reporte Mensual
+                    {t('Generar Reporte Mensual')}
                   </button>
                 )}
               </div>
@@ -1484,8 +1487,8 @@ export function Analytics() {
                     <p className="font-medium text-gray-900">{emp.full_name}</p>
                     <p className="text-xs text-gray-500">{emp.role}</p>
                     <div className="flex gap-4 text-xs text-gray-600 mt-1">
-                      <span>{emp.total_sessions_today} sesiones</span>
-                      <span>{emp.total_orders_today} pedidos</span>
+                      <span>{emp.total_sessions_today} {t('sesiones')}</span>
+                      <span>{emp.total_orders_today} {t('pedidos')}</span>
                       <span>${emp.total_sales_today.toFixed(2)}</span>
                     </div>
                   </div>
@@ -1513,11 +1516,11 @@ export function Analytics() {
                     <p className="text-sm text-gray-900 font-medium">{notif.message}</p>
                     {notif.type === 'order_deleted' && notif.note && (
                       <div className="mt-2 p-2 bg-white rounded border border-red-100">
-                        <p className="text-xs font-semibold text-red-600 mb-1">Motivo:</p>
+                        <p className="text-xs font-semibold text-red-600 mb-1">{t('Motivo:')}</p>
                         <p className="text-xs text-gray-700">{notif.note}</p>
                         {notif.total && (
                           <p className="text-xs font-bold text-red-600 mt-1">
-                            Total: ${notif.total.toFixed(2)}
+                            {t('Total')}: ${notif.total.toFixed(2)}
                           </p>
                         )}
                       </div>
@@ -1558,7 +1561,7 @@ export function Analytics() {
                     </span>
                     <div className="text-right">
                       <p className="font-semibold text-gray-900">${day.total.toFixed(2)}</p>
-                      <p className="text-xs text-gray-500">{day.order_count} órdenes</p>
+                      <p className="text-xs text-gray-500">{day.order_count} {t('órdenes')}</p>
                     </div>
                   </div>
                 ))}
@@ -1581,7 +1584,7 @@ export function Analytics() {
                     </div>
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{product.product_name}</p>
-                      <p className="text-sm text-gray-500">{product.quantity_sold} unidades</p>
+                      <p className="text-sm text-gray-500">{product.quantity_sold} {t('unidades')}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-amber-600">${product.revenue.toFixed(2)}</p>
@@ -1610,23 +1613,22 @@ export function Analytics() {
               {financialSummary[0].profit_margin < 20 && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
                   <p className="text-sm text-amber-800">
-                    <strong>Margen bajo hoy:</strong> {financialSummary[0].profit_margin.toFixed(1)}%.
-                    Considera revisar precios o reducir gastos.
+                    <strong>{t('Margen bajo hoy:')}</strong> {financialSummary[0].profit_margin.toFixed(1)}%.
+                    {t('Considera revisar precios o reducir gastos.')}
                   </p>
                 </div>
               )}
               {financialSummary[1].sales < financialSummary[1].expenses && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-sm text-red-800">
-                    <strong>Pérdidas esta semana.</strong> Los gastos superan las ventas.
-                    Revisa el control de inventario y gastos operativos.
+                    <strong>{t('Pérdidas esta semana.')}</strong> {t('Los gastos superan las ventas. Revisa el control de inventario y gastos operativos.')}
                   </p>
                 </div>
               )}
               {employeeActivity.filter(e => e.total_orders_today === 0 && e.is_online).length > 0 && (
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
-                    <strong>Empleados inactivos.</strong> Algunos empleados conectados no han procesado pedidos hoy.
+                    <strong>{t('Empleados inactivos.')}</strong> {t('Algunos empleados conectados no han procesado pedidos hoy.')}
                   </p>
                 </div>
               )}
@@ -1635,7 +1637,7 @@ export function Analytics() {
           {onlineUsers === 0 && (
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-sm text-gray-800">
-                <strong>Ningún empleado conectado.</strong> Verifica la conectividad y horarios de trabajo.
+                <strong>{t('Ningún empleado conectado.')}</strong> {t('Verifica la conectividad y horarios de trabajo.')}
               </p>
             </div>
           )}

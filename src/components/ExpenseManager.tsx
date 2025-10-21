@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Filter, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { toast } from 'react-hot-toast';
 import { Expense, ExpenseCategory, Supplier } from '../types/expenses';
 
@@ -16,6 +17,7 @@ const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
 
 export function ExpenseManager() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -51,7 +53,7 @@ export function ExpenseManager() {
       setSuppliers(data || []);
     } catch (err) {
       console.error('Error fetching suppliers:', err);
-      toast.error('Error al cargar proveedores');
+      toast.error(t('Error al cargar proveedores'));
     }
   };
 
@@ -80,7 +82,7 @@ export function ExpenseManager() {
       setExpenses(data || []);
     } catch (err) {
       console.error('Error fetching expenses:', err);
-      toast.error('Error al cargar gastos');
+      toast.error(t('Error al cargar gastos'));
     }
   };
 
@@ -115,7 +117,7 @@ export function ExpenseManager() {
 
       if (error) throw error;
 
-      toast.success('Gasto registrado exitosamente');
+      toast.success(t('Gasto registrado exitosamente'));
       setShowForm(false);
       setNewExpense({
         category: '',
@@ -128,7 +130,7 @@ export function ExpenseManager() {
       await fetchExpenses();
     } catch (err) {
       console.error('Error creating expense:', err);
-      toast.error('Error al registrar gasto');
+      toast.error(t('Error al registrar gasto'));
     } finally {
       setLoading(false);
     }
@@ -161,21 +163,21 @@ export function ExpenseManager() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Gastos</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Gastos')}</h2>
         <div className="flex gap-4">
           <button
             onClick={downloadReport}
             className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <Download className="w-5 h-5" />
-            Descargar Reporte
+            {t('Descargar Reporte')}
           </button>
           <button
             onClick={() => setShowForm(!showForm)}
             className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <Plus className="w-5 h-5" />
-            Nuevo Gasto
+            {t('Nuevo Gasto')}
           </button>
         </div>
       </div>
@@ -185,7 +187,7 @@ export function ExpenseManager() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha
+                {t('Fecha')}
               </label>
               <input
                 type="date"
@@ -198,7 +200,7 @@ export function ExpenseManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Categoría / Proveedor
+                {t('Categoría / Proveedor')}
               </label>
               <select
                 value={newExpense.supplier_id}
@@ -206,15 +208,15 @@ export function ExpenseManager() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 required
               >
-                <option value="">Seleccionar categoría o proveedor</option>
-                <optgroup label="Otras categorías">
-                  <option value="salary">Salarios</option>
-                  <option value="rent">Alquiler</option>
-                  <option value="utilities">Servicios</option>
-                  <option value="maintenance">Mantenimiento</option>
-                  <option value="other">Otros</option>
+                <option value="">{t('Seleccionar categoría o proveedor')}</option>
+                <optgroup label={t('Otras categorías')}>
+                  <option value="salary">{t('Salarios')}</option>
+                  <option value="rent">{t('Alquiler')}</option>
+                  <option value="utilities">{t('Servicios')}</option>
+                  <option value="maintenance">{t('Mantenimiento')}</option>
+                  <option value="other">{t('Otros')}</option>
                 </optgroup>
-                <optgroup label="Proveedores">
+                <optgroup label={t('Proveedores')}>
                   {suppliers.map(supplier => (
                     <option key={supplier.id} value={supplier.id}>
                       {supplier.name}
@@ -226,7 +228,7 @@ export function ExpenseManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción
+                {t('Descripción')}
               </label>
               <input
                 type="text"
@@ -239,7 +241,7 @@ export function ExpenseManager() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto
+                {t('Monto')}
               </label>
               <input
                 type="number"
@@ -258,14 +260,14 @@ export function ExpenseManager() {
               onClick={() => setShowForm(false)}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
             >
-              {loading ? 'Guardando...' : 'Guardar Gasto'}
+              {loading ? t('Guardando...') : t('Guardar Gasto')}
             </button>
           </div>
         </form>
@@ -275,22 +277,22 @@ export function ExpenseManager() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoría / Proveedor
+              {t('Categoría / Proveedor')}
             </label>
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value as ExpenseCategory | 'all')}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             >
-              <option value="all">Todas las categorías</option>
-              <optgroup label="Otras categorías">
-                <option value="salary">Salarios</option>
-                <option value="rent">Alquiler</option>
-                <option value="utilities">Servicios</option>
-                <option value="maintenance">Mantenimiento</option>
-                <option value="other">Otros</option>
+              <option value="all">{t('Todas las categorías')}</option>
+              <optgroup label={t('Otras categorías')}>
+                <option value="salary">{t('Salarios')}</option>
+                <option value="rent">{t('Alquiler')}</option>
+                <option value="utilities">{t('Servicios')}</option>
+                <option value="maintenance">{t('Mantenimiento')}</option>
+                <option value="other">{t('Otros')}</option>
               </optgroup>
-              <optgroup label="Proveedores">
+              <optgroup label={t('Proveedores')}>
                 {suppliers.map(supplier => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.name}
@@ -302,7 +304,7 @@ export function ExpenseManager() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fecha Inicial
+              {t('Fecha Inicial')}
             </label>
             <input
               type="date"
@@ -314,7 +316,7 @@ export function ExpenseManager() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fecha Final
+              {t('Fecha Final')}
             </label>
             <input
               type="date"
@@ -329,9 +331,9 @@ export function ExpenseManager() {
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">Lista de Gastos</h3>
+            <h3 className="text-lg font-medium text-gray-900">{t('Lista de Gastos')}</h3>
             <div className="text-lg font-bold text-amber-600">
-              Total: ${calculateTotal().toFixed(2)}
+              {t('Total')}: ${calculateTotal().toFixed(2)}
             </div>
           </div>
         </div>
@@ -340,16 +342,16 @@ export function ExpenseManager() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha
+                  {t('Fecha')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Categoría / Proveedor
+                  {t('Categoría / Proveedor')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descripción
+                  {t('Descripción')}
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Monto
+                  {t('Monto')}
                 </th>
               </tr>
             </thead>
@@ -375,7 +377,7 @@ export function ExpenseManager() {
               {expenses.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
-                    No hay gastos registrados en este período
+                    {t('No hay gastos registrados en este período')}
                   </td>
                 </tr>
               )}

@@ -43,6 +43,7 @@ export function UserManager() {
       const { data, error } = await supabase
         .from('employee_profiles')
         .select('id, full_name, role, phone, active, created_at, email, deleted_at')
+        .neq('role', 'super_admin') // Ocultar super_admin de todos los usuarios
         .order('full_name');
 
       if (error) throw error;

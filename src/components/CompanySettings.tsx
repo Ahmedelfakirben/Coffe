@@ -9,6 +9,7 @@ interface CompanySettings {
   company_name: string;
   address: string;
   phone: string;
+  language?: 'es' | 'fr';
 }
 
 export function CompanySettings() {
@@ -63,7 +64,7 @@ export function CompanySettings() {
       }
     } catch (error) {
       console.error('💥 COMPANY SETTINGS: Error fetching company settings:', error);
-      toast.error('Error al cargar configuración de la empresa');
+      toast.error(t('Error al cargar configuración de la empresa'));
     } finally {
       setLoading(false);
     }
@@ -94,13 +95,13 @@ export function CompanySettings() {
         console.log('✅ COMPANY SETTINGS: Default settings created successfully:', data);
         setSettings(data);
         setOriginalSettings(data);
-        toast.success('Configuración por defecto creada');
+        toast.success(t('Configuración por defecto creada'));
       } else {
         console.log('⚠️ COMPANY SETTINGS: No data returned after creating default settings');
       }
     } catch (error) {
       console.error('💥 COMPANY SETTINGS: Error creating default settings:', error);
-      toast.error('Error al crear configuración por defecto');
+      toast.error(t('Error al crear configuración por defecto'));
     }
   };
 
@@ -132,7 +133,7 @@ export function CompanySettings() {
 
   const restoreAllPermissions = async () => {
     try {
-      toast.loading('Restaurando permisos...', { id: 'restore' });
+      toast.loading(t('Restaurando permisos...'), { id: 'restore' });
 
       // All permissions for super_admin
       const allPermissions = [
@@ -163,10 +164,10 @@ export function CompanySettings() {
         }
       }
 
-      toast.success('Todos los permisos restaurados para super_admin', { id: 'restore' });
+      toast.success(t('Todos los permisos restaurados para super_admin'), { id: 'restore' });
     } catch (error) {
       console.error('Error restoring permissions:', error);
-      toast.error('Error al restaurar permisos', { id: 'restore' });
+      toast.error(t('Error al restaurar permisos'), { id: 'restore' });
     }
   };
 
@@ -175,7 +176,7 @@ export function CompanySettings() {
     window.dispatchEvent(new CustomEvent('companySettingsUpdated', {
       detail: settings
     }));
-    toast.success('Ticket printers refreshed');
+    toast.success(t('Impresoras de tickets actualizadas'));
   };
 
   const checkDatabaseDirectly = async () => {
@@ -187,21 +188,21 @@ export function CompanySettings() {
 
       if (error) {
         console.error('❌ COMPANY SETTINGS: Database query error:', error);
-        toast.error('Error querying database');
+        toast.error(t('Error consultando la base de datos'));
         return;
       }
 
       console.log('📋 COMPANY SETTINGS: Direct database query result:', data);
-      toast.success('Check console for database contents');
+      toast.success(t('Revisa la consola para el contenido de la base de datos'));
     } catch (error) {
       console.error('💥 COMPANY SETTINGS: Error checking database:', error);
-      toast.error('Error checking database');
+      toast.error(t('Error verificando la base de datos'));
     }
   };
 
   const handleSave = async () => {
     if (!settings.company_name.trim()) {
-      toast.error('El nombre de la empresa es obligatorio');
+      toast.error(t('El nombre de la empresa es obligatorio'));
       return;
     }
 
@@ -282,11 +283,11 @@ export function CompanySettings() {
           detail: result.data
         }));
 
-        toast.success('Configuración guardada correctamente');
+        toast.success(t('Configuración guardada correctamente'));
       }
     } catch (error: any) {
       console.error('Error saving company settings:', error);
-      toast.error(`Error al guardar la configuración: ${error.message || error}`);
+      toast.error(`${t('Error al guardar la configuración:')} ${error.message || error}`);
     } finally {
       setSaving(false);
     }
@@ -304,7 +305,7 @@ export function CompanySettings() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando configuración...</p>
+          <p className="text-gray-600">{t('Cargando configuración...')}</p>
         </div>
       </div>
     );
@@ -341,7 +342,7 @@ export function CompanySettings() {
                 {saving ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Guardando...
+                    {t('Guardando...')}
                   </>
                 ) : (
                   <>
@@ -376,13 +377,13 @@ export function CompanySettings() {
         <div className="flex gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-red-800">
-            <p className="font-semibold mb-2">¿Problemas con permisos?</p>
-            <p className="mb-3">Si no puedes acceder a esta página o a la gestión de roles, usa el botón de emergencia para restaurar todos los permisos del super_admin.</p>
+            <p className="font-semibold mb-2">{t('¿Problemas con permisos?')}</p>
+            <p className="mb-3">{t('Si no puedes acceder a esta página o a la gestión de roles, usa el botón de emergencia para restaurar todos los permisos del super_admin.')}</p>
             <button
               onClick={restoreAllPermissions}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
             >
-              Restaurar Todos los Permisos (Super Admin)
+              {t('Restaurar Todos los Permisos (Super Admin)')}
             </button>
           </div>
         </div>
@@ -393,13 +394,13 @@ export function CompanySettings() {
         <div className="flex gap-3">
           <AlertCircle className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-gray-800 w-full">
-            <p className="font-semibold mb-2">🔧 Debug Information:</p>
+            <p className="font-semibold mb-2">🔧 {t('Información de Depuración:')}</p>
             <div className="space-y-1 text-xs mb-3">
-              <p><strong>Current Company Name:</strong> {settings.company_name || 'Not set'}</p>
-              <p><strong>Current Address:</strong> {settings.address || 'Not set'}</p>
-              <p><strong>Current Phone:</strong> {settings.phone || 'Not set'}</p>
-              <p><strong>Settings ID:</strong> {settings.id || 'No ID (new record)'}</p>
-              <p><strong>Has Changes:</strong> {hasChanges ? 'Yes' : 'No'}</p>
+              <p><strong>{t('Nombre Actual de Empresa:')}</strong> {settings.company_name || t('No establecido')}</p>
+              <p><strong>{t('Dirección Actual:')}</strong> {settings.address || t('No establecido')}</p>
+              <p><strong>{t('Teléfono Actual:')}</strong> {settings.phone || t('No establecido')}</p>
+              <p><strong>{t('ID de Configuración:')}</strong> {settings.id || t('Sin ID (nuevo registro)')}</p>
+              <p><strong>{t('Tiene Cambios:')}</strong> {hasChanges ? t('Sí') : t('No')}</p>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -407,24 +408,24 @@ export function CompanySettings() {
                 onClick={checkDatabaseDirectly}
                 className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"
               >
-                🔍 Check Database
+                🔍 {t('Verificar Base de Datos')}
               </button>
               <button
                 onClick={forceRefreshTickets}
                 className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
               >
-                🔄 Force Refresh Tickets
+                🔄 {t('Forzar Actualización de Tickets')}
               </button>
               <button
                 onClick={restoreAllPermissions}
                 className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
               >
-                🔐 Restore Permissions
+                🔐 {t('Restaurar Permisos')}
               </button>
             </div>
 
             <p className="mt-2 text-xs text-gray-600">
-              💡 Use these buttons to debug the issue. Check browser console for detailed logs.
+              💡 {t('Usa estos botones para depurar el problema. Revisa la consola del navegador para logs detallados.')}
             </p>
           </div>
         </div>
@@ -444,10 +445,10 @@ export function CompanySettings() {
               value={settings.company_name}
               onChange={(e) => setSettings({ ...settings, company_name: e.target.value })}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Ej: Coffee Shop"
+              placeholder="Ej: LIN-Caisse"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Este nombre aparecerá en todos los documentos</p>
+            <p className="text-xs text-gray-500 mt-1">{t('Este nombre aparecerá en todos los documentos')}</p>
           </div>
 
           {/* Dirección */}
@@ -463,7 +464,7 @@ export function CompanySettings() {
               placeholder="Ej: Calle Principal #123, Ciudad"
               rows={3}
             />
-            <p className="text-xs text-gray-500 mt-1">Dirección física de la empresa</p>
+            <p className="text-xs text-gray-500 mt-1">{t('Dirección física de la empresa')}</p>
           </div>
 
           {/* Teléfono */}
@@ -479,21 +480,21 @@ export function CompanySettings() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Ej: +34 000 000 000"
             />
-            <p className="text-xs text-gray-500 mt-1">Número de contacto para clientes</p>
+            <p className="text-xs text-gray-500 mt-1">{t('Número de contacto para clientes')}</p>
           </div>
         </div>
 
         {/* Vista previa */}
         <div className="mt-8 pt-6 border-t border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Vista Previa (Tickets)</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('Vista Previa (Tickets)')}</h3>
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 font-mono text-sm">
             <div className="text-center space-y-1">
-              <p className="font-bold text-base">{settings.company_name || 'Nombre de empresa'}</p>
+              <p className="font-bold text-base">{settings.company_name || t('Nombre de empresa')}</p>
               {settings.address && <p className="text-xs text-gray-600">{settings.address}</p>}
               {settings.phone && <p className="text-xs text-gray-600">Tel: {settings.phone}</p>}
             </div>
             <div className="border-t border-gray-300 my-3"></div>
-            <p className="text-xs text-gray-500 text-center">Información de pedido...</p>
+            <p className="text-xs text-gray-500 text-center">{t('Información de pedido...')}</p>
           </div>
         </div>
       </div>

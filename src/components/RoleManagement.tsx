@@ -110,7 +110,7 @@ export function RoleManagement() {
       setOriginalPermissions(JSON.parse(JSON.stringify(allPermissions)));
     } catch (error) {
       console.error('Error fetching permissions:', error);
-      toast.error('Error al cargar permisos');
+      toast.error(t('Error al cargar permisos'));
     } finally {
       setLoading(false);
     }
@@ -173,12 +173,12 @@ export function RoleManagement() {
 
       if (insertError) throw insertError;
 
-      toast.success('Permisos actualizados correctamente');
+      toast.success(t('Permisos actualizados correctamente'));
       setOriginalPermissions(JSON.parse(JSON.stringify(permissions)));
       setHasChanges(false);
     } catch (error) {
       console.error('Error saving permissions:', error);
-      toast.error('Error al guardar permisos');
+      toast.error(t('Error al guardar permisos'));
     } finally {
       setSaving(false);
     }
@@ -222,7 +222,7 @@ export function RoleManagement() {
                 {saving ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Guardando...
+                    {t('Guardando...')}
                   </>
                 ) : (
                   <>
@@ -249,7 +249,7 @@ export function RoleManagement() {
             >
               <div className="text-center">
                 <Shield className="w-6 h-6 mx-auto mb-2" />
-                <p className="font-semibold text-sm">{role.label}</p>
+                <p className="font-semibold text-sm">{t(role.label)}</p>
               </div>
             </button>
           ))}
@@ -273,24 +273,24 @@ export function RoleManagement() {
             return (
               <div key={sectionName} className="bg-white rounded-xl shadow-sm overflow-hidden">
                 <div className="p-4 bg-gradient-to-r from-gray-100 to-gray-50 border-b flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-gray-900">{sectionName}</h3>
+                  <h3 className="text-lg font-bold text-gray-900">{t(sectionName)}</h3>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-600">
-                      {sectionPermissions.filter(p => p.can_access).length} / {sectionPermissions.length} habilitadas
+                      {sectionPermissions.filter(p => p.can_access).length} / {sectionPermissions.length} {t('habilitadas')}
                     </span>
                     {allEnabled && (
                       <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                        Acceso completo
+                        {t('Acceso completo')}
                       </span>
                     )}
                     {!allEnabled && someEnabled && (
                       <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-full">
-                        Acceso parcial
+                        {t('Acceso parcial')}
                       </span>
                     )}
                     {!someEnabled && (
                       <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">
-                        Sin acceso
+                        {t('Sin acceso')}
                       </span>
                     )}
                   </div>
@@ -320,7 +320,7 @@ export function RoleManagement() {
                             <div className="flex items-center justify-between">
                               <div className="text-left flex-1">
                                 <p className={`font-semibold ${isEnabled ? 'text-green-900' : 'text-gray-700'}`}>
-                                  {page.label}
+                                  {t(page.label)}
                                 </p>
                                 <p className={`text-xs mt-1 ${isEnabled ? 'text-green-600' : 'text-gray-500'}`}>
                                   {page.id}
@@ -341,7 +341,7 @@ export function RoleManagement() {
                           {/* Opciones granulares para Punto de Venta */}
                           {isPOS && isEnabled && (
                             <div className="mt-3 pt-3 border-t border-green-200 space-y-2">
-                              <p className="text-xs font-semibold text-green-800 mb-2">Permisos específicos:</p>
+                              <p className="text-xs font-semibold text-green-800 mb-2">{t('Permisos específicos:')}</p>
 
                               <label className="flex items-center gap-2 cursor-pointer group">
                                 <input
@@ -354,7 +354,7 @@ export function RoleManagement() {
                                   className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500"
                                 />
                                 <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                                  Confirmar pedidos
+                                  {t('Confirmar pedidos')}
                                 </span>
                               </label>
 
@@ -369,7 +369,7 @@ export function RoleManagement() {
                                   className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500"
                                 />
                                 <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                                  Validar pedidos (finalizar con pago)
+                                  {t('Validar pedidos (finalizar con pago)')}
                                 </span>
                               </label>
                             </div>
@@ -390,13 +390,13 @@ export function RoleManagement() {
         <div className="flex gap-3">
           <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800">
-            <p className="font-semibold mb-1">Información sobre roles:</p>
+            <p className="font-semibold mb-1">{t('Información sobre roles:')}</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li><strong>Super Administrador:</strong> Acceso completo incluyendo gestión de roles</li>
-              <li><strong>Administrador:</strong> Acceso completo excepto gestión de roles</li>
-              <li><strong>Cajero:</strong> Ventas y gestión de caja</li>
-              <li><strong>Barista:</strong> Solo sección de ventas</li>
-              <li><strong>Camarero:</strong> Sala y órdenes (sin validar pedidos)</li>
+              <li><strong>{t('Super Administrador')}:</strong> {t('Acceso completo incluyendo gestión de roles')}</li>
+              <li><strong>{t('Administrador')}:</strong> {t('Acceso completo excepto gestión de roles')}</li>
+              <li><strong>{t('Cajero')}:</strong> {t('Ventas y gestión de caja')}</li>
+              <li><strong>{t('Barista')}:</strong> {t('Solo sección de ventas')}</li>
+              <li><strong>{t('Camarero')}:</strong> {t('Sala y órdenes (sin validar pedidos)')}</li>
             </ul>
           </div>
         </div>

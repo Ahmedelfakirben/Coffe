@@ -54,6 +54,7 @@ export function POS() {
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
   const [existingOrderNumber, setExistingOrderNumber] = useState<number | null>(null);
   const [canConfirmOrder, setCanConfirmOrder] = useState(true);
+  const [canValidateOrder, setCanValidateOrder] = useState(true);
   const [ticket, setTicket] = useState<{
     orderDate: Date;
     orderNumber: string;

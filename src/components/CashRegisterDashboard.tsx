@@ -80,8 +80,9 @@ export function CashRegisterDashboard() {
         .from('cash_register_sessions')
         .select(`
           *,
-          employee_profiles!inner(full_name)
+          employee_profiles!inner(full_name, role)
         `)
+        .neq('employee_profiles.role', 'super_admin') // Ocultar sesiones de super_admin
         .order('opened_at', { ascending: false });
 
       // Para cajeros: solo sus sesiones y solo del día actual
@@ -122,7 +123,7 @@ export function CashRegisterDashboard() {
       });
     } catch (err) {
       console.error('Error fetching cash sessions:', err);
-      toast.error('Error al cargar sesiones de caja');
+      toast.error(t('Error al cargar sesiones de caja'));
     } finally {
       setLoading(false);
     }
@@ -150,6 +151,7 @@ export function CashRegisterDashboard() {
       const { data, error } = await supabase
         .from('employee_profiles')
         .select('id, full_name')
+        .neq('role', 'super_admin') // Ocultar super_admin
         .order('full_name');
 
       if (error) throw error;
@@ -277,7 +279,7 @@ export function CashRegisterDashboard() {
       const printContent = `
         <div class="report">
           <div class="header">
-            <h1>Coffee Shop</h1>
+            <h1>LIN-Caisse</h1>
             <p>Sistema de Gestión Integral</p>
             <p>Reporte Diario de Caja</p>
           </div>
@@ -388,7 +390,7 @@ export function CashRegisterDashboard() {
           </div>
 
           <div class="footer">
-            <p>Este documento es oficial y forma parte del registro contable de Coffee Shop</p>
+            <p>Este documento es oficial y forma parte del registro contable de LIN-Caisse</p>
             <p>Reporte generado el ${new Date().toLocaleString('es-ES')}</p>
           </div>
         </div>
@@ -551,7 +553,7 @@ export function CashRegisterDashboard() {
       }
     } catch (err) {
       console.error('Error generating daily report:', err);
-      toast.error('Error al generar el reporte diario');
+      toast.error(t('Error al generar el reporte diario'));
     }
   };
 
@@ -678,15 +680,15 @@ export function CashRegisterDashboard() {
       }
     } catch (err) {
       console.error('Error generating report:', err);
-      toast.error('Error al generar el reporte');
+      toast.error(t('Error al generar el reporte'));
     }
   };
 
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Gestión de Caja</h1>
-        <p className="text-gray-600">Historial de aperturas y cierres de caja</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('Gestión de Caja')}</h1>
+        <p className="text-gray-600">{t('Historial de aperturas y cierres de caja')}</p>
       </div>
 
       {/* Totales */}
@@ -694,21 +696,21 @@ export function CashRegisterDashboard() {
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <div className="flex items-center gap-2 mb-2">
             <DollarSign className="w-5 h-5 text-green-600" />
-            <span className="text-sm font-medium text-gray-700">Total Aperturas</span>
+            <span className="text-sm font-medium text-gray-700">{t('Total Aperturas')}</span>
           </div>
           <p className="text-2xl font-bold text-green-600">{formatCurrency(totals.totalOpening)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <div className="flex items-center gap-2 mb-2">
             <DollarSign className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">Total Cierres</span>
+            <span className="text-sm font-medium text-gray-700">{t('Total Cierres')}</span>
           </div>
           <p className="text-2xl font-bold text-blue-600">{formatCurrency(totals.totalClosing)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <div className="flex items-center gap-2 mb-2">
             <DollarSign className="w-5 h-5 text-amber-600" />
-            <span className="text-sm font-medium text-gray-700">Balance</span>
+            <span className="text-sm font-medium text-gray-700">{t('Balance')}</span>
           </div>
           <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatCurrency(totals.balance)}
@@ -717,11 +719,11 @@ export function CashRegisterDashboard() {
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <div className="flex items-center gap-2 mb-2">
             <DollarSign className="w-5 h-5 text-purple-600" />
-            <span className="text-sm font-medium text-gray-700">Estado Actual</span>
+            <span className="text-sm font-medium text-gray-700">{t('Estado Actual')}</span>
           </div>
           <p className="text-2xl font-bold text-purple-600">{formatCurrency(currentCashStatus.currentAmount)}</p>
           <p className="text-xs text-gray-500">
-            {currentCashStatus.lastSessionStatus === 'open' ? 'Caja Abierta' : 'Caja Cerrada'}
+            {currentCashStatus.lastSessionStatus === 'open' ? t('Caja Abierta') : t('Caja Cerrada')}
             {currentCashStatus.lastSessionTime && (
               <span className="block">
                 {new Date(currentCashStatus.lastSessionTime).toLocaleString('es-ES', {
@@ -739,11 +741,11 @@ export function CashRegisterDashboard() {
         <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="w-5 h-5 text-gray-600" />
-            <span className="font-medium text-gray-900">Filtros</span>
+            <span className="font-medium text-gray-900">{t('Filtros')}</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Inicio</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Fecha Inicio')}</label>
               <input
                 type="date"
                 value={filters.startDate}
@@ -752,7 +754,7 @@ export function CashRegisterDashboard() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Fin</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Fecha Fin')}</label>
               <input
                 type="date"
                 value={filters.endDate}
@@ -761,25 +763,25 @@ export function CashRegisterDashboard() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Estado')}</label>
               <select
                 value={filters.status}
                 onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value as any }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               >
-                <option value="all">Todos</option>
-                <option value="open">Abiertas</option>
-                <option value="closed">Cerradas</option>
+                <option value="all">{t('Todos')}</option>
+                <option value="open">{t('Abiertas')}</option>
+                <option value="closed">{t('Cerradas')}</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Empleado</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Empleado')}</label>
               <select
                 value={filters.employeeId}
                 onChange={(e) => setFilters(prev => ({ ...prev, employeeId: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               >
-                <option value="all">Todos los empleados</option>
+                <option value="all">{t('Todos los empleados')}</option>
                 {employees.map(employee => (
                   <option key={employee.id} value={employee.id}>
                     {employee.full_name}
@@ -793,7 +795,7 @@ export function CashRegisterDashboard() {
                 className="w-full bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md transition-colors flex items-center justify-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
-                Actualizar
+                {t('Actualizar')}
               </button>
             </div>
           </div>
@@ -805,10 +807,10 @@ export function CashRegisterDashboard() {
         <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="w-5 h-5 text-gray-600" />
-            <span className="font-medium text-gray-900">Sesiones de Hoy</span>
+            <span className="font-medium text-gray-900">{t('Sesiones de Hoy')}</span>
           </div>
           <div className="text-sm text-gray-600">
-            Mostrando todas tus sesiones de caja del día actual
+            {t('Mostrando todas tus sesiones de caja del día actual')}
           </div>
         </div>
       )}
@@ -818,12 +820,12 @@ export function CashRegisterDashboard() {
         {loading ? (
           <div className="p-8 text-center">
             <div className="w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Cargando sesiones...</p>
+            <p className="text-gray-600">{t('Cargando sesiones...')}</p>
           </div>
         ) : sessions.length === 0 ? (
           <div className="p-8 text-center">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No hay sesiones de caja para mostrar</p>
+            <p className="text-gray-600">{t('No hay sesiones de caja para mostrar')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -831,31 +833,31 @@ export function CashRegisterDashboard() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Empleado
+                    {t('Empleado')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fecha
+                    {t('Fecha')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Primera Apertura
+                    {t('Primera Apertura')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Último Cierre
+                    {t('Último Cierre')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Inicial
+                    {t('Total Inicial')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Final
+                    {t('Total Final')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Balance
+                    {t('Balance')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sesiones
+                    {t('Sesiones')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Acciones
+                    {t('Acciones')}
                   </th>
                 </tr>
               </thead>
@@ -863,7 +865,7 @@ export function CashRegisterDashboard() {
                 {dailySessions.map((day: any) => (
                   <tr key={day.date} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : 'Tú'}
+                      {profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : t('Tú')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(day.date).toLocaleDateString('es-ES')}
@@ -892,7 +894,7 @@ export function CashRegisterDashboard() {
                       <button
                         onClick={() => printDailyReport(day)}
                         className="text-amber-600 hover:text-amber-900 p-1 rounded-md hover:bg-amber-50 transition-colors"
-                        title="Imprimir reporte diario"
+                        title={t('Imprimir reporte diario')}
                       >
                         <Printer className="w-4 h-4" />
                       </button>

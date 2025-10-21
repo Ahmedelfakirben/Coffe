@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export type Language = 'es' | 'fr';
 
@@ -59,6 +60,16 @@ const translations = {
     // Mensajes
     'messages.language-changed': 'Idioma cambiado correctamente',
     'messages.settings-saved': 'Configuración guardada correctamente',
+
+    // Estado de conexión
+    'Available': 'Disponible',
+    'Not available': 'No disponible',
+    'Status changed to: Available': 'Estado cambiado a: Disponible',
+    'Status changed to: Not available': 'Estado cambiado a: No disponible',
+    'Click to mark yourself as unavailable': 'Haz clic para marcarte como no disponible',
+    'Click to mark yourself as available': 'Haz clic para marcarte como disponible',
+    'connected': 'se conectó',
+    'disconnected': 'se desconectó',
 
     // Configuración empresa
     'Información de la Empresa': 'Información de la Empresa',
@@ -337,6 +348,253 @@ const translations = {
     'Activar': 'Activar',
     'Reset': 'Reset',
     'Guardar': 'Guardar',
+
+    // Login Form
+    'La contraseña es obligatoria.': 'La contraseña es obligatoria.',
+    'Por favor ingresa un correo electrónico válido.': 'Por favor ingresa un correo electrónico válido.',
+    'La contraseña debe tener al menos 6 caracteres.': 'La contraseña debe tener al menos 6 caracteres.',
+    'Credenciales inválidas. Por favor intenta de nuevo.': 'Credenciales inválidas. Por favor intenta de nuevo.',
+    'Correo electrónico o contraseña incorrectos.': 'Correo electrónico o contraseña incorrectos.',
+    'Por favor confirma tu correo electrónico antes de iniciar sesión.': 'Por favor confirma tu correo electrónico antes de iniciar sesión.',
+    'Demasiados intentos. Por favor espera unos minutos.': 'Demasiados intentos. Por favor espera unos minutos.',
+    'Ocultar contraseña': 'Ocultar contraseña',
+    'Mostrar contraseña': 'Mostrar contraseña',
+    'empleado@cafeteria.com': 'empleado@cafeteria.com',
+
+    // Analytics - Additional texts
+    'Activos': 'Activos',
+    'Usuarios conectados': 'Usuarios conectados',
+    'Ahora': 'Ahora',
+    'Hora actual': 'Hora actual',
+    'Generar Reporte Diario': 'Generar Reporte Diario',
+    'Generar Reporte Semanal': 'Generar Reporte Semanal',
+    'Generar Reporte Mensual': 'Generar Reporte Mensual',
+    'sesiones': 'sesiones',
+    'pedidos': 'pedidos',
+    'Motivo:': 'Motivo:',
+    'órdenes': 'órdenes',
+    'unidades': 'unidades',
+    'Margen bajo hoy:': 'Margen bajo hoy:',
+    'Considera revisar precios o reducir gastos.': 'Considera revisar precios o reducir gastos.',
+    'Pérdidas esta semana.': 'Pérdidas esta semana.',
+    'Los gastos superan las ventas. Revisa el control de inventario y gastos operativos.': 'Los gastos superan las ventas. Revisa el control de inventario y gastos operativos.',
+    'Empleados inactivos.': 'Empleados inactivos.',
+    'Algunos empleados conectados no han procesado pedidos hoy.': 'Algunos empleados conectados no han procesado pedidos hoy.',
+    'Ningún empleado conectado.': 'Ningún empleado conectado.',
+    'Verifica la conectividad y horarios de trabajo.': 'Verifica la conectividad y horarios de trabajo.',
+
+    // Company Settings - Additional texts (many already exist in lines 63-80)
+    'Error al cargar configuración de la empresa': 'Error al cargar configuración de la empresa',
+    'Configuración por defecto creada': 'Configuración por defecto creada',
+    'Error al crear configuración por defecto': 'Error al crear configuración por defecto',
+    'Restaurando permisos...': 'Restaurando permisos...',
+    'Todos los permisos restaurados para super_admin': 'Todos los permisos restaurados para super_admin',
+    'Error al restaurar permisos': 'Error al restaurar permisos',
+    'Impresoras de tickets actualizadas': 'Impresoras de tickets actualizadas',
+    'Error consultando la base de datos': 'Error consultando la base de datos',
+    'Revisa la consola para el contenido de la base de datos': 'Revisa la consola para el contenido de la base de datos',
+    'Error verificando la base de datos': 'Error verificando la base de datos',
+    'El nombre de la empresa es obligatorio': 'El nombre de la empresa es obligatorio',
+    'Error al guardar la configuración:': 'Error al guardar la configuración:',
+    'Cargando configuración...': 'Cargando configuración...',
+    'Guardando...': 'Guardando...',
+    '¿Problemas con permisos?': '¿Problemas con permisos?',
+    'Si no puedes acceder a esta página o a la gestión de roles, usa el botón de emergencia para restaurar todos los permisos del super_admin.': 'Si no puedes acceder a esta página o a la gestión de roles, usa el botón de emergencia para restaurar todos los permisos del super_admin.',
+    'Restaurar Todos los Permisos (Super Admin)': 'Restaurar Todos los Permisos (Super Admin)',
+    'Información de Depuración:': 'Información de Depuración:',
+    'Nombre Actual de Empresa:': 'Nombre Actual de Empresa:',
+    'Dirección Actual:': 'Dirección Actual:',
+    'Teléfono Actual:': 'Teléfono Actual:',
+    'ID de Configuración:': 'ID de Configuración:',
+    'Sin ID (nuevo registro)': 'Sin ID (nuevo registro)',
+    'Tiene Cambios:': 'Tiene Cambios:',
+    'Sí': 'Sí',
+    'No': 'No',
+    'Verificar Base de Datos': 'Verificar Base de Datos',
+    'Forzar Actualización de Tickets': 'Forzar Actualización de Tickets',
+    'Restaurar Permisos': 'Restaurar Permisos',
+    'Usa estos botones para depurar el problema. Revisa la consola del navegador para logs detallados.': 'Usa estos botones para depurar el problema. Revisa la consola del navegador para logs detallados.',
+    'Nombre de empresa': 'Nombre de empresa',
+    'No establecido': 'No establecido',
+
+    // Cash Register Dashboard
+    'Error al cargar sesiones de caja': 'Error al cargar sesiones de caja',
+    'Gestión de Caja': 'Gestión de Caja',
+    'Historial de aperturas y cierres de caja': 'Historial de aperturas y cierres de caja',
+    'Total Aperturas': 'Total Aperturas',
+    'Total Cierres': 'Total Cierres',
+    'Estado Actual': 'Estado Actual',
+    'Caja Abierta': 'Caja Abierta',
+    'Caja Cerrada': 'Caja Cerrada',
+    'Fecha Inicio': 'Fecha Inicio',
+    'Fecha Fin': 'Fecha Fin',
+    'Abiertas': 'Abiertas',
+    'Cerradas': 'Cerradas',
+    'Todos los empleados': 'Todos los empleados',
+    'Sesiones de Hoy': 'Sesiones de Hoy',
+    'Mostrando todas tus sesiones de caja del día actual': 'Mostrando todas tus sesiones de caja del día actual',
+    'Cargando sesiones...': 'Cargando sesiones...',
+    'No hay sesiones de caja para mostrar': 'No hay sesiones de caja para mostrar',
+    'Primera Apertura': 'Primera Apertura',
+    'Último Cierre': 'Último Cierre',
+    'Total Inicial': 'Total Inicial',
+    'Total Final': 'Total Final',
+    'Sesiones': 'Sesiones',
+    'Acciones': 'Acciones',
+    'Imprimir reporte diario': 'Imprimir reporte diario',
+    'Error al generar el reporte diario': 'Error al generar el reporte diario',
+    'Error al generar el reporte': 'Error al generar el reporte',
+    'Reporte Diario de Caja': 'Reporte Diario de Caja',
+    'Sesiones de Caja': 'Sesiones de Caja',
+    'Hora Apertura': 'Hora Apertura',
+    'Hora Cierre': 'Hora Cierre',
+    'Firma del Empleado': 'Firma del Empleado',
+    'Reporte de Caja': 'Reporte de Caja',
+    'Tú': 'Tú',
+    'Abierta': 'Abierta',
+    'Cerrada': 'Cerrada',
+    'Monto Apertura': 'Monto Apertura',
+    'Monto Cierre': 'Monto Cierre',
+    'Órdenes del día': 'Órdenes del día',
+    'Cantidad': 'Cantidad',
+    'Este documento es oficial y forma parte del registro contable de': 'Este documento es oficial y forma parte del registro contable de',
+
+    // Expense Manager
+    'Salarios': 'Salarios',
+    'Alquiler': 'Alquiler',
+    'Servicios': 'Servicios',
+    'Mantenimiento': 'Mantenimiento',
+    'Otras categorías': 'Otras categorías',
+    'Error al cargar proveedores': 'Error al cargar proveedores',
+    'Error al cargar gastos': 'Error al cargar gastos',
+    'Gasto registrado exitosamente': 'Gasto registrado exitosamente',
+    'Error al registrar gasto': 'Error al registrar gasto',
+    'Gestión de Gastos': 'Gestión de Gastos',
+    'Descargar Reporte': 'Descargar Reporte',
+    'Nuevo Gasto': 'Nuevo Gasto',
+    'Categoría / Proveedor': 'Categoría / Proveedor',
+    'Seleccionar categoría o proveedor': 'Seleccionar categoría o proveedor',
+    'Descripción': 'Descripción',
+    'Guardar Gasto': 'Guardar Gasto',
+    'Todas las categorías': 'Todas las categorías',
+    'Fecha Inicial': 'Fecha Inicial',
+    'Fecha Final': 'Fecha Final',
+    'Lista de Gastos': 'Lista de Gastos',
+    'No hay gastos registrados en este período': 'No hay gastos registrados en este período',
+
+    // Supplier Manager
+    'Proveedor actualizado': 'Proveedor actualizado',
+    'Proveedor creado': 'Proveedor creado',
+    'Error al guardar proveedor': 'Error al guardar proveedor',
+    'Proveedor eliminado': 'Proveedor eliminado',
+    'Error al eliminar proveedor': 'Error al eliminar proveedor',
+    'Gestión de Proveedores': 'Gestión de Proveedores',
+    'Nuevo Proveedor': 'Nuevo Proveedor',
+    'Editar Proveedor': 'Editar Proveedor',
+    'Persona de Contacto': 'Persona de Contacto',
+    'Email/Teléfono': 'Email/Teléfono',
+    'No hay proveedores registrados': 'No hay proveedores registrados',
+    'Contacto': 'Contacto',
+
+    // Employee Time Tracking
+    'Error al cargar empleados': 'Error al cargar empleados',
+    'Error al cargar estadísticas': 'Error al cargar estadísticas',
+    'No hay datos para exportar': 'No hay datos para exportar',
+    'Reporte generado exitosamente': 'Reporte generado exitosamente',
+    'Error al generar reporte': 'Error al generar reporte',
+    'Gestión de Tiempo de Empleados': 'Gestión de Tiempo de Empleados',
+    'Seleccionar Empleado': 'Seleccionar Empleado',
+    'Seleccione un empleado': 'Seleccione un empleado',
+    'Horas trabajadas': 'Horas trabajadas',
+    'Horas por día': 'Horas por día',
+    'Días trabajados': 'Días trabajados',
+    'Ventas totales': 'Ventas totales',
+    'Órdenes procesadas': 'Órdenes procesadas',
+    'Entrada': 'Entrada',
+    'Salida': 'Salida',
+    'En curso': 'En curso',
+    'Exportar Resumen': 'Exportar Resumen',
+    'Exportar Detalle Diario': 'Exportar Detalle Diario',
+    'Exportar Sesiones': 'Exportar Sesiones',
+    'No especificada': 'No especificada',
+    'No especificado': 'No especificado',
+    'No configurada': 'No configurada',
+
+    // Role Management
+    'Gestión de Roles y Permisos': 'Gestión de Roles y Permisos',
+    'Configure los accesos para cada rol del sistema': 'Configure los accesos para cada rol del sistema',
+    'Cargando permisos...': 'Cargando permisos...',
+    'Error al cargar permisos': 'Error al cargar permisos',
+    'Permisos actualizados correctamente': 'Permisos actualizados correctamente',
+    'Error al guardar permisos': 'Error al guardar permisos',
+    'Ventas': 'Ventas',
+    'Inventario': 'Inventario',
+    'Finanzas': 'Finanzas',
+    'Sistema': 'Sistema',
+    'Órdenes': 'Órdenes',
+    'Usuarios': 'Usuarios',
+    'Caja': 'Caja',
+    'Tiempo Empleados': 'Tiempo Empleados',
+    'Proveedores': 'Proveedores',
+    'Gastos': 'Gastos',
+    'Analíticas': 'Analíticas',
+    'Productos': 'Productos',
+    'Categorías': 'Categorías',
+    'Gestión de Roles': 'Gestión de Roles',
+    'habilitadas': 'habilitadas',
+    'Acceso completo': 'Acceso completo',
+    'Acceso parcial': 'Acceso parcial',
+    'Sin acceso': 'Sin acceso',
+    'Permisos específicos:': 'Permisos específicos:',
+    'Confirmar pedidos': 'Confirmar pedidos',
+    'Validar pedidos (finalizar con pago)': 'Validar pedidos (finalizar con pago)',
+    'Información sobre roles:': 'Información sobre roles:',
+    'Acceso completo incluyendo gestión de roles': 'Acceso completo incluyendo gestión de roles',
+    'Acceso completo excepto gestión de roles': 'Acceso completo excepto gestión de roles',
+    'Ventas y gestión de caja': 'Ventas y gestión de caja',
+    'Solo sección de ventas': 'Solo sección de ventas',
+    'Sala y órdenes (sin validar pedidos)': 'Sala y órdenes (sin validar pedidos)',
+
+    // App Settings
+    'Configuración de la aplicación': 'Configuración de la aplicación',
+    'Personaliza el idioma y la apariencia de la aplicación. Los cambios se aplican inmediatamente.': 'Personaliza el idioma y la apariencia de la aplicación. Los cambios se aplican inmediatamente.',
+    'Español': 'Español',
+    'Français': 'Français',
+    'Selecciona el tema de color de la aplicación': 'Selecciona el tema de color de la aplicación',
+    'Tema claro': 'Tema claro',
+    'Tema oscuro': 'Tema oscuro',
+    'Automático': 'Automático',
+    'Información': 'Información',
+    'Los cambios de idioma se aplican inmediatamente a toda la aplicación': 'Los cambios de idioma se aplican inmediatamente a toda la aplicación',
+    'La configuración se guarda automáticamente en tu navegador': 'La configuración se guarda automáticamente en tu navegador',
+    'Puedes cambiar entre idiomas en cualquier momento': 'Puedes cambiar entre idiomas en cualquier momento',
+    'El tema automático sigue la configuración de tu sistema operativo': 'El tema automático sigue la configuración de tu sistema operativo',
+
+    // Navigation & Cash Register
+    'Ingrese un monto de cierre válido (>= 0)': 'Ingrese un monto de cierre válido (>= 0)',
+    'No hay sesión de caja abierta para cerrar. Se cerrará la sesión de usuario.': 'No hay sesión de caja abierta para cerrar. Se cerrará la sesión de usuario.',
+    'Cierre de caja registrado e impreso.': 'Cierre de caja registrado e impreso.',
+    'No se pudo cerrar la caja:': 'No se pudo cerrar la caja:',
+    '¿Desea cerrar la sesión de caja antes de salir?': '¿Desea cerrar la sesión de caja antes de salir?',
+    'Monto de cierre': 'Monto de cierre',
+    'Salir Sin Cambios': 'Salir Sin Cambios',
+    'Cerrar Caja y Salir': 'Cerrar Caja y Salir',
+    'CIERRE DE CAJA': 'CIERRE DE CAJA',
+    'Empleado:': 'Empleado:',
+    'SESIONES DEL DÍA': 'SESIONES DEL DÍA',
+    'Sesión': 'Sesión',
+    'RESUMEN FINANCIERO': 'RESUMEN FINANCIERO',
+    'Primera Apertura:': 'Primera Apertura:',
+    'Cierre Final:': 'Cierre Final:',
+    'Resultado del Día:': 'Resultado del Día:',
+    'Total Pedidos:': 'Total Pedidos:',
+    'Total Ventas:': 'Total Ventas:',
+    'PEDIDOS DEL DÍA': 'PEDIDOS DEL DÍA',
+    'Pedido #': 'Pedido #',
+    'Hora:': 'Hora:',
+    'Producto': 'Producto',
+    'Generado el': 'Generado el',
+    'El cambio de idioma se aplicará a todos los usuarios del sistema de forma inmediata.': 'El cambio de idioma se aplicará a todos los usuarios del sistema de forma inmediata.',
   },
   fr: {
     // Navigation
@@ -385,6 +643,16 @@ const translations = {
     // Messages
     'messages.language-changed': 'Langue changée avec succès',
     'messages.settings-saved': 'Configuration sauvegardée avec succès',
+
+    // État de connexion
+    'Available': 'Disponible',
+    'Not available': 'Non disponible',
+    'Status changed to: Available': 'Statut changé en : Disponible',
+    'Status changed to: Not available': 'Statut changé en : Non disponible',
+    'Click to mark yourself as unavailable': 'Cliquez pour vous marquer comme non disponible',
+    'Click to mark yourself as available': 'Cliquez pour vous marquer comme disponible',
+    'connected': 's\'est connecté(e)',
+    'disconnected': 's\'est déconnecté(e)',
 
     // Configuration entreprise
     'Información de la Empresa': 'Informations de l\'Entreprise',
@@ -451,11 +719,176 @@ const translations = {
     'Contraseña': 'Mot de passe',
     'Iniciando sesión...': 'Connexion en cours...',
     'Iniciar Sesión': 'Se connecter',
+    'El correo electrónico es obligatorio.': 'L\'adresse e-mail est obligatoire.',
+    'La contraseña es obligatoria.': 'Le mot de passe est obligatoire.',
+    'Por favor ingresa un correo electrónico válido.': 'Veuillez saisir une adresse e-mail valide.',
+    'La contraseña debe tener al menos 6 caracteres.': 'Le mot de passe doit contenir au moins 6 caractères.',
+    'Credenciales inválidas. Por favor intenta de nuevo.': 'Identifiants invalides. Veuillez réessayer.',
+    'Correo electrónico o contraseña incorrectos.': 'Adresse e-mail ou mot de passe incorrect.',
+    'Por favor confirma tu correo electrónico antes de iniciar sesión.': 'Veuillez confirmer votre adresse e-mail avant de vous connecter.',
+    'Demasiados intentos. Por favor espera unos minutos.': 'Trop de tentatives. Veuillez attendre quelques minutes.',
+    'Ocultar contraseña': 'Masquer le mot de passe',
+    'Mostrar contraseña': 'Afficher le mot de passe',
+    'empleado@cafeteria.com': 'employe@cafeteria.com',
 
-    // Role Management
-    'Gestión de Roles y Permisos': 'Gestion des Rôles et Permissions',
-    'Configure los accesos para cada rol del sistema': 'Configurez les accès pour chaque rôle du système',
-    'Cargando permisos...': 'Chargement des permissions...',
+    // Analytics - Additional texts
+    'Activos': 'Actifs',
+    'Usuarios conectados': 'Utilisateurs connectés',
+    'Ahora': 'Maintenant',
+    'Hora actual': 'Heure actuelle',
+    'Generar Reporte Diario': 'Générer un Rapport Quotidien',
+    'Generar Reporte Semanal': 'Générer un Rapport Hebdomadaire',
+    'Generar Reporte Mensual': 'Générer un Rapport Mensuel',
+    'sesiones': 'sessions',
+    'pedidos': 'commandes',
+    'Motivo:': 'Motif :',
+    'órdenes': 'commandes',
+    'unidades': 'unités',
+    'Margen bajo hoy:': 'Marge faible aujourd\'hui :',
+    'Considera revisar precios o reducir gastos.': 'Envisagez de réviser les prix ou de réduire les dépenses.',
+    'Pérdidas esta semana.': 'Pertes cette semaine.',
+    'Los gastos superan las ventas. Revisa el control de inventario y gastos operativos.': 'Les dépenses dépassent les ventes. Vérifiez le contrôle des stocks et les dépenses opérationnelles.',
+    'Empleados inactivos.': 'Employés inactifs.',
+    'Algunos empleados conectados no han procesado pedidos hoy.': 'Certains employés connectés n\'ont pas traité de commandes aujourd\'hui.',
+    'Ningún empleado conectado.': 'Aucun employé connecté.',
+    'Verifica la conectividad y horarios de trabajo.': 'Vérifiez la connectivité et les horaires de travail.',
+
+    // Company Settings - Additional texts (many already exist in lines 457-474)
+    'Error al cargar configuración de la empresa': 'Erreur lors du chargement de la configuration de l\'entreprise',
+    'Configuración por defecto creada': 'Configuration par défaut créée',
+    'Error al crear configuración por defecto': 'Erreur lors de la création de la configuration par défaut',
+    'Restaurando permisos...': 'Restauration des permissions...',
+    'Todos los permisos restaurados para super_admin': 'Toutes les permissions restaurées pour super_admin',
+    'Error al restaurar permisos': 'Erreur lors de la restauration des permissions',
+    'Impresoras de tickets actualizadas': 'Imprimantes de tickets mises à jour',
+    'Error consultando la base de datos': 'Erreur lors de la consultation de la base de données',
+    'Revisa la consola para el contenido de la base de datos': 'Consultez la console pour le contenu de la base de données',
+    'Error verificando la base de datos': 'Erreur lors de la vérification de la base de données',
+    'El nombre de la empresa es obligatorio': 'Le nom de l\'entreprise est obligatoire',
+    'Error al guardar la configuración:': 'Erreur lors de l\'enregistrement de la configuration :',
+    'Cargando configuración...': 'Chargement de la configuration...',
+    'Guardando...': 'Enregistrement...',
+    '¿Problemas con permisos?': 'Problèmes avec les permissions ?',
+    'Si no puedes acceder a esta página o a la gestión de roles, usa el botón de emergencia para restaurar todos los permisos del super_admin.': 'Si vous ne pouvez pas accéder à cette page ou à la gestion des rôles, utilisez le bouton d\'urgence pour restaurer toutes les permissions du super_admin.',
+    'Restaurar Todos los Permisos (Super Admin)': 'Restaurer Toutes les Permissions (Super Admin)',
+    'Información de Depuración:': 'Informations de Débogage :',
+    'Nombre Actual de Empresa:': 'Nom Actuel de l\'Entreprise :',
+    'Dirección Actual:': 'Adresse Actuelle :',
+    'Teléfono Actual:': 'Téléphone Actuel :',
+    'ID de Configuración:': 'ID de Configuration :',
+    'Sin ID (nuevo registro)': 'Sans ID (nouvel enregistrement)',
+    'Tiene Cambios:': 'A des Changements :',
+    'Sí': 'Oui',
+    'No': 'Non',
+    'Verificar Base de Datos': 'Vérifier la Base de Données',
+    'Forzar Actualización de Tickets': 'Forcer la Mise à Jour des Tickets',
+    'Restaurar Permisos': 'Restaurer les Permissions',
+    'Usa estos botones para depurar el problema. Revisa la consola del navegador para logs detallados.': 'Utilisez ces boutons pour déboguer le problème. Consultez la console du navigateur pour des logs détaillés.',
+    'Nombre de empresa': 'Nom d\'entreprise',
+    'No establecido': 'Non défini',
+
+    // Cash Register Dashboard
+    'Error al cargar sesiones de caja': 'Erreur lors du chargement des sessions de caisse',
+    'Gestión de Caja': 'Gestion de Caisse',
+    'Historial de aperturas y cierres de caja': 'Historique des ouvertures et fermetures de caisse',
+    'Total Aperturas': 'Total Ouvertures',
+    'Total Cierres': 'Total Fermetures',
+    'Estado Actual': 'État Actuel',
+    'Caja Abierta': 'Caisse Ouverte',
+    'Caja Cerrada': 'Caisse Fermée',
+    'Fecha Inicio': 'Date Début',
+    'Fecha Fin': 'Date Fin',
+    'Abiertas': 'Ouvertes',
+    'Cerradas': 'Fermées',
+    'Todos los empleados': 'Tous les employés',
+    'Sesiones de Hoy': 'Sessions d\'Aujourd\'hui',
+    'Mostrando todas tus sesiones de caja del día actual': 'Affichage de toutes vos sessions de caisse du jour actuel',
+    'Cargando sesiones...': 'Chargement des sessions...',
+    'No hay sesiones de caja para mostrar': 'Aucune session de caisse à afficher',
+    'Primera Apertura': 'Première Ouverture',
+    'Último Cierre': 'Dernière Fermeture',
+    'Total Inicial': 'Total Initial',
+    'Total Final': 'Total Final',
+    'Sesiones': 'Sessions',
+    'Acciones': 'Actions',
+    'Imprimir reporte diario': 'Imprimer le rapport quotidien',
+    'Error al generar el reporte diario': 'Erreur lors de la génération du rapport quotidien',
+    'Error al generar el reporte': 'Erreur lors de la génération du rapport',
+    'Reporte Diario de Caja': 'Rapport Quotidien de Caisse',
+    'Sesiones de Caja': 'Sessions de Caisse',
+    'Hora Apertura': 'Heure Ouverture',
+    'Hora Cierre': 'Heure Fermeture',
+    'Firma del Empleado': 'Signature de l\'Employé',
+    'Reporte de Caja': 'Rapport de Caisse',
+    'Tú': 'Vous',
+    'Abierta': 'Ouverte',
+    'Cerrada': 'Fermée',
+    'Monto Apertura': 'Montant Ouverture',
+    'Monto Cierre': 'Montant Fermeture',
+    'Órdenes del día': 'Commandes du jour',
+    'Cantidad': 'Quantité',
+    'Este documento es oficial y forma parte del registro contable de': 'Ce document est officiel et fait partie de l\'enregistrement comptable de',
+
+    // Expense Manager
+    'Salarios': 'Salaires',
+    'Alquiler': 'Loyer',
+    'Servicios': 'Services',
+    'Mantenimiento': 'Entretien',
+    'Otras categorías': 'Autres catégories',
+    'Error al cargar proveedores': 'Erreur lors du chargement des fournisseurs',
+    'Error al cargar gastos': 'Erreur lors du chargement des dépenses',
+    'Gasto registrado exitosamente': 'Dépense enregistrée avec succès',
+    'Error al registrar gasto': 'Erreur lors de l\'enregistrement de la dépense',
+    'Gestión de Gastos': 'Gestion des Dépenses',
+    'Descargar Reporte': 'Télécharger le Rapport',
+    'Nuevo Gasto': 'Nouvelle Dépense',
+    'Categoría / Proveedor': 'Catégorie / Fournisseur',
+    'Seleccionar categoría o proveedor': 'Sélectionner catégorie ou fournisseur',
+    'Descripción': 'Description',
+    'Guardar Gasto': 'Enregistrer la Dépense',
+    'Todas las categorías': 'Toutes les catégories',
+    'Fecha Inicial': 'Date Initiale',
+    'Fecha Final': 'Date Finale',
+    'Lista de Gastos': 'Liste des Dépenses',
+    'No hay gastos registrados en este período': 'Aucune dépense enregistrée pour cette période',
+
+    // Supplier Manager
+    'Proveedor actualizado': 'Fournisseur mis à jour',
+    'Proveedor creado': 'Fournisseur créé',
+    'Error al guardar proveedor': 'Erreur lors de l\'enregistrement du fournisseur',
+    'Proveedor eliminado': 'Fournisseur supprimé',
+    'Error al eliminar proveedor': 'Erreur lors de la suppression du fournisseur',
+    'Gestión de Proveedores': 'Gestion des Fournisseurs',
+    'Nuevo Proveedor': 'Nouveau Fournisseur',
+    'Editar Proveedor': 'Modifier le Fournisseur',
+    'Persona de Contacto': 'Personne de Contact',
+    'Email/Teléfono': 'Email/Téléphone',
+    'No hay proveedores registrados': 'Aucun fournisseur enregistré',
+    'Contacto': 'Contact',
+
+    // Employee Time Tracking
+    'Error al cargar empleados': 'Erreur lors du chargement des employés',
+    'Error al cargar estadísticas': 'Erreur lors du chargement des statistiques',
+    'No hay datos para exportar': 'Aucune donnée à exporter',
+    'Reporte generado exitosamente': 'Rapport généré avec succès',
+    'Error al generar reporte': 'Erreur lors de la génération du rapport',
+    'Gestión de Tiempo de Empleados': 'Gestion du Temps des Employés',
+    'Seleccionar Empleado': 'Sélectionner un Employé',
+    'Seleccione un empleado': 'Sélectionnez un employé',
+    'Horas trabajadas': 'Heures travaillées',
+    'Horas por día': 'Heures par jour',
+    'Días trabajados': 'Jours travaillés',
+    'Ventas totales': 'Ventes totales',
+    'Órdenes procesadas': 'Commandes traitées',
+    'Entrada': 'Entrée',
+    'Salida': 'Sortie',
+    'En curso': 'En cours',
+    'Exportar Resumen': 'Exporter le Résumé',
+    'Exportar Detalle Diario': 'Exporter le Détail Quotidien',
+    'Exportar Sesiones': 'Exporter les Sessions',
+    'No especificada': 'Non spécifiée',
+    'No especificado': 'Non spécifié',
+    'No configurada': 'Non configurée',
 
     // Role Management
     'Gestión de Roles y Permisos': 'Gestion des Rôles et Permissions',
@@ -484,15 +917,8 @@ const translations = {
     'No hay datos de productos disponibles': 'Aucune donnée de produit disponible',
     'Insights de Rendimiento': 'Insights de Performance',
 
-    // Login Form
-    'Correo Electrónico': 'Adresse e-mail',
-    'Contraseña': 'Mot de passe',
-    'Iniciando sesión...': 'Connexion en cours...',
-    'Iniciar Sesión': 'Se connecter',
-
     // Sala - Room Management
     'Gestión de Sala': 'Gestion de la Salle',
-    'Sala': 'Salle',
     'Cargando mesas...': 'Chargement des tables...',
     'No se pudieron cargar las mesas': 'Impossible de charger les tables',
     'Error al cargar mesas': 'Erreur lors du chargement des tables',
@@ -707,31 +1133,215 @@ const translations = {
     'Activar': 'Activer',
     'Reset': 'Réinitialiser',
     'Guardar': 'Enregistrer',
+
+    // Role Management
+    'Gestión de Roles y Permisos': 'Gestion des Rôles et Permissions',
+    'Configure los accesos para cada rol del sistema': 'Configurez les accès pour chaque rôle du système',
+    'Cargando permisos...': 'Chargement des permissions...',
+    'Error al cargar permisos': 'Erreur lors du chargement des permissions',
+    'Permisos actualizados correctamente': 'Permissions mises à jour avec succès',
+    'Error al guardar permisos': 'Erreur lors de l\'enregistrement des permissions',
+    'Ventas': 'Ventes',
+    'Inventario': 'Inventaire',
+    'Finanzas': 'Finances',
+    'Sistema': 'Système',
+    'Órdenes': 'Commandes',
+    'Usuarios': 'Utilisateurs',
+    'Caja': 'Caisse',
+    'Tiempo Empleados': 'Temps des Employés',
+    'Proveedores': 'Fournisseurs',
+    'Gastos': 'Dépenses',
+    'Analíticas': 'Analytiques',
+    'Productos': 'Produits',
+    'Categorías': 'Catégories',
+    'Gestión de Roles': 'Gestion des Rôles',
+    'habilitadas': 'activées',
+    'Acceso completo': 'Accès complet',
+    'Acceso parcial': 'Accès partiel',
+    'Sin acceso': 'Sans accès',
+    'Permisos específicos:': 'Permissions spécifiques :',
+    'Confirmar pedidos': 'Confirmer les commandes',
+    'Validar pedidos (finalizar con pago)': 'Valider les commandes (finaliser avec paiement)',
+    'Información sobre roles:': 'Informations sur les rôles :',
+    'Acceso completo incluyendo gestión de roles': 'Accès complet incluant la gestion des rôles',
+    'Acceso completo excepto gestión de roles': 'Accès complet sauf la gestion des rôles',
+    'Ventas y gestión de caja': 'Ventes et gestion de caisse',
+    'Solo sección de ventas': 'Section ventes uniquement',
+    'Sala y órdenes (sin validar pedidos)': 'Salle et commandes (sans valider les commandes)',
+
+    // App Settings
+    'Configuración de la aplicación': 'Configuration de l\'application',
+    'Personaliza el idioma y la apariencia de la aplicación. Los cambios se aplican inmediatamente.': 'Personnalisez la langue et l\'apparence de l\'application. Les modifications sont appliquées immédiatement.',
+    'Español': 'Espagnol',
+    'Français': 'Français',
+    'Selecciona el tema de color de la aplicación': 'Sélectionnez le thème de couleur de l\'application',
+    'Tema claro': 'Thème clair',
+    'Tema oscuro': 'Thème sombre',
+    'Automático': 'Automatique',
+    'Información': 'Informations',
+    'Los cambios de idioma se aplican inmediatamente a toda la aplicación': 'Les changements de langue sont appliqués immédiatement à toute l\'application',
+    'La configuración se guarda automáticamente en tu navegador': 'La configuration est enregistrée automatiquement dans votre navigateur',
+    'Puedes cambiar entre idiomas en cualquier momento': 'Vous pouvez changer de langue à tout moment',
+    'El tema automático sigue la configuración de tu sistema operativo': 'Le thème automatique suit la configuration de votre système d\'exploitation',
+
+    // Navigation & Cash Register
+    'Ingrese un monto de cierre válido (>= 0)': 'Entrez un montant de clôture valide (>= 0)',
+    'No hay sesión de caja abierta para cerrar. Se cerrará la sesión de usuario.': 'Aucune session de caisse ouverte à fermer. La session utilisateur sera fermée.',
+    'Cierre de caja registrado e impreso.': 'Clôture de caisse enregistrée et imprimée.',
+    'No se pudo cerrar la caja:': 'Impossible de fermer la caisse :',
+    '¿Desea cerrar la sesión de caja antes de salir?': 'Voulez-vous fermer la session de caisse avant de quitter ?',
+    'Monto de cierre': 'Montant de clôture',
+    'Salir Sin Cambios': 'Quitter sans Modifications',
+    'Cerrar Caja y Salir': 'Fermer la Caisse et Quitter',
+    'CIERRE DE CAJA': 'CLÔTURE DE CAISSE',
+    'Empleado:': 'Employé :',
+    'SESIONES DEL DÍA': 'SESSIONS DU JOUR',
+    'Sesión': 'Session',
+    'RESUMEN FINANCIERO': 'RÉSUMÉ FINANCIER',
+    'Primera Apertura:': 'Première Ouverture :',
+    'Cierre Final:': 'Clôture Finale :',
+    'Resultado del Día:': 'Résultat du Jour :',
+    'Total Pedidos:': 'Total Commandes :',
+    'Total Ventas:': 'Total Ventes :',
+    'PEDIDOS DEL DÍA': 'COMMANDES DU JOUR',
+    'Pedido #': 'Commande n°',
+    'Hora:': 'Heure :',
+    'Producto': 'Produit',
+    'Generado el': 'Généré le',
+    'El cambio de idioma se aplicará a todos los usuarios del sistema de forma inmediata.': 'Le changement de langue sera appliqué à tous les utilisateurs du système immédiatement.',
   }
 };
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [currentLanguage, setCurrentLanguage] = useState<Language>('es');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Cargar idioma guardado al iniciar
+  // Cargar idioma desde la base de datos al iniciar
   useEffect(() => {
-    const savedLanguage = localStorage.getItem('app-language') as Language;
-    if (savedLanguage && (savedLanguage === 'es' || savedLanguage === 'fr')) {
-      setCurrentLanguage(savedLanguage);
-    }
+    const loadLanguageFromDB = async () => {
+      try {
+        console.log('🔄 [LANGUAGE] Loading language from database...');
+        const { data, error } = await supabase
+          .from('company_settings')
+          .select('language')
+          .single();
+
+        if (error) {
+          console.error('❌ [LANGUAGE] Error loading language from DB:', error);
+          // Si hay error, usar idioma por defecto
+          setCurrentLanguage('es');
+          console.log('⚠️ [LANGUAGE] Using default language: es');
+        } else if (data && data.language) {
+          console.log(`✅ [LANGUAGE] Loaded language from DB: ${data.language}`);
+          setCurrentLanguage(data.language as Language);
+          document.documentElement.lang = data.language;
+        } else {
+          // Si no hay idioma configurado, usar español por defecto
+          console.log('⚠️ [LANGUAGE] No language configured, using default: es');
+          setCurrentLanguage('es');
+        }
+      } catch (error) {
+        console.error('💥 [LANGUAGE] Error loading language:', error);
+        setCurrentLanguage('es');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLanguageFromDB();
+
+    // Suscribirse a cambios en tiempo real en company_settings
+    console.log('📡 [LANGUAGE] Setting up Realtime subscription...');
+    const channel = supabase
+      .channel('company-settings-language')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'company_settings'
+        },
+        (payload) => {
+          console.log('🔔 [LANGUAGE] Realtime change detected!', payload);
+          if (payload.new && (payload.new as any).language) {
+            const newLanguage = (payload.new as any).language as Language;
+            console.log(`🌍 [LANGUAGE] Updating language to: ${newLanguage} (from Realtime)`);
+            setCurrentLanguage(newLanguage);
+            document.documentElement.lang = newLanguage;
+            console.log(`✅ [LANGUAGE] Language updated successfully to: ${newLanguage}`);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(`📡 [LANGUAGE] Realtime subscription status: ${status}`);
+      });
+
+    return () => {
+      console.log('🔌 [LANGUAGE] Disconnecting Realtime subscription...');
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const setLanguage = (lang: Language) => {
-    setCurrentLanguage(lang);
-    localStorage.setItem('app-language', lang);
+  const setLanguage = async (lang: Language) => {
+    try {
+      console.log(`🌍 [LANGUAGE] Attempting to change language to: ${lang}`);
 
-    // Actualizar idioma del documento
-    document.documentElement.lang = lang;
+      // Primero obtener el ID de company_settings
+      const { data: settingsData, error: fetchError } = await supabase
+        .from('company_settings')
+        .select('id')
+        .single();
+
+      if (fetchError) {
+        console.error('❌ [LANGUAGE] Error fetching company_settings ID:', fetchError);
+        throw fetchError;
+      }
+
+      if (!settingsData) {
+        console.error('❌ [LANGUAGE] No company_settings record found');
+        throw new Error('No company_settings record found');
+      }
+
+      console.log(`📝 [LANGUAGE] Updating company_settings (ID: ${settingsData.id}) to language: ${lang}`);
+
+      // Actualizar en la base de datos (esto notificará a todos los clientes conectados)
+      const { error: updateError } = await supabase
+        .from('company_settings')
+        .update({ language: lang })
+        .eq('id', settingsData.id);
+
+      if (updateError) {
+        console.error('❌ [LANGUAGE] Error updating language in DB:', updateError);
+        throw updateError;
+      }
+
+      console.log(`✅ [LANGUAGE] Language updated to ${lang} in database`);
+
+      // Actualizar inmediatamente en el cliente
+      setCurrentLanguage(lang);
+      document.documentElement.lang = lang;
+
+      console.log(`✅ [LANGUAGE] Language updated to ${lang} in local state`);
+    } catch (error) {
+      console.error('💥 [LANGUAGE] Error setting language:', error);
+      // Revertir el cambio cargando desde la base de datos
+      const { data } = await supabase.from('company_settings').select('language').single();
+      if (data && data.language) {
+        setCurrentLanguage(data.language as Language);
+        document.documentElement.lang = data.language;
+      }
+      throw error; // Re-lanzar el error para que AppSettings pueda manejarlo
+    }
   };
 
   const t = (key: string): string => {
     return translations[currentLanguage][key as keyof typeof translations.es] || key;
   };
+
+  // Mostrar un loader mientras se carga el idioma
+  if (isLoading) {
+    return null; // o un spinner si prefieres
+  }
 
   return (
     <LanguageContext.Provider value={{ currentLanguage, setLanguage, t }}>

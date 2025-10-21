@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Clock, Calendar, DollarSign, TrendingUp, Download, User, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -52,6 +53,7 @@ interface MonthStats {
 
 export function EmployeeTimeTracking() {
   const { profile } = useAuth();
+  const { t } = useLanguage();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -92,13 +94,14 @@ export function EmployeeTimeTracking() {
         .select('*')
         .eq('active', true)
         .is('deleted_at', null)
+        .neq('role', 'super_admin') // Ocultar super_admin
         .order('full_name');
 
       if (error) throw error;
       setEmployees(data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
-      toast.error('Error al cargar empleados');
+      toast.error(t('Error al cargar empleados'));
     }
   };
 
@@ -197,13 +200,26 @@ export function EmployeeTimeTracking() {
       });
 
       // Agregar ventas por día
+      // Para empleados sin sesiones de caja (camareros, baristas), crear entradas basadas en órdenes
       orders?.forEach((order) => {
         const date = order.created_at.split('T')[0];
-        if (dayStatsMap.has(date)) {
-          const dayData = dayStatsMap.get(date)!;
-          dayData.total_sales += order.total;
-          dayData.orders_count += 1;
+
+        // Si no existe un día para este empleado, créalo (para camareros/baristas sin sesión de caja)
+        if (!dayStatsMap.has(date)) {
+          dayStatsMap.set(date, {
+            date,
+            sessions: [],
+            total_hours: 0, // Sin sesiones de caja, horas = 0
+            total_sales: 0,
+            orders_count: 0,
+            first_check_in: order.created_at,
+            last_check_out: null,
+          });
         }
+
+        const dayData = dayStatsMap.get(date)!;
+        dayData.total_sales += order.total;
+        dayData.orders_count += 1;
       });
 
       const dayStatsArray = Array.from(dayStatsMap.values()).sort((a, b) =>
@@ -225,7 +241,7 @@ export function EmployeeTimeTracking() {
       });
     } catch (error) {
       console.error('Error fetching employee stats:', error);
-      toast.error('Error al cargar estadísticas');
+      toast.error(t('Error al cargar estadísticas'));
     } finally {
       setLoading(false);
     }
@@ -233,7 +249,7 @@ export function EmployeeTimeTracking() {
 
   const exportToExcel = () => {
     if (!selectedEmployee || !monthStats || dayStats.length === 0) {
-      toast.error('No hay datos para exportar');
+      toast.error(t('No hay datos para exportar'));
       return;
     }
 
@@ -386,10 +402,10 @@ export function EmployeeTimeTracking() {
       // Descargar archivo
       XLSX.writeFile(wb, filename);
 
-      toast.success('Reporte generado exitosamente', { id: 'export' });
+      toast.success(t('Reporte generado exitosamente'), { id: 'export' });
     } catch (error) {
       console.error('Error generating report:', error);
-      toast.error('Error al generar reporte', { id: 'export' });
+      toast.error(t('Error al generar reporte'), { id: 'export' });
     }
   };
 
@@ -397,14 +413,14 @@ export function EmployeeTimeTracking() {
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">Gestión de Tiempo de Empleados</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Tiempo de Empleados')}</h2>
           {selectedEmployee && dayStats.length > 0 && (
             <button
               onClick={exportToExcel}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-md"
             >
               <FileSpreadsheet className="w-5 h-5" />
-              <span>Exportar Excel</span>
+              <span>{t('Exportar Excel')}</span>
             </button>
           )}
         </div>
@@ -413,7 +429,7 @@ export function EmployeeTimeTracking() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar Empleado
+              {t('Seleccionar Empleado')}
             </label>
             <select
               value={selectedEmployee?.id || ''}
@@ -423,7 +439,7 @@ export function EmployeeTimeTracking() {
               }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             >
-              <option value="">-- Seleccione un empleado --</option>
+              <option value="">-- {t('Seleccione un empleado')} --</option>
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.full_name} ({emp.role})

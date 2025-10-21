@@ -202,6 +202,7 @@ export function OrdersDashboard() {
       const { data } = await supabase
         .from('employee_profiles')
         .select('id, full_name')
+        .neq('role', 'super_admin') // Ocultar super_admin
         .order('full_name');
       setEmployees(data || []);
     } catch (err) {
@@ -241,6 +242,7 @@ export function OrdersDashboard() {
           supabase
             .from('employee_profiles')
             .select('id, full_name')
+            .neq('role', 'super_admin') // Ocultar super_admin
             .in('id', uniqueEmployeeIds),
           supabase
             .from('orders')
@@ -318,6 +320,7 @@ export function OrdersDashboard() {
         const { data: employeesData } = await supabase
           .from('employee_profiles')
           .select('id, full_name, role')
+          .neq('role', 'super_admin') // Ocultar super_admin
           .in('id', uniqueEmployeeIds);
 
         // Crear un mapa de empleados para búsqueda rápida O(1)

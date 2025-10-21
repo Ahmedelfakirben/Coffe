@@ -182,14 +182,17 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
     if (visibleItems.length === 0) return null;
 
-    // For cashier users, show Ventas items as individual buttons instead of dropdown
-    if (profile?.role === 'cashier' && group.name === 'Ventas') {
+    // For cashier, barista, and waiter users, show Sales items as individual buttons instead of dropdown
+    const isNonAdminRole = profile?.role === 'cashier' || profile?.role === 'barista' || profile?.role === 'waiter';
+    const isSalesGroup = group.name === t('nav.sales'); // Compare with translated name
+
+    if (isNonAdminRole && isSalesGroup) {
       return (
         <div key={group.name} className="flex items-center gap-2">
           {visibleItems.map(item => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
-            
+
             return (
               <button
                 key={item.id}
@@ -251,7 +254,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     if (!user) return;
     const amount = parseFloat(closingAmount);
     if (isNaN(amount) || amount < 0) {
-      toast.error('Ingrese un monto de cierre válido (>= 0)');
+      toast.error(t('Ingrese un monto de cierre válido (>= 0)'));
       return;
     }
     setClosingLoading(true);
@@ -269,7 +272,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       if (fetchErr) throw fetchErr;
 
       if (!sessions || sessions.length === 0) {
-        toast('No hay sesión de caja abierta para cerrar. Se cerrará la sesión de usuario.');
+        toast(t('No hay sesión de caja abierta para cerrar. Se cerrará la sesión de usuario.'));
         setShowCloseCashModal(false);
         await signOut();
         return;
@@ -315,68 +318,68 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       // Generar ticket de cierre
       const ticketContent = `
         <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
-          <h2 style="text-align: center; margin-bottom: 10px;">CIERRE DE CAJA</h2>
+          <h2 style="text-align: center; margin-bottom: 10px;">${t('CIERRE DE CAJA')}</h2>
           <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>Empleado:</strong> ${profile?.full_name || user.email}
+            <strong>${t('Empleado:')}</strong> ${profile?.full_name || user.email}
           </div>
 
           <div style="margin-bottom: 10px;">
-            <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}
+            <strong>${t('Fecha:')}</strong> ${new Date().toLocaleDateString('es-ES')}
           </div>
 
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>SESIONES DEL DÍA</strong>
+            <strong>${t('SESIONES DEL DÍA')}</strong>
           </div>
 
           ${sessions.map((session, index) => `
             <div style="margin-bottom: 5px;">
-              Sesión ${index + 1}: ${new Date(session.opened_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - ${formatCurrency(session.opening_amount)}
+              ${t('Sesión')} ${index + 1}: ${new Date(session.opened_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - ${formatCurrency(session.opening_amount)}
             </div>
           `).join('')}
 
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>RESUMEN FINANCIERO</strong>
+            <strong>${t('RESUMEN FINANCIERO')}</strong>
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>Primera Apertura:</strong> ${formatCurrency(firstOpening)}
+            <strong>${t('Primera Apertura:')}</strong> ${formatCurrency(firstOpening)}
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>Cierre Final:</strong> ${formatCurrency(amount)}
+            <strong>${t('Cierre Final:')}</strong> ${formatCurrency(amount)}
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>Resultado del Día:</strong> ${formatCurrency(dailyResult)}
+            <strong>${t('Resultado del Día:')}</strong> ${formatCurrency(dailyResult)}
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>Total Pedidos:</strong> ${(orders || []).length}
+            <strong>${t('Total Pedidos:')}</strong> ${(orders || []).length}
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>Total Ventas:</strong> ${formatCurrency((orders || []).reduce((sum, order) => sum + order.total, 0))}
+            <strong>${t('Total Ventas:')}</strong> ${formatCurrency((orders || []).reduce((sum, order) => sum + order.total, 0))}
           </div>
 
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>PEDIDOS DEL DÍA (${(orders || []).length})</strong>
+            <strong>${t('PEDIDOS DEL DÍA')} (${(orders || []).length})</strong>
           </div>
 
           ${(orders || []).map(order => `
             <div style="margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
-              <div><strong>Pedido #${order.id.slice(-8)}</strong></div>
-              <div>Hora: ${new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+              <div><strong>${t('Pedido #')}${order.id.slice(-8)}</strong></div>
+              <div>${t('Hora:')} ${new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
               <div>Total: ${formatCurrency(order.total)}</div>
               <div style="font-size: 12px; margin-top: 3px;">
-                ${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || 'Producto'}`).join(', ')}
+                ${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || t('Producto')}`).join(', ')}
               </div>
             </div>
           `).join('')}
@@ -384,7 +387,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="text-align: center; margin-top: 20px; font-size: 12px;">
-            Generado el ${new Date().toLocaleString('es-ES')}
+            ${t('Generado el')} ${new Date().toLocaleString('es-ES')}
           </div>
         </div>
       `;
@@ -415,12 +418,12 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         printWindow.onafterprint = () => printWindow.close();
       }
 
-      toast.success('Cierre de caja registrado e impreso.');
+      toast.success(t('Cierre de caja registrado e impreso.'));
       setShowCloseCashModal(false);
       await signOut();
     } catch (err: any) {
       console.error('Error en cierre de caja:', err);
-      toast.error(`No se pudo cerrar la caja: ${err.message || err}`);
+      toast.error(`${t('No se pudo cerrar la caja:')} ${err.message || err}`);
     } finally {
       setClosingLoading(false);
     }
@@ -438,7 +441,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       setShowCloseCashModal(true);
     } else if (profile?.role === 'admin' || profile?.role === 'super_admin') {
       // Para administradores, mostrar opción de cerrar caja o salir directamente
-      const confirmClose = window.confirm('¿Desea cerrar la sesión de caja antes de salir?');
+      const confirmClose = window.confirm(t('¿Desea cerrar la sesión de caja antes de salir?'));
       if (confirmClose) {
         setShowCloseCashModal(true);
       } else {
@@ -459,7 +462,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 <Coffee className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Coffee Shop</h1>
+                <h1 className="text-2xl font-bold text-gray-900">LIN-Caisse</h1>
                 <p className="text-sm text-gray-500">{t('Sistema de Gestión')}</p>
               </div>
             </div>
@@ -659,7 +662,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
             <p className="text-sm text-gray-600 mb-4">
               {t('Indique el monto final en caja antes de cerrar sesión.')}
             </p>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Monto de cierre</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Monto de cierre')}</label>
             <input
               type="number"
               step="0.01"
@@ -674,7 +677,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded"
                 onClick={() => setShowCloseCashModal(false)}
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
               {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
                 <button
@@ -684,7 +687,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                     await signOut();
                   }}
                 >
-                  Salir Sin Cambios
+                  {t('Salir Sin Cambios')}
                 </button>
               )}
               <button
@@ -692,7 +695,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 onClick={handleCloseCashSubmit}
                 disabled={closingLoading}
               >
-                {closingLoading ? 'Guardando...' : 'Cerrar Caja y Salir'}
+                {closingLoading ? t('Guardando...') : t('Cerrar Caja y Salir')}
               </button>
             </div>
           </div>

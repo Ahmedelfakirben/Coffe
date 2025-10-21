@@ -9,6 +9,9 @@ interface EmployeeProfile {
   role: 'super_admin' | 'admin' | 'cashier' | 'barista' | 'waiter';
   phone: string | null;
   active: boolean;
+  is_online?: boolean;
+  last_login?: string;
+  last_logout?: string;
 }
 
 interface AuthContextType {
@@ -17,6 +20,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  setOnlineStatus: (isOnline: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('employee_profiles')
-      .select('id, full_name, role, phone, active, email, deleted_at')
+      .select('id, full_name, role, phone, active, email, deleted_at, is_online')
       .eq('id', userId)
       .maybeSingle();
 
@@ -69,6 +73,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       toast.error('Tu cuenta está desactivada o eliminada');
       return;
+    }
+
+    // Marcar al usuario como conectado
+    if (data) {
+      const { error: updateError } = await supabase
+        .from('employee_profiles')
+        .update({
+          is_online: true,
+          last_login: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('Error updating online status:', updateError);
+      } else {
+        console.log('✅ Usuario marcado como conectado:', data.full_name);
+      }
     }
 
     setProfile(data);
@@ -101,13 +122,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Marcar al usuario como desconectado antes de hacer logout
+    if (user) {
+      const { error: updateError } = await supabase
+        .from('employee_profiles')
+        .update({
+          is_online: false,
+          last_logout: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Error updating offline status:', updateError);
+      } else {
+        console.log('✅ Usuario marcado como desconectado');
+      }
+    }
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     setProfile(null);
   };
 
+  const setOnlineStatus = async (isOnline: boolean) => {
+    if (!user) return;
+
+    const updateData: any = {
+      is_online: isOnline
+    };
+
+    // Actualizar timestamp apropiado
+    if (isOnline) {
+      updateData.last_login = new Date().toISOString();
+    } else {
+      updateData.last_logout = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from('employee_profiles')
+      .update(updateData)
+      .eq('id', user.id);
+
+    if (error) {
+      console.error('Error updating online status:', error);
+      throw error;
+    }
+
+    // Actualizar el perfil local
+    if (profile) {
+      setProfile({ ...profile, is_online: isOnline });
+    }
+
+    console.log(`✅ Estado actualizado manualmente: ${isOnline ? 'Conectado' : 'Desconectado'}`);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, setOnlineStatus }}>
       {children}
     </AuthContext.Provider>
   );
