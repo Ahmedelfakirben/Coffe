@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
+import salaBackgroundImage from '../assets/image/sala.png';
 
 type TableStatus = 'available' | 'occupied' | 'reserved' | 'dirty';
 
@@ -326,7 +327,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
     <div
       className="min-h-screen relative overflow-hidden"
       style={{
-        backgroundImage: `url('/src/assets/image/sala.png')`,
+        backgroundImage: `url(${salaBackgroundImage})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
@@ -442,7 +443,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       <div
         className="hidden md:block min-h-screen relative overflow-hidden"
         style={{
-          backgroundImage: `url('/src/assets/image/sala.png')`,
+          backgroundImage: `url(${salaBackgroundImage})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',

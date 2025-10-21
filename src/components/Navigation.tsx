@@ -87,23 +87,35 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       if (!user || profile?.role !== 'cashier') return;
 
       try {
-        const today = new Date().toISOString().split('T')[0];
+        // Calcular el inicio del día laboral (02:00 AM)
+        const now = new Date();
+        const currentHour = now.getHours();
 
-        // Verificar si ya tiene una sesión abierta hoy
+        // Si es antes de las 02:00 AM, el día laboral comenzó ayer a las 02:00 AM
+        // Si es después de las 02:00 AM, el día laboral comenzó hoy a las 02:00 AM
+        const workdayStart = new Date(now);
+        if (currentHour < 2) {
+          // Es madrugada antes de las 02:00, restar un día
+          workdayStart.setDate(workdayStart.getDate() - 1);
+        }
+        workdayStart.setHours(2, 0, 0, 0); // Establecer a las 02:00:00
+
+        // Verificar si ya tiene CUALQUIER sesión (abierta o cerrada) desde las 02:00 AM del día laboral
         const { data: sessions, error } = await supabase
           .from('cash_register_sessions')
-          .select('id')
+          .select('id, status')
           .eq('employee_id', user.id)
-          .gte('opened_at', today)
-          .eq('status', 'open')
-          .is('closed_at', null);
+          .gte('opened_at', workdayStart.toISOString());
 
         if (error) {
           console.error('Error checking cash session:', error);
           return;
         }
 
-        // Si no tiene sesión abierta, mostrar modal de apertura
+        console.log(`🕐 Verificación de caja - Día laboral desde: ${workdayStart.toLocaleString('es-ES')}`);
+        console.log(`📊 Sesiones encontradas en este período: ${sessions?.length || 0}`);
+
+        // Si no tiene ninguna sesión en el período actual, mostrar modal de apertura
         if (!sessions || sessions.length === 0) {
           setShowOpenCashModal(true);
         }
@@ -334,16 +346,28 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     if (!user) return;
 
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Calcular el inicio del día laboral (02:00 AM)
+      const now = new Date();
+      const currentHour = now.getHours();
 
-      // Get all open sessions for today
+      const workdayStart = new Date(now);
+      if (currentHour < 2) {
+        workdayStart.setDate(workdayStart.getDate() - 1);
+      }
+      workdayStart.setHours(2, 0, 0, 0);
+
+      const workdayEnd = new Date(workdayStart);
+      workdayEnd.setDate(workdayEnd.getDate() + 1); // Siguiente día a las 02:00 AM
+
+      // Get all open sessions for the current workday
       const { data: sessions, error: sessionsErr } = await supabase
         .from('cash_register_sessions')
         .select('id, opened_at, opening_amount')
         .eq('employee_id', user.id)
         .eq('status', 'open')
         .is('closed_at', null)
-        .gte('opened_at', today)
+        .gte('opened_at', workdayStart.toISOString())
+        .lt('opened_at', workdayEnd.toISOString())
         .order('opened_at', { ascending: true });
 
       if (sessionsErr) throw sessionsErr;
@@ -362,14 +386,14 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       const sessionIds = sessions.map(s => s.id);
       const openingAmount = sessions[0].opening_amount;
 
-      // Get total sales from completed orders
+      // Get total sales from completed orders during the workday
       const { data: orders, error: ordersErr } = await supabase
         .from('orders')
         .select('total')
         .eq('employee_id', user.id)
         .eq('status', 'completed')
-        .gte('created_at', today)
-        .lte('created_at', today + 'T23:59:59');
+        .gte('created_at', workdayStart.toISOString())
+        .lt('created_at', workdayEnd.toISOString());
 
       if (ordersErr) throw ordersErr;
 
@@ -410,15 +434,28 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     }
     setClosingLoading(true);
     try {
-      // Obtener todas las sesiones abiertas del día actual
-      const today = new Date().toISOString().split('T')[0];
+      // Calcular el inicio del día laboral (02:00 AM)
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      const workdayStart = new Date(now);
+      if (currentHour < 2) {
+        workdayStart.setDate(workdayStart.getDate() - 1);
+      }
+      workdayStart.setHours(2, 0, 0, 0);
+
+      const workdayEnd = new Date(workdayStart);
+      workdayEnd.setDate(workdayEnd.getDate() + 1); // Siguiente día a las 02:00 AM
+
+      // Obtener todas las sesiones abiertas del día laboral actual
       const { data: sessions, error: fetchErr } = await supabase
         .from('cash_register_sessions')
         .select('id, opened_at, opening_amount')
         .eq('employee_id', user.id)
         .eq('status', 'open')
         .is('closed_at', null)
-        .gte('opened_at', today)
+        .gte('opened_at', workdayStart.toISOString())
+        .lt('opened_at', workdayEnd.toISOString())
         .order('opened_at', { ascending: true });
       if (fetchErr) throw fetchErr;
 
@@ -446,7 +483,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         .in('id', sessionIds);
       if (updateErr) throw updateErr;
 
-      // Obtener pedidos del día para el ticket
+      // Obtener pedidos del día laboral para el ticket
       const { data: orders, error: ordersErr } = await supabase
         .from('orders')
         .select(`
@@ -460,8 +497,8 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           )
         `)
         .eq('employee_id', user.id)
-        .gte('created_at', today)
-        .lte('created_at', today + 'T23:59:59')
+        .gte('created_at', workdayStart.toISOString())
+        .lt('created_at', workdayEnd.toISOString())
         .eq('status', 'completed');
 
       if (ordersErr) throw ordersErr;
