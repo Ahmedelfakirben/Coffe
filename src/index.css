@@ -12,6 +12,89 @@
   }
 }
 
+/* Theme System - Dynamic color overrides */
+@layer components {
+  /* Tema Amber (Default) */
+  [data-theme="amber"] {
+    /* Amber/Orange colors remain as default */
+  }
+
+  /* Tema Oscuro (Dark) */
+  [data-theme="dark"] .bg-amber-500,
+  [data-theme="dark"] .from-amber-500,
+  [data-theme="dark"] .to-amber-600 { background-color: #4b5563 !important; }
+
+  [data-theme="dark"] .bg-amber-600,
+  [data-theme="dark"] .hover\:bg-amber-600:hover { background-color: #374151 !important; }
+
+  [data-theme="dark"] .bg-amber-100 { background-color: #f3f4f6 !important; }
+
+  [data-theme="dark"] .text-amber-600,
+  [data-theme="dark"] .text-amber-700 { color: #6b7280 !important; }
+
+  [data-theme="dark"] .border-amber-200,
+  [data-theme="dark"] .border-amber-500 { border-color: #6b7280 !important; }
+
+  [data-theme="dark"] .bg-orange-500,
+  [data-theme="dark"] .from-orange-500 { background-color: #6b7280 !important; }
+
+  [data-theme="dark"] .bg-orange-600,
+  [data-theme="dark"] .hover\:bg-orange-600:hover { background-color: #4b5563 !important; }
+
+  [data-theme="dark"] .bg-gradient-to-br { background-image: linear-gradient(to bottom right, #4b5563, #374151) !important; }
+  [data-theme="dark"] .bg-gradient-to-r { background-image: linear-gradient(to right, #4b5563, #374151) !important; }
+
+  /* Tema Azul (Blue) */
+  [data-theme="blue"] .bg-amber-500,
+  [data-theme="blue"] .from-amber-500,
+  [data-theme="blue"] .to-amber-600 { background-color: #3b82f6 !important; }
+
+  [data-theme="blue"] .bg-amber-600,
+  [data-theme="blue"] .hover\:bg-amber-600:hover { background-color: #2563eb !important; }
+
+  [data-theme="blue"] .bg-amber-100 { background-color: #dbeafe !important; }
+
+  [data-theme="blue"] .text-amber-600,
+  [data-theme="blue"] .text-amber-700 { color: #2563eb !important; }
+
+  [data-theme="blue"] .border-amber-200,
+  [data-theme="blue"] .border-amber-500 { border-color: #3b82f6 !important; }
+
+  [data-theme="blue"] .bg-orange-500,
+  [data-theme="blue"] .from-orange-500 { background-color: #0ea5e9 !important; }
+
+  [data-theme="blue"] .bg-orange-600,
+  [data-theme="blue"] .hover\:bg-orange-600:hover { background-color: #0284c7 !important; }
+
+  [data-theme="blue"] .bg-gradient-to-br { background-image: linear-gradient(to bottom right, #3b82f6, #2563eb) !important; }
+  [data-theme="blue"] .bg-gradient-to-r { background-image: linear-gradient(to right, #3b82f6, #0ea5e9) !important; }
+
+  /* Tema Verde (Green) */
+  [data-theme="green"] .bg-amber-500,
+  [data-theme="green"] .from-amber-500,
+  [data-theme="green"] .to-amber-600 { background-color: #10b981 !important; }
+
+  [data-theme="green"] .bg-amber-600,
+  [data-theme="green"] .hover\:bg-amber-600:hover { background-color: #059669 !important; }
+
+  [data-theme="green"] .bg-amber-100 { background-color: #d1fae5 !important; }
+
+  [data-theme="green"] .text-amber-600,
+  [data-theme="green"] .text-amber-700 { color: #059669 !important; }
+
+  [data-theme="green"] .border-amber-200,
+  [data-theme="green"] .border-amber-500 { border-color: #10b981 !important; }
+
+  [data-theme="green"] .bg-orange-500,
+  [data-theme="green"] .from-orange-500 { background-color: #14b8a6 !important; }
+
+  [data-theme="green"] .bg-orange-600,
+  [data-theme="green"] .hover\:bg-orange-600:hover { background-color: #0d9488 !important; }
+
+  [data-theme="green"] .bg-gradient-to-br { background-image: linear-gradient(to bottom right, #10b981, #059669) !important; }
+  [data-theme="green"] .bg-gradient-to-r { background-image: linear-gradient(to right, #10b981, #14b8a6) !important; }
+}
+
 @layer utilities {
   @keyframes slideInLeft {
     from {

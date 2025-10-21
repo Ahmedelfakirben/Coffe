@@ -3,6 +3,7 @@ import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { LoginForm } from './components/LoginForm';
 import { Navigation } from './components/Navigation';
 import { POS } from './components/POS';
@@ -19,6 +20,7 @@ import { EmployeeTimeTracking } from './components/EmployeeTimeTracking';
 import { RoleManagement } from './components/RoleManagement';
 import { CompanySettings } from './components/CompanySettings';
 import { AppSettings } from './components/AppSettings';
+import { ServerManager } from './components/ServerManager';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -221,6 +223,7 @@ function AppContent() {
         {currentView === 'role-management' && userPermissions['role-management'] && <RoleManagement />}
         {currentView === 'company-settings' && userPermissions['company-settings'] && <CompanySettings />}
         {currentView === 'app-settings' && userPermissions['app-settings'] && <AppSettings />}
+        {currentView === 'server' && userPermissions['server'] && <ServerManager />}
       </div>
 
       {showOpenCashModal && (
@@ -292,7 +295,9 @@ function App() {
     <AuthProvider>
       <CartProvider>
         <LanguageProvider>
-          <AppContent />
+          <ThemeProvider>
+            <AppContent />
+          </ThemeProvider>
         </LanguageProvider>
       </CartProvider>
     </AuthProvider>

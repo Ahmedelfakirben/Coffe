@@ -1,4 +1,4 @@
-import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings } from 'lucide-react';
+import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useState, useRef, useEffect } from 'react';
@@ -77,6 +77,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         { id: 'role-management', label: t('nav.role-management'), icon: Shield, roles: ['super_admin'] },
         { id: 'company-settings', label: t('nav.company-settings'), icon: Building2, roles: ['super_admin'] },
         { id: 'app-settings', label: t('nav.app-settings'), icon: Settings, roles: ['super_admin', 'admin'] },
+        { id: 'server', label: t('nav.server'), icon: Server, roles: ['super_admin'] },
       ]
     }
   ];
