@@ -134,7 +134,9 @@ export function Analytics() {
           role,
           active,
           deleted_at,
-          created_at
+          created_at,
+          is_online,
+          last_login
         `)
         .eq('active', true)
         .is('deleted_at', null)
@@ -155,17 +157,6 @@ export function Analytics() {
         const activityData = await Promise.all(
           employees.map(async (emp) => {
             try {
-              // Get open sessions (not closed) - this determines if user is online
-              const { data: openSessions, error: openSessionsError } = await supabase
-                .from('cash_register_sessions')
-                .select('id, opened_at')
-                .eq('employee_id', emp.id)
-                .is('closed_at', null);
-
-              if (openSessionsError) {
-                console.error('Error fetching open sessions for employee:', emp.id, openSessionsError);
-              }
-
               // Get sessions today
               const { data: sessions, error: sessionsError } = await supabase
                 .from('cash_register_sessions')
@@ -193,17 +184,11 @@ export function Analytics() {
                 ?.filter(order => order.status === 'completed')
                 .reduce((sum, order) => sum + order.total, 0) || 0;
 
-              // User is online if they have an open cash session OR have created orders today
-              // This allows waiters/baristas to appear as online even without cash sessions
-              const hasOpenSession = openSessions && openSessions.length > 0;
-              const hasOrdersToday = orders && orders.length > 0;
-              const isOnline = hasOpenSession || hasOrdersToday;
+              // Usar el estado is_online directamente de la base de datos
+              const isOnline = emp.is_online ?? false;
+              const lastLogin = emp.last_login || emp.created_at;
 
-              const lastLogin = openSessions && openSessions.length > 0
-                ? openSessions[0].opened_at
-                : (orders && orders.length > 0 ? orders[0].created_at : emp.created_at);
-
-              console.log(`Employee ${emp.full_name}: open sessions: ${openSessions?.length || 0}, isOnline: ${isOnline}, sessions today: ${sessions?.length || 0}, orders today: ${orders?.length || 0}`);
+              console.log(`Employee ${emp.full_name}: is_online: ${isOnline}, sessions today: ${sessions?.length || 0}, orders today: ${orders?.length || 0}`);
 
               return {
                 id: emp.id,
@@ -221,11 +206,11 @@ export function Analytics() {
                 id: emp.id,
                 full_name: emp.full_name,
                 role: emp.role,
-                last_login: emp.created_at,
+                last_login: emp.last_login || emp.created_at,
                 total_sessions_today: 0,
                 total_orders_today: 0,
                 total_sales_today: 0,
-                is_online: false,
+                is_online: emp.is_online ?? false,
               };
             }
           })
@@ -358,65 +343,128 @@ export function Analytics() {
   };
 
   const fetchRecentNotifications = async () => {
-    // Get recent cash register sessions (last 24 hours)
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    // Get start of today for deleted orders
-    const todayStart = new Date().toISOString().split('T')[0];
+    try {
+      // Get recent cash register sessions (last 24 hours)
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // Get start of today for deleted orders
+      const todayStart = new Date().toISOString().split('T')[0];
 
-    const { data: sessions } = await supabase
-      .from('cash_register_sessions')
-      .select(`
-        id,
-        opened_at,
-        closed_at,
-        status,
-        employee_profiles!inner(full_name)
-      `)
-      .gte('opened_at', yesterday.toISOString())
-      .order('opened_at', { ascending: false })
-      .limit(10);
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('cash_register_sessions')
+        .select(`
+          id,
+          opened_at,
+          closed_at,
+          status,
+          employee_profiles!inner(full_name, role)
+        `)
+        .neq('employee_profiles.role', 'super_admin') // Ocultar super_admin
+        .gte('opened_at', yesterday.toISOString())
+        .order('opened_at', { ascending: false })
+        .limit(10);
 
-    // Get deleted orders from today
-    const { data: deletedOrders } = await supabase
-      .from('deleted_orders')
-      .select(`
-        id,
-        order_number,
-        total,
-        deletion_note,
-        deleted_at,
-        employee_profiles!deleted_orders_deleted_by_fkey(full_name)
-      `)
-      .gte('deleted_at', todayStart)
-      .order('deleted_at', { ascending: false })
-      .limit(20);
+      if (sessionsError) {
+        console.error('Error fetching session notifications:', sessionsError);
+      }
 
-    const sessionNotifications = (sessions || []).map(session => ({
-      id: session.id,
-      type: session.closed_at ? 'session_closed' : 'session_opened',
-      message: session.closed_at
-        ? `${(session.employee_profiles as any)?.full_name || 'Empleado'} cerró caja`
-        : `${(session.employee_profiles as any)?.full_name || 'Empleado'} abrió caja`,
-      timestamp: session.closed_at || session.opened_at,
-      icon: session.closed_at ? '🔒' : '🔓',
-    }));
+      // Get deleted orders from today
+      const { data: deletedOrders, error: deletedOrdersError } = await supabase
+        .from('deleted_orders')
+        .select(`
+          id,
+          order_number,
+          total,
+          deletion_note,
+          deleted_at,
+          employee_profiles!deleted_orders_deleted_by_fkey(full_name, role)
+        `)
+        .neq('employee_profiles.role', 'super_admin') // Ocultar super_admin
+        .gte('deleted_at', todayStart)
+        .order('deleted_at', { ascending: false })
+        .limit(20);
 
-    const deletedOrderNotifications = (deletedOrders || []).map(order => ({
-      id: `deleted-${order.id}`,
-      type: 'order_deleted',
-      message: `Pedido #${order.order_number?.toString().padStart(3, '0') || 'N/A'} eliminado por ${(order.employee_profiles as any)?.full_name || 'Admin'}`,
-      note: order.deletion_note,
-      total: order.total,
-      timestamp: order.deleted_at,
-      icon: '🗑️',
-    }));
+      if (deletedOrdersError) {
+        console.error('Error fetching deleted order notifications:', deletedOrdersError);
+      }
 
-    // Combinar y ordenar todas las notificaciones por timestamp
-    const allNotifications = [...sessionNotifications, ...deletedOrderNotifications]
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 15); // Limitar a 15 notificaciones totales
+      // Get recent completed orders (last 2 hours)
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const { data: recentOrders, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          order_number,
+          total,
+          created_at,
+          employee_id
+        `)
+        .eq('status', 'completed')
+        .gte('created_at', twoHoursAgo.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(15);
 
-    setRecentNotifications(allNotifications);
+      if (ordersError) {
+        console.error('Error fetching recent orders:', ordersError);
+      }
+
+      // Obtener información de empleados para las órdenes
+      let ordersWithEmployees: any[] = [];
+      if (recentOrders && recentOrders.length > 0) {
+        const employeeIds = [...new Set(recentOrders.map(o => o.employee_id))];
+        const { data: employeesData } = await supabase
+          .from('employee_profiles')
+          .select('id, full_name, role')
+          .in('id', employeeIds);
+
+        ordersWithEmployees = recentOrders.map(order => ({
+          ...order,
+          employee_profiles: employeesData?.find(e => e.id === order.employee_id)
+        })).filter(order =>
+          // Filtrar órdenes de super_admin
+          order.employee_profiles?.role !== 'super_admin'
+        );
+      }
+
+      const sessionNotifications = (sessions || []).map(session => ({
+        id: session.id,
+        type: session.closed_at ? 'session_closed' : 'session_opened',
+        message: session.closed_at
+          ? `${(session.employee_profiles as any)?.full_name || 'Empleado'} ${t('cerró caja')}`
+          : `${(session.employee_profiles as any)?.full_name || 'Empleado'} ${t('abrió caja')}`,
+        timestamp: session.closed_at || session.opened_at,
+        icon: session.closed_at ? '🔒' : '🔓',
+      }));
+
+      const deletedOrderNotifications = (deletedOrders || []).map(order => ({
+        id: `deleted-${order.id}`,
+        type: 'order_deleted',
+        message: `${t('Pedido')} #${order.order_number?.toString().padStart(3, '0') || 'N/A'} ${t('eliminado por')} ${(order.employee_profiles as any)?.full_name || 'Admin'}`,
+        note: order.deletion_note,
+        total: order.total,
+        timestamp: order.deleted_at,
+        icon: '🗑️',
+      }));
+
+      const orderNotifications = (ordersWithEmployees || []).map(order => ({
+        id: `order-${order.id}`,
+        type: 'order_completed',
+        message: `${t('Pedido')} #${order.order_number?.toString().padStart(3, '0') || 'N/A'} ${t('completado por')} ${order.employee_profiles?.full_name || 'Empleado'}`,
+        total: order.total,
+        timestamp: order.created_at,
+        icon: '✅',
+      }));
+
+      // Combinar y ordenar todas las notificaciones por timestamp
+      const allNotifications = [...sessionNotifications, ...deletedOrderNotifications, ...orderNotifications]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 20); // Limitar a 20 notificaciones totales
+
+      console.log('📢 Notificaciones cargadas:', allNotifications.length);
+      setRecentNotifications(allNotifications);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      setRecentNotifications([]);
+    }
   };
 
   const generateDailyReport = async (summary: FinancialSummary) => {
@@ -1289,6 +1337,40 @@ export function Analytics() {
   };
 
   const setupRealtimeSubscriptions = () => {
+    // Subscribe to employee status changes (online/offline)
+    const employeeSubscription = supabase
+      .channel('employee_status_changes')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'employee_profiles'
+      }, (payload) => {
+        console.log('🔔 Employee status changed:', payload);
+        const updatedEmployee = payload.new as any;
+        const oldEmployee = payload.old as any;
+
+        // Refrescar la actividad de empleados
+        fetchEmployeeActivity();
+
+        // Si es admin/super_admin y el estado de conexión cambió, mostrar notificación
+        if (profile && (profile.role === 'admin' || profile.role === 'super_admin')) {
+          // Verificar que no sea el super_admin y que el estado cambió
+          if (updatedEmployee.role !== 'super_admin' &&
+              updatedEmployee.is_online !== undefined &&
+              oldEmployee.is_online !== undefined &&
+              updatedEmployee.is_online !== oldEmployee.is_online) {
+            const statusText = updatedEmployee.is_online ? t('connected') : t('disconnected');
+            toast(`${updatedEmployee.full_name} ${statusText}`, {
+              icon: updatedEmployee.is_online ? '🟢' : '🔴',
+              duration: 3000,
+            });
+          }
+        }
+      })
+      .subscribe((status) => {
+        console.log('📡 Employee status subscription:', status);
+      });
+
     // Subscribe to cash register sessions
     const sessionSubscription = supabase
       .channel('cash_sessions')
@@ -1336,6 +1418,7 @@ export function Analytics() {
       .subscribe();
 
     return () => {
+      employeeSubscription.unsubscribe();
       sessionSubscription.unsubscribe();
       orderSubscription.unsubscribe();
       tableSubscription.unsubscribe();

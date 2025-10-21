@@ -323,19 +323,33 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
 
   // Vista móvil
   const renderMobileView = () => (
-    <div className="min-h-[calc(100vh-8rem)] bg-gray-50">
-      {/* Header móvil */}
-      <div className="bg-white p-4 border-b sticky top-0 z-10">
-        <h2 className="text-xl font-bold text-gray-900">{t('Gestión de Sala')}</h2>
-        {tableId && (
-          <p className="text-sm text-amber-600 mt-1">
-            {t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}
-          </p>
-        )}
-      </div>
+    <div
+      className="min-h-screen relative overflow-hidden"
+      style={{
+        backgroundImage: `url('/src/assets/image/sala.png')`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed'
+      }}
+    >
+      {/* Overlay para mantener legibilidad */}
+      <div className="absolute inset-0 bg-white/20"></div>
 
-      {/* Botones de acción */}
-      <div className="p-4 bg-white border-b flex gap-2">
+      {/* Contenido sobre la imagen */}
+      <div className="relative z-10">
+        {/* Header móvil */}
+        <div className="bg-white/90 backdrop-blur-sm p-4 border-b border-amber-200/50 sticky top-0 z-10">
+          <h2 className="text-xl font-bold text-gray-900">{t('Gestión de Sala')}</h2>
+          {tableId && (
+            <p className="text-sm text-amber-600 mt-1">
+              {t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}
+            </p>
+          )}
+        </div>
+
+        {/* Botones de acción */}
+        <div className="p-4 bg-white/80 backdrop-blur-sm border-b border-amber-200/50 flex gap-2">
         <button
           onClick={clearSelection}
           className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
@@ -401,7 +415,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       </div>
 
       {/* Leyenda móvil */}
-      <div className="p-4 bg-white border-t fixed bottom-0 left-0 right-0">
+      <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-amber-200/50 fixed bottom-0 left-0 right-0 z-10">
         <div className="flex justify-around text-xs">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -412,6 +426,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
             <span className="text-gray-600">{t('Ocupada')}</span>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -424,42 +439,46 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       </div>
 
       {/* Vista Desktop */}
-      <div className="hidden md:block min-h-screen bg-gray-50 p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-900">{t('Sala')}</h2>
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={clearSelection}
-            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
-          >
-            {t('Para llevar')}
-          </button>
-          {tableId && (
-            <span className="px-3 py-2 bg-amber-50 text-amber-700 rounded-lg">{t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}</span>
-          )}
-          {tables.length === 0 && (
-            <button
-              onClick={seedTables}
-              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
-            >
-              {t('Añadir 6 mesas')}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Plano de la sala con mesas objetuales */}
       <div
-        className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-8 min-h-[60vh] shadow-inner relative overflow-hidden"
+        className="hidden md:block min-h-screen relative overflow-hidden"
         style={{
           backgroundImage: `url('/src/assets/image/sala.png')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed'
         }}
       >
-        {/* Overlay para mantener legibilidad */}
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-50/80 to-orange-50/80 rounded-2xl"></div>
+        {/* Overlay para mantener legibilidad en toda la página */}
+        <div className="absolute inset-0 bg-white/20"></div>
+
+        {/* Contenido sobre la imagen */}
+        <div className="relative z-10 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 drop-shadow-sm">{t('Sala')}</h2>
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={clearSelection}
+                className="px-3 py-2 bg-white/90 hover:bg-white backdrop-blur-sm rounded-lg shadow-sm border border-gray-200"
+              >
+                {t('Para llevar')}
+              </button>
+              {tableId && (
+                <span className="px-3 py-2 bg-amber-100/90 backdrop-blur-sm text-amber-700 rounded-lg shadow-sm border border-amber-200">{t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}</span>
+              )}
+              {tables.length === 0 && (
+                <button
+                  onClick={seedTables}
+                  className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md"
+                >
+                  {t('Añadir 6 mesas')}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Plano de la sala con mesas objetuales */}
+          <div className="border-2 border-white/30 rounded-2xl p-8 min-h-[calc(100vh-12rem)] shadow-inner relative overflow-hidden">
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 place-items-center relative z-10">
           {tables.map((table) => (
@@ -508,6 +527,8 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           </div>
         </div>
       </div>
+        </div>
+
       {showOrdersModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-4">

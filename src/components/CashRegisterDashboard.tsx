@@ -17,6 +17,16 @@ interface CashSession {
   employee_profiles?: { full_name: string };
 }
 
+interface CashWithdrawal {
+  id: string;
+  session_id: string;
+  amount: number;
+  reason: string;
+  withdrawn_by: string;
+  withdrawn_at: string;
+  notes: string | null;
+}
+
 interface Order {
   id: string;
   total: number;
@@ -57,9 +67,18 @@ export function CashRegisterDashboard() {
 
   const [dailySessions, setDailySessions] = useState<any[]>([]);
 
+  // Estados para retiros de caja
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [selectedSessionForWithdrawal, setSelectedSessionForWithdrawal] = useState<string | null>(null);
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalReason, setWithdrawalReason] = useState('');
+  const [withdrawalNotes, setWithdrawalNotes] = useState('');
+  const [withdrawals, setWithdrawals] = useState<CashWithdrawal[]>([]);
+
   useEffect(() => {
     fetchSessions();
     fetchCurrentCashStatus();
+    fetchWithdrawals();
   }, [filters, profile]);
 
   useEffect(() => {
@@ -161,6 +180,55 @@ export function CashRegisterDashboard() {
     }
   };
 
+  const fetchWithdrawals = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cash_withdrawals')
+        .select('*')
+        .order('withdrawn_at', { ascending: false });
+
+      if (error) throw error;
+      setWithdrawals(data || []);
+    } catch (err) {
+      console.error('Error fetching withdrawals:', err);
+    }
+  };
+
+  const registerWithdrawal = async () => {
+    if (!selectedSessionForWithdrawal || !withdrawalAmount || !withdrawalReason) {
+      toast.error(t('Por favor completa todos los campos obligatorios'));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('cash_withdrawals')
+        .insert({
+          session_id: selectedSessionForWithdrawal,
+          amount: parseFloat(withdrawalAmount),
+          reason: withdrawalReason,
+          withdrawn_by: user!.id,
+          notes: withdrawalNotes || null
+        });
+
+      if (error) throw error;
+
+      toast.success(t('Retiro registrado exitosamente'));
+      setShowWithdrawalModal(false);
+      setWithdrawalAmount('');
+      setWithdrawalReason('');
+      setWithdrawalNotes('');
+      setSelectedSessionForWithdrawal(null);
+
+      // Recargar datos
+      fetchWithdrawals();
+      fetchSessions();
+    } catch (err) {
+      console.error('Error registering withdrawal:', err);
+      toast.error(t('Error al registrar el retiro'));
+    }
+  };
+
   const fetchCurrentCashStatus = async () => {
     try {
       // Get the most recent session for the current user (or all for admin)
@@ -202,7 +270,7 @@ export function CashRegisterDashboard() {
     }
   };
 
-  const groupSessionsByDay = () => {
+  const groupSessionsByDay = async () => {
     const grouped = sessions.reduce((acc: any, session) => {
       const date = new Date(session.opened_at).toDateString();
       const employeeKey = `${date}-${session.employee_id}`;
@@ -215,6 +283,10 @@ export function CashRegisterDashboard() {
           sessions: [],
           totalOpening: 0,
           totalClosing: 0,
+          totalSales: 0,
+          totalWithdrawals: 0,
+          expectedClosing: 0,
+          difference: 0,
           firstOpen: session.opened_at,
           lastClose: session.closed_at,
         };
@@ -232,6 +304,41 @@ export function CashRegisterDashboard() {
       }
       return acc;
     }, {});
+
+    // Calcular ventas y retiros para cada día
+    for (const employeeKey of Object.keys(grouped)) {
+      const dayData = grouped[employeeKey];
+      const startOfDay = new Date(dayData.date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(dayData.date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Obtener ventas del día (pedidos confirmados)
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('total')
+        .eq('employee_id', dayData.employee_id)
+        .eq('status', 'completed')
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString());
+
+      dayData.totalSales = (orders || []).reduce((sum, order) => sum + order.total, 0);
+
+      // Obtener retiros del día
+      const sessionIds = dayData.sessions.map((s: CashSession) => s.id);
+      const { data: dayWithdrawals } = await supabase
+        .from('cash_withdrawals')
+        .select('amount')
+        .in('session_id', sessionIds);
+
+      dayData.totalWithdrawals = (dayWithdrawals || []).reduce((sum, w) => sum + w.amount, 0);
+
+      // Calcular cierre esperado y diferencia
+      // Cierre esperado = Apertura + Ventas - Retiros
+      dayData.expectedClosing = dayData.totalOpening + dayData.totalSales - dayData.totalWithdrawals;
+      // Diferencia = Cierre Real - Cierre Esperado
+      dayData.difference = dayData.totalClosing - dayData.expectedClosing;
+    }
 
     const dailyArray = Object.values(grouped).sort((a: any, b: any) => {
       // Sort by date desc, then by employee name
@@ -845,16 +952,22 @@ export function CashRegisterDashboard() {
                     {t('Último Cierre')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Total Inicial')}
+                    {t('Apertura')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Total Final')}
+                    {t('Ventas')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Balance')}
+                    {t('Retiros')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Sesiones')}
+                    {t('Cierre Esperado')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {t('Cierre Real')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {t('Diferencia')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {t('Acciones')}
@@ -876,28 +989,51 @@ export function CashRegisterDashboard() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {day.lastClose ? new Date(day.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
                       {formatCurrency(day.totalOpening)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                      {formatCurrency(day.totalClosing)}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                      {formatCurrency(day.totalSales || 0)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <span className={day.totalClosing - day.totalOpening >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {formatCurrency(day.totalClosing - day.totalOpening)}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600">
+                      {formatCurrency(day.totalWithdrawals || 0)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                      {formatCurrency(day.expectedClosing || 0)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-purple-600">
+                      {formatCurrency(day.totalClosing || 0)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                      <span className={`px-2 py-1 rounded ${
+                        Math.abs(day.difference) < 0.01 ? 'bg-green-100 text-green-700' :
+                        day.difference > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {formatCurrency(day.difference || 0)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {day.sessions.length}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => printDailyReport(day)}
-                        className="text-amber-600 hover:text-amber-900 p-1 rounded-md hover:bg-amber-50 transition-colors"
-                        title={t('Imprimir reporte diario')}
-                      >
-                        <Printer className="w-4 h-4" />
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => printDailyReport(day)}
+                          className="text-amber-600 hover:text-amber-900 p-1 rounded-md hover:bg-amber-50 transition-colors"
+                          title={t('Imprimir reporte diario')}
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                        {(profile?.role === 'admin' || profile?.role === 'super_admin') && day.sessions.length > 0 && (
+                          <button
+                            onClick={() => {
+                              setSelectedSessionForWithdrawal(day.sessions[0].id);
+                              setShowWithdrawalModal(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-900 px-2 py-1 rounded-md hover:bg-blue-50 transition-colors text-xs"
+                            title={t('Registrar retiro de caja')}
+                          >
+                            {t('Retiro')}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -906,6 +1042,93 @@ export function CashRegisterDashboard() {
           </div>
         )}
       </div>
+
+      {/* Modal para registrar retiros de caja */}
+      {showWithdrawalModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full m-4">
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">{t('Registrar Retiro de Caja')}</h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('Monto a retirar')} *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={withdrawalAmount}
+                    onChange={(e) => setWithdrawalAmount(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('Motivo del retiro')} *
+                  </label>
+                  <select
+                    value={withdrawalReason}
+                    onChange={(e) => setWithdrawalReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">{t('Seleccionar motivo')}</option>
+                    <option value="Depósito bancario">{t('Depósito bancario')}</option>
+                    <option value="Pago a proveedor">{t('Pago a proveedor')}</option>
+                    <option value="Gastos operativos">{t('Gastos operativos')}</option>
+                    <option value="Cambio de billetes">{t('Cambio de billetes')}</option>
+                    <option value="Otros">{t('Otros')}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('Notas adicionales')} ({t('opcional')})
+                  </label>
+                  <textarea
+                    value={withdrawalNotes}
+                    onChange={(e) => setWithdrawalNotes(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    rows={3}
+                    placeholder={t('Detalles adicionales sobre el retiro...')}
+                  />
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-800">
+                    <strong>ℹ️ {t('Importante')}:</strong> {t('Este retiro se restará del cálculo del cierre de caja esperado.')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowWithdrawalModal(false);
+                    setWithdrawalAmount('');
+                    setWithdrawalReason('');
+                    setWithdrawalNotes('');
+                    setSelectedSessionForWithdrawal(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  {t('Cancelar')}
+                </button>
+                <button
+                  onClick={registerWithdrawal}
+                  disabled={!withdrawalAmount || !withdrawalReason}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {t('Registrar Retiro')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
+import OnlineStatusToggle from './OnlineStatusToggle';
 
 interface NavigationProps {
   currentView: string;
@@ -32,6 +33,16 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   const [closingLoading, setClosingLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userPermissions, setUserPermissions] = useState<{ [key: string]: boolean }>({});
+  const [cashBreakdown, setCashBreakdown] = useState({
+    openingAmount: 0,
+    totalSales: 0,
+    totalWithdrawals: 0,
+    expectedClosing: 0,
+    sessionIds: [] as string[]
+  });
+  const [showOpenCashModal, setShowOpenCashModal] = useState(false);
+  const [openingAmount, setOpeningAmount] = useState('');
+  const [openingLoading, setOpeningLoading] = useState(false);
 
   const navGroups: NavGroup[] = [
     {
@@ -69,6 +80,40 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       ]
     }
   ];
+
+  // Verificar si el cajero debe abrir caja al iniciar sesión
+  useEffect(() => {
+    const checkCashSession = async () => {
+      if (!user || profile?.role !== 'cashier') return;
+
+      try {
+        const today = new Date().toISOString().split('T')[0];
+
+        // Verificar si ya tiene una sesión abierta hoy
+        const { data: sessions, error } = await supabase
+          .from('cash_register_sessions')
+          .select('id')
+          .eq('employee_id', user.id)
+          .gte('opened_at', today)
+          .eq('status', 'open')
+          .is('closed_at', null);
+
+        if (error) {
+          console.error('Error checking cash session:', error);
+          return;
+        }
+
+        // Si no tiene sesión abierta, mostrar modal de apertura
+        if (!sessions || sessions.length === 0) {
+          setShowOpenCashModal(true);
+        }
+      } catch (err) {
+        console.error('Error checking cash session:', err);
+      }
+    };
+
+    checkCashSession();
+  }, [user, profile?.role]);
 
   // Cargar permisos del usuario desde la base de datos
   useEffect(() => {
@@ -250,6 +295,112 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     );
   };
 
+  const handleOpenCashSubmit = async () => {
+    if (!user) return;
+
+    const amount = parseFloat(openingAmount);
+    if (isNaN(amount) || amount < 0) {
+      toast.error(t('Ingrese un monto de apertura válido (>= 0)'));
+      return;
+    }
+
+    setOpeningLoading(true);
+
+    try {
+      // Crear nueva sesión de caja
+      const { error } = await supabase
+        .from('cash_register_sessions')
+        .insert({
+          employee_id: user.id,
+          opening_amount: amount,
+          opened_at: new Date().toISOString(),
+          status: 'open'
+        });
+
+      if (error) throw error;
+
+      toast.success(t('Caja abierta exitosamente'));
+      setShowOpenCashModal(false);
+      setOpeningAmount('');
+    } catch (err: any) {
+      console.error('Error al abrir caja:', err);
+      toast.error(`${t('No se pudo abrir la caja:')} ${err.message || err}`);
+    } finally {
+      setOpeningLoading(false);
+    }
+  };
+
+  const fetchCashBreakdown = async () => {
+    if (!user) return;
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+
+      // Get all open sessions for today
+      const { data: sessions, error: sessionsErr } = await supabase
+        .from('cash_register_sessions')
+        .select('id, opened_at, opening_amount')
+        .eq('employee_id', user.id)
+        .eq('status', 'open')
+        .is('closed_at', null)
+        .gte('opened_at', today)
+        .order('opened_at', { ascending: true });
+
+      if (sessionsErr) throw sessionsErr;
+
+      if (!sessions || sessions.length === 0) {
+        setCashBreakdown({
+          openingAmount: 0,
+          totalSales: 0,
+          totalWithdrawals: 0,
+          expectedClosing: 0,
+          sessionIds: []
+        });
+        return;
+      }
+
+      const sessionIds = sessions.map(s => s.id);
+      const openingAmount = sessions[0].opening_amount;
+
+      // Get total sales from completed orders
+      const { data: orders, error: ordersErr } = await supabase
+        .from('orders')
+        .select('total')
+        .eq('employee_id', user.id)
+        .eq('status', 'completed')
+        .gte('created_at', today)
+        .lte('created_at', today + 'T23:59:59');
+
+      if (ordersErr) throw ordersErr;
+
+      const totalSales = (orders || []).reduce((sum, order) => sum + order.total, 0);
+
+      // Get total withdrawals
+      const { data: withdrawals, error: withdrawalsErr } = await supabase
+        .from('cash_withdrawals')
+        .select('amount')
+        .in('session_id', sessionIds);
+
+      if (withdrawalsErr) throw withdrawalsErr;
+
+      const totalWithdrawals = (withdrawals || []).reduce((sum, w) => sum + w.amount, 0);
+
+      // Calculate expected closing
+      const expectedClosing = openingAmount + totalSales - totalWithdrawals;
+
+      setCashBreakdown({
+        openingAmount,
+        totalSales,
+        totalWithdrawals,
+        expectedClosing,
+        sessionIds
+      });
+    } catch (err) {
+      console.error('Error fetching cash breakdown:', err);
+      toast.error(t('Error al cargar información de caja'));
+    }
+  };
+
   const handleCloseCashSubmit = async () => {
     if (!user) return;
     const amount = parseFloat(closingAmount);
@@ -315,6 +466,20 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
       if (ordersErr) throw ordersErr;
 
+      // Obtener retiros del día para el ticket
+      const { data: withdrawals, error: withdrawalsErr } = await supabase
+        .from('cash_withdrawals')
+        .select('amount, reason, withdrawn_at, notes')
+        .in('session_id', sessionIds);
+
+      if (withdrawalsErr) throw withdrawalsErr;
+
+      // Calcular totales para el ticket
+      const totalSales = (orders || []).reduce((sum, order) => sum + order.total, 0);
+      const totalWithdrawals = (withdrawals || []).reduce((sum, w) => sum + w.amount, 0);
+      const expectedClosing = firstOpening + totalSales - totalWithdrawals;
+      const difference = amount - expectedClosing;
+
       // Generar ticket de cierre
       const ticketContent = `
         <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
@@ -332,39 +497,35 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>${t('SESIONES DEL DÍA')}</strong>
-          </div>
-
-          ${sessions.map((session, index) => `
-            <div style="margin-bottom: 5px;">
-              ${t('Sesión')} ${index + 1}: ${new Date(session.opened_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} - ${formatCurrency(session.opening_amount)}
-            </div>
-          `).join('')}
-
-          <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-
-          <div style="margin-bottom: 10px;">
             <strong>${t('RESUMEN FINANCIERO')}</strong>
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>${t('Primera Apertura:')}</strong> ${formatCurrency(firstOpening)}
+            <strong>${t('Apertura')}:</strong> ${formatCurrency(firstOpening)}
+          </div>
+
+          <div style="margin-bottom: 5px; color: green;">
+            <strong>${t('Ventas')} (+):</strong> ${formatCurrency(totalSales)}
+          </div>
+
+          <div style="margin-bottom: 5px; color: orange;">
+            <strong>${t('Retiros')} (-):</strong> ${formatCurrency(totalWithdrawals)}
+          </div>
+
+          <div style="margin-bottom: 5px; padding: 5px; background-color: #e3f2fd; border: 1px solid #2196f3;">
+            <strong>${t('Cierre Esperado')}:</strong> ${formatCurrency(expectedClosing)}
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>${t('Cierre Final:')}</strong> ${formatCurrency(amount)}
+            <strong>${t('Cierre Real')}:</strong> ${formatCurrency(amount)}
           </div>
 
-          <div style="margin-bottom: 5px;">
-            <strong>${t('Resultado del Día:')}</strong> ${formatCurrency(dailyResult)}
-          </div>
-
-          <div style="margin-bottom: 5px;">
-            <strong>${t('Total Pedidos:')}</strong> ${(orders || []).length}
-          </div>
-
-          <div style="margin-bottom: 5px;">
-            <strong>${t('Total Ventas:')}</strong> ${formatCurrency((orders || []).reduce((sum, order) => sum + order.total, 0))}
+          <div style="margin-bottom: 5px; padding: 5px; background-color: ${
+            difference === 0 ? '#e8f5e9' : difference > 0 ? '#e3f2fd' : '#ffebee'
+          }; border: 1px solid ${
+            difference === 0 ? '#4caf50' : difference > 0 ? '#2196f3' : '#f44336'
+          };">
+            <strong>${t('Diferencia')}:</strong> ${formatCurrency(difference)} ${difference === 0 ? '✓' : ''}
           </div>
 
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
@@ -373,7 +534,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
             <strong>${t('PEDIDOS DEL DÍA')} (${(orders || []).length})</strong>
           </div>
 
-          ${(orders || []).map(order => `
+          ${(orders || []).length > 0 ? (orders || []).map(order => `
             <div style="margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
               <div><strong>${t('Pedido #')}${order.id.slice(-8)}</strong></div>
               <div>${t('Hora:')} ${new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -382,7 +543,24 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 ${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || t('Producto')}`).join(', ')}
               </div>
             </div>
-          `).join('')}
+          `).join('') : `<div style="text-align: center; color: #666; padding: 10px;">${t('Sin pedidos')}</div>`}
+
+          ${(withdrawals || []).length > 0 ? `
+            <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+            <div style="margin-bottom: 10px;">
+              <strong>${t('RETIROS DE CAJA')} (${(withdrawals || []).length})</strong>
+            </div>
+
+            ${(withdrawals || []).map(withdrawal => `
+              <div style="margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
+                <div><strong>${formatCurrency(withdrawal.amount)}</strong></div>
+                <div style="font-size: 12px;">${t('Motivo')}: ${withdrawal.reason}</div>
+                <div style="font-size: 12px;">${t('Hora:')} ${new Date(withdrawal.withdrawn_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+                ${withdrawal.notes ? `<div style="font-size: 11px; color: #666;">${t('Nota')}: ${withdrawal.notes}</div>` : ''}
+              </div>
+            `).join('')}
+          ` : ''}
 
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
@@ -436,13 +614,15 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     }).format(amount);
   };
 
-  const handleLogoutClick = () => {
+  const handleLogoutClick = async () => {
     if (profile?.role === 'cashier') {
+      await fetchCashBreakdown();
       setShowCloseCashModal(true);
     } else if (profile?.role === 'admin' || profile?.role === 'super_admin') {
       // Para administradores, mostrar opción de cerrar caja o salir directamente
       const confirmClose = window.confirm(t('¿Desea cerrar la sesión de caja antes de salir?'));
       if (confirmClose) {
+        await fetchCashBreakdown();
         setShowCloseCashModal(true);
       } else {
         signOut();
@@ -480,6 +660,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                   <p className="text-xs text-gray-500 capitalize">{profile.role}</p>
                 </div>
               )}
+              <OnlineStatusToggle />
               <button
                 onClick={handleLogoutClick}
                 className="flex items-center gap-2 px-4 py-2.5 text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
@@ -639,6 +820,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                     <p className="text-xs text-gray-500 capitalize">{profile?.role}</p>
                   </div>
                 </div>
+                <div className="mb-3">
+                  <OnlineStatusToggle />
+                </div>
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false);
@@ -656,32 +840,129 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       )}
 
       {showCloseCashModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">{t('Cierre de Caja')}</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              {t('Indique el monto final en caja antes de cerrar sesión.')}
-            </p>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('Monto de cierre')}</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={closingAmount}
-              onChange={(e) => setClosingAmount(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded mb-4"
-              placeholder="0.00"
-            />
-            <div className="flex justify-end gap-2">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-4 rounded-t-xl">
+              <h2 className="text-xl font-bold">{t('Cierre de Caja')}</h2>
+              <p className="text-sm text-white/90 mt-1">
+                {t('Revise el resumen y confirme el cierre')}
+              </p>
+            </div>
+
+            {/* Breakdown Summary */}
+            <div className="px-6 py-5 bg-gray-50 border-b border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                {t('Resumen del Día')}
+              </h3>
+
+              <div className="space-y-2">
+                {/* Opening Amount */}
+                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">{t('Apertura')}:</span>
+                  <span className="text-sm font-bold text-gray-900">
+                    {formatCurrency(cashBreakdown.openingAmount)}
+                  </span>
+                </div>
+
+                {/* Sales */}
+                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-sm font-medium text-green-700">{t('Ventas')}:</span>
+                  <span className="text-sm font-bold text-green-700">
+                    + {formatCurrency(cashBreakdown.totalSales)}
+                  </span>
+                </div>
+
+                {/* Withdrawals */}
+                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-sm font-medium text-orange-700">{t('Retiros')}:</span>
+                  <span className="text-sm font-bold text-orange-700">
+                    - {formatCurrency(cashBreakdown.totalWithdrawals)}
+                  </span>
+                </div>
+
+                {/* Expected Closing */}
+                <div className="flex justify-between items-center py-3 bg-blue-50 -mx-3 px-3 rounded-lg mt-3">
+                  <span className="text-sm font-semibold text-blue-900">{t('Cierre Esperado')}:</span>
+                  <span className="text-lg font-bold text-blue-900">
+                    {formatCurrency(cashBreakdown.expectedClosing)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Input Section */}
+            <div className="px-6 py-5">
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                {t('Monto Real en Caja')}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={closingAmount}
+                onChange={(e) => setClosingAmount(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                placeholder="0.00"
+                autoFocus
+              />
+
+              {/* Difference Display */}
+              {closingAmount && !isNaN(parseFloat(closingAmount)) && (
+                <div className={`mt-4 p-3 rounded-lg ${
+                  parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
+                    ? 'bg-green-50 border border-green-200'
+                    : parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
+                    ? 'bg-blue-50 border border-blue-200'
+                    : 'bg-red-50 border border-red-200'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <span className={`text-sm font-semibold ${
+                      parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
+                        ? 'text-green-900'
+                        : parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
+                        ? 'text-blue-900'
+                        : 'text-red-900'
+                    }`}>
+                      {t('Diferencia')}:
+                    </span>
+                    <span className={`text-lg font-bold ${
+                      parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
+                        ? 'text-green-900'
+                        : parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
+                        ? 'text-blue-900'
+                        : 'text-red-900'
+                    }`}>
+                      {formatCurrency(parseFloat(closingAmount) - cashBreakdown.expectedClosing)}
+                      {parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0 && ' ✓'}
+                    </span>
+                  </div>
+                  {parseFloat(closingAmount) - cashBreakdown.expectedClosing !== 0 && (
+                    <p className={`text-xs mt-1 ${
+                      parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
+                        ? 'text-blue-700'
+                        : 'text-red-700'
+                    }`}>
+                      {parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
+                        ? t('Hay más dinero del esperado')
+                        : t('Hay menos dinero del esperado')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Buttons */}
+            <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex justify-end gap-3 border-t border-gray-200">
               <button
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded"
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
                 onClick={() => setShowCloseCashModal(false)}
               >
                 {t('Cancelar')}
               </button>
               {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
                 <button
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                   onClick={async () => {
                     setShowCloseCashModal(false);
                     await signOut();
@@ -691,11 +972,72 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 </button>
               )}
               <button
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleCloseCashSubmit}
                 disabled={closingLoading}
               >
                 {closingLoading ? t('Guardando...') : t('Cerrar Caja y Salir')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOpenCashModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-4 rounded-t-xl">
+              <h2 className="text-xl font-bold">{t('Apertura de Caja')}</h2>
+              <p className="text-sm text-white/90 mt-1">
+                {t('Bienvenido! Ingrese el monto inicial en caja')}
+              </p>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-6">
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900">
+                  <strong>{t('Importante')}:</strong> {t('Este monto será el punto de partida para el control de caja del día.')}
+                </p>
+              </div>
+
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                {t('Monto de Apertura')}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={openingAmount}
+                onChange={(e) => setOpeningAmount(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
+                placeholder="0.00"
+                autoFocus
+              />
+
+              {openingAmount && !isNaN(parseFloat(openingAmount)) && (
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-green-900">
+                      {t('Monto inicial en caja')}:
+                    </span>
+                    <span className="text-lg font-bold text-green-900">
+                      {formatCurrency(parseFloat(openingAmount))}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex justify-end gap-3 border-t border-gray-200">
+              <button
+                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleOpenCashSubmit}
+                disabled={openingLoading || !openingAmount || parseFloat(openingAmount) < 0}
+              >
+                {openingLoading ? t('Abriendo...') : t('Abrir Caja')}
               </button>
             </div>
           </div>
