@@ -33,6 +33,7 @@ const translations = {
     'nav.role-management': 'Gestión de Roles',
     'nav.company-settings': 'Información Empresa',
     'nav.app-settings': 'Configuración',
+    'nav.tables': 'Mesas',
     'nav.server': 'Servidor',
     'nav.backup': 'Backup',
 
@@ -746,6 +747,7 @@ const translations = {
     'nav.role-management': 'Gestion des Rôles',
     'nav.company-settings': 'Informations Entreprise',
     'nav.app-settings': 'Configuration',
+    'nav.tables': 'Tables',
     'nav.server': 'Serveur',
     'nav.backup': 'Sauvegarde',
 

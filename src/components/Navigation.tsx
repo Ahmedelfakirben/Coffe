@@ -1,4 +1,4 @@
-import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server, Database } from 'lucide-react';
+import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server, Database, Grid3x3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useState, useRef, useEffect } from 'react';
@@ -77,6 +77,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         { id: 'role-management', label: t('nav.role-management'), icon: Shield, roles: ['super_admin'] },
         { id: 'company-settings', label: t('nav.company-settings'), icon: Building2, roles: ['super_admin'] },
         { id: 'app-settings', label: t('nav.app-settings'), icon: Settings, roles: ['super_admin', 'admin'] },
+        { id: 'tables', label: t('nav.tables'), icon: Grid3x3, roles: ['super_admin', 'admin'] },
         { id: 'server', label: t('nav.server'), icon: Server, roles: ['super_admin'] },
         { id: 'backup', label: t('nav.backup'), icon: Database, roles: ['super_admin'] },
       ]
@@ -218,16 +219,16 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           onViewChange(item.id);
           setOpenMenu(null);
         }}
-        className={`flex items-center gap-3 w-full px-4 py-2 text-sm transition-colors ${
+        className={`flex items-center gap-3 w-full px-4 py-3 text-sm transition-all duration-200 rounded-xl mx-2 ${
           isActive
-            ? 'bg-amber-50 text-amber-700 font-medium'
-            : 'text-gray-700 hover:bg-gray-50'
+            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold shadow-md'
+            : 'text-gray-700 hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 font-medium'
         }`}
       >
-        <Icon className="w-4 h-4" />
+        <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-amber-600'}`} />
         <span>{item.label}</span>
         {isActive && (
-          <div className="w-1.5 h-1.5 rounded-full bg-amber-500 ml-auto" />
+          <div className="w-2 h-2 rounded-full bg-white ml-auto animate-pulse" />
         )}
       </button>
     );
@@ -256,10 +257,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               <button
                 key={item.id}
                 onClick={() => onViewChange(item.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all duration-200 shadow-sm ${
                   isActive
-                    ? 'bg-amber-50 text-amber-700'
-                    : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                    : 'text-gray-700 hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 hover:shadow-md'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -281,10 +282,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       >
         <button
           onClick={(e) => handleMenuClick(group.name, e)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all duration-200 shadow-sm ${
             isActive
-              ? 'bg-amber-50 text-amber-700'
-              : 'text-gray-700 hover:bg-gray-50'
+              ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+              : 'text-gray-700 hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 hover:shadow-md'
           }`}
         >
           <span>{group.name}</span>
@@ -296,10 +297,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         </button>
 
         {openMenu === group.name && (
-          <div 
-            className={`absolute top-full left-0 mt-1 ${
-              isMobile ? 'w-44' : 'w-48'
-            } py-2 bg-white rounded-lg shadow-lg border border-gray-100 z-50 nav-dropdown`}
+          <div
+            className={`absolute top-full left-0 mt-2 ${
+              isMobile ? 'w-44' : 'w-52'
+            } py-2 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 z-50 nav-dropdown animate-fadeIn`}
             onClick={(e) => e.stopPropagation()}
           >
             {visibleItems.map(renderMenuItem)}
@@ -673,16 +674,16 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
   return (
     <>
-      <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+      <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-between h-20">
             <div className="flex-shrink-0 flex items-center gap-3">
-              <div className="w-12 h-12 bg-amber-600 rounded-xl flex items-center justify-center shadow-sm">
-                <Coffee className="w-7 h-7 text-white" />
+              <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <Coffee className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">LIN-Caisse</h1>
-                <p className="text-sm text-gray-500">{t('Sistema de Gestión')}</p>
+                <h1 className="text-2xl font-extrabold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">LIN-Caisse</h1>
+                <p className="text-sm text-gray-600 font-medium">{t('Sistema de Gestión')}</p>
               </div>
             </div>
 
@@ -694,15 +695,15 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
             <div className="flex items-center gap-6">
               {profile && (
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-900">{profile.full_name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{profile.role}</p>
+                <div className="text-right bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-2 rounded-xl border border-amber-100 shadow-sm">
+                  <p className="text-sm font-bold text-gray-900">{profile.full_name}</p>
+                  <p className="text-xs text-amber-600 capitalize font-semibold">{profile.role}</p>
                 </div>
               )}
               <OnlineStatusToggle />
               <button
                 onClick={handleLogoutClick}
-                className="flex items-center gap-2 px-4 py-2.5 text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5"
               >
                 <LogOut className="w-5 h-5" />
                 <span>{t('Salir')}</span>

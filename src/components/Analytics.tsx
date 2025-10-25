@@ -1428,82 +1428,93 @@ export function Analytics() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">{t('Analíticas y Reportes')}</h2>
+    <div className="p-6 bg-gradient-to-br from-gray-50 via-white to-gray-100 min-h-screen">
+      <div className="flex items-center justify-between mb-8">
+        <h2 className="text-4xl font-black bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">{t('Analíticas y Reportes')}</h2>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span>{onlineUsers} {t('usuarios conectados')}</span>
+          <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl shadow-md">
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg"></div>
+            <span className="font-bold text-green-700">{onlineUsers} {t('usuarios conectados')}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-            <span>{occupiedTables} {t('mesas ocupadas')}</span>
+          <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-200 rounded-xl shadow-md">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full shadow-lg"></div>
+            <span className="font-bold text-yellow-700">{occupiedTables} {t('mesas ocupadas')}</span>
           </div>
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl transition-all duration-200 font-bold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
           >
-            <FileSpreadsheet className="w-4 h-4" />
+            <FileSpreadsheet className="w-5 h-5" />
             <span>{t('Exportar Excel')}</span>
           </button>
-          <Bell className="w-5 h-5 text-gray-400" />
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-xl flex items-center justify-center">
+            <Bell className="w-5 h-5 text-purple-600" />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <DollarSign className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">{t('Hoy')}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+        <div className="bg-gradient-to-br from-green-500 via-emerald-500 to-green-600 rounded-2xl shadow-2xl p-6 text-white transform hover:scale-105 hover:shadow-3xl transition-all duration-300 border-2 border-green-400">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-xl flex items-center justify-center">
+              <DollarSign className="w-7 h-7" />
+            </div>
+            <span className="text-sm font-black opacity-95 bg-white/20 px-3 py-1 rounded-lg">{t('Hoy')}</span>
           </div>
-          <p className="text-2xl font-bold mb-1">{formatCurrency(stats.todaySales)}</p>
-          <p className="text-xs opacity-90">{t('Ventas del día')}</p>
+          <p className="text-3xl font-black mb-2">{formatCurrency(stats.todaySales)}</p>
+          <p className="text-sm font-semibold opacity-90">{t('Ventas del día')}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <ShoppingBag className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">{t('Hoy')}</span>
+        <div className="bg-gradient-to-br from-blue-500 via-cyan-500 to-blue-600 rounded-2xl shadow-2xl p-6 text-white transform hover:scale-105 hover:shadow-3xl transition-all duration-300 border-2 border-blue-400">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-xl flex items-center justify-center">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+            <span className="text-sm font-black opacity-95 bg-white/20 px-3 py-1 rounded-lg">{t('Hoy')}</span>
           </div>
-          <p className="text-2xl font-bold mb-1">{stats.todayOrders}</p>
-          <p className="text-xs opacity-90">{t('Órdenes completadas')}</p>
+          <p className="text-3xl font-black mb-2">{stats.todayOrders}</p>
+          <p className="text-sm font-semibold opacity-90">{t('Órdenes completadas')}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <TrendingUp className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">{t('Total')}</span>
+        <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 rounded-2xl shadow-2xl p-6 text-white transform hover:scale-105 hover:shadow-3xl transition-all duration-300 border-2 border-amber-400">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-7 h-7" />
+            </div>
+            <span className="text-sm font-black opacity-95 bg-white/20 px-3 py-1 rounded-lg">{t('Total')}</span>
           </div>
-          <p className="text-2xl font-bold mb-1">{stats.totalProducts}</p>
-          <p className="text-xs opacity-90">{t('Productos activos')}</p>
+          <p className="text-3xl font-black mb-2">{stats.totalProducts}</p>
+          <p className="text-sm font-semibold opacity-90">{t('Productos activos')}</p>
         </div>
 
-
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <Activity className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">{t('Activos')}</span>
+        <div className="bg-gradient-to-br from-red-500 via-pink-500 to-red-600 rounded-2xl shadow-2xl p-6 text-white transform hover:scale-105 hover:shadow-3xl transition-all duration-300 border-2 border-red-400">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-xl flex items-center justify-center">
+              <Activity className="w-7 h-7" />
+            </div>
+            <span className="text-sm font-black opacity-95 bg-white/20 px-3 py-1 rounded-lg">{t('Activos')}</span>
           </div>
-          <p className="text-2xl font-bold mb-1">{onlineUsers}</p>
-          <p className="text-xs opacity-90">{t('Usuarios conectados')}</p>
+          <p className="text-3xl font-black mb-2">{onlineUsers}</p>
+          <p className="text-sm font-semibold opacity-90">{t('Usuarios conectados')}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <Clock className="w-6 h-6 opacity-80" />
-            <span className="text-xs font-medium opacity-90">{t('Ahora')}</span>
+        <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-600 rounded-2xl shadow-2xl p-6 text-white transform hover:scale-105 hover:shadow-3xl transition-all duration-300 border-2 border-indigo-400">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-xl flex items-center justify-center">
+              <Clock className="w-7 h-7" />
+            </div>
+            <span className="text-sm font-black opacity-95 bg-white/20 px-3 py-1 rounded-lg">{t('Ahora')}</span>
           </div>
-          <p className="text-2xl font-bold mb-1">{new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
-          <p className="text-xs opacity-90">{t('Hora actual')}</p>
+          <p className="text-3xl font-black mb-2">{new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+          <p className="text-sm font-semibold opacity-90">{t('Hora actual')}</p>
         </div>
       </div>
 
       {/* Financial Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
         {financialSummary.map((summary, index) => (
-          <div key={index} className="bg-white rounded-xl shadow-sm p-6 border">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">{summary.period}</h3>
+          <div key={index} className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-gray-100 hover:border-purple-300 transition-all duration-300 transform hover:-translate-y-1">
+            <h3 className="text-2xl font-black text-gray-900 mb-6 bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">{summary.period}</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">{t('Ventas:')}</span>

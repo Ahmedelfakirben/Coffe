@@ -651,18 +651,20 @@ export function OrdersDashboard() {
   };
 
   return (
-    <div className="p-3 md:p-6">
-      <div className="mb-4 md:mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('Panel de Órdenes')}</h2>
+    <div className="p-3 md:p-6 bg-gradient-to-br from-gray-50 via-white to-gray-50 min-h-screen">
+      <div className="mb-6 md:mb-8">
+        <h2 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 bg-clip-text text-transparent text-center">
+          {t('Panel de Órdenes')}
+        </h2>
 
-        {/* Selector de vista */}
-        <div className="flex gap-4 mb-4">
+        {/* Selector de vista - Centrado */}
+        <div className="flex gap-3 mb-6 justify-center">
           <button
             onClick={() => setViewMode('current')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-6 py-3 rounded-full font-bold transition-all duration-300 shadow-lg transform hover:-translate-y-0.5 ${
               viewMode === 'current'
-                ? 'bg-amber-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-300 scale-105'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200'
             }`}
           >
             {t('Órdenes Actuales')}
@@ -671,10 +673,10 @@ export function OrdersDashboard() {
           {profile?.role !== 'cashier' && (
             <button
               onClick={() => setViewMode('history')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-6 py-3 rounded-full font-bold transition-all duration-300 shadow-lg transform hover:-translate-y-0.5 ${
                 viewMode === 'history'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-300 scale-105'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200'
               }`}
             >
               {t('Historial')}
@@ -683,20 +685,36 @@ export function OrdersDashboard() {
         </div>
 
         {viewMode === 'current' ? (
-          <div className="flex gap-2 flex-wrap justify-center md:justify-start">
-            {Object.entries(statusLabels).map(([status, label]) => (
-              <button
-                key={status}
-                onClick={() => setSelectedStatus(status)}
-                className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-colors text-sm md:text-base ${
-                  selectedStatus === status
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex gap-3 flex-wrap justify-center">
+            {Object.entries(statusLabels).map(([status, label]) => {
+              const count = orders.filter(o => o.status === status).length;
+              return (
+                <button
+                  key={status}
+                  onClick={() => setSelectedStatus(status)}
+                  className={`px-5 md:px-6 py-3 rounded-full font-bold transition-all duration-300 text-sm md:text-base shadow-lg transform hover:-translate-y-0.5 relative ${
+                    selectedStatus === status
+                      ? status === 'preparing'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-300'
+                        : status === 'completed'
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-green-300'
+                        : 'bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-red-300'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200'
+                  }`}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-black ${
+                      selectedStatus === status
+                        ? 'bg-white/30 text-white animate-pulse'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         ) : viewMode === 'history' ? (
           <div className="flex gap-4 flex-wrap items-center mb-6">
@@ -806,83 +824,110 @@ export function OrdersDashboard() {
 
       {viewMode === 'current' ? (
         filteredOrders.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">{t('No hay órdenes para mostrar')}</p>
+          <div className="text-center py-20">
+            <div className="inline-block p-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl shadow-xl mb-4">
+              <Clock className="w-16 h-16 text-amber-500 mx-auto" />
+            </div>
+            <p className="text-gray-600 text-xl font-bold">{t('No hay órdenes para mostrar')}</p>
+            <p className="text-gray-400 text-sm mt-2">{t('Las órdenes aparecerán aquí')}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredOrders.map(order => (
-              <div
-                key={order.id}
-                className={`bg-white rounded-xl shadow-sm border-2 p-4 ${getStatusColor(order.status)}`}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      {getStatusIcon(order.status)}
-                      <span className="font-semibold">
-                        {statusLabels[order.status as keyof typeof statusLabels]}
-                      </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredOrders.map(order => {
+              const borderColorClass =
+                order.status === 'preparing' ? 'border-amber-400' :
+                order.status === 'completed' ? 'border-green-400' :
+                'border-red-400';
+              const bgGradientClass =
+                order.status === 'preparing' ? 'bg-gradient-to-br from-amber-50 to-orange-50' :
+                order.status === 'completed' ? 'bg-gradient-to-br from-green-50 to-emerald-50' :
+                'bg-gradient-to-br from-red-50 to-pink-50';
+              const badgeGradientClass =
+                order.status === 'preparing' ? 'bg-gradient-to-r from-amber-500 to-orange-500' :
+                order.status === 'completed' ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
+                'bg-gradient-to-r from-red-500 to-pink-500';
+
+              return (
+                <div
+                  key={order.id}
+                  className={`${bgGradientClass} rounded-2xl shadow-xl border-4 ${borderColorClass} p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1`}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${badgeGradientClass} text-white shadow-lg mb-2`}>
+                        {getStatusIcon(order.status)}
+                        <span className="font-bold text-sm">
+                          {statusLabels[order.status as keyof typeof statusLabels]}
+                        </span>
+                      </div>
+                      <p className="text-sm font-bold bg-gradient-to-r from-amber-700 to-orange-700 bg-clip-text text-transparent">
+                        #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8)}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {new Date(order.created_at).toLocaleString('es-ES')}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-600">
-                      {new Date(order.created_at).toLocaleString('es-ES')}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-3xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                        {formatCurrency(order.total)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-amber-600">
-                      {formatCurrency(order.total)}
+
+                  <div className="mb-4 space-y-2 bg-white/60 backdrop-blur-sm rounded-xl p-3 border-2 border-white/80">
+                    {order.order_items?.map(item => (
+                      <div key={item.id} className="text-sm flex justify-between items-center bg-white/80 rounded-lg px-3 py-2 shadow-sm">
+                        <span className="font-semibold text-gray-800">
+                          <span className="inline-block w-6 h-6 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 text-white text-xs font-black flex items-center justify-center mr-2">
+                            {item.quantity}
+                          </span>
+                          {item.products?.name}
+                          {item.product_sizes && (
+                            <span className="text-xs text-amber-600 font-bold ml-1">({item.product_sizes.size_name})</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-t-2 border-white/50 pt-4 space-y-3">
+                    <p className="text-xs text-gray-700 font-semibold bg-white/50 rounded-lg px-3 py-2">
+                      {t('Empleado:')} <span className="text-amber-700 font-bold">{order.employee_profiles?.full_name || profile?.full_name || (user?.email ?? 'N/A')}</span>
                     </p>
+
+                    {order.status === 'preparing' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'completed')}
+                          className="flex-1 px-4 py-3 text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                        >
+                          {t('Completar')}
+                        </button>
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                          className="px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                        >
+                          {t('Cancelar')}
+                        </button>
+                      </div>
+                    )}
+
+                    {order.status === 'completed' && (profile?.role === 'admin' || profile?.role === 'super_admin') && (
+                      <button
+                        onClick={() => {
+                          setOrderToDelete(order);
+                          setShowDeleteModal(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                        {t('Eliminar Pedido')}
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                <div className="mb-3 space-y-1">
-                  {order.order_items?.map(item => (
-                    <div key={item.id} className="text-sm flex justify-between">
-                      <span>
-                        {item.quantity}x {item.products?.name}
-                        {item.product_sizes && ` (${item.product_sizes.size_name})`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t pt-3 space-y-2">
-                  <p className="text-xs text-gray-600">
-                    {t('Empleado:')} {order.employee_profiles?.full_name || profile?.full_name || (user?.email ?? 'N/A')}
-                  </p>
-
-                  {order.status === 'preparing' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'completed')}
-                        className="flex-1 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
-                      >
-                        {t('Completar')}
-                      </button>
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                        className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                      >
-                        {t('Cancelar')}
-                      </button>
-                    </div>
-                  )}
-
-                  {order.status === 'completed' && (profile?.role === 'admin' || profile?.role === 'super_admin') && (
-                    <button
-                      onClick={() => {
-                        setOrderToDelete(order);
-                        setShowDeleteModal(true);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      {t('Eliminar Pedido')}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )
       ) : viewMode === 'history' ? (
@@ -1002,53 +1047,66 @@ export function OrdersDashboard() {
 
       {/* Delete Order Modal */}
       {showDeleteModal && orderToDelete && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">{t('Eliminar Pedido')}</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              {t('¿Está seguro de eliminar el pedido')} #{orderToDelete.order_number?.toString().padStart(3, '0') || orderToDelete.id.slice(-8)}?
-            </p>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 transform scale-100 transition-all">
+            <div className="text-center mb-6">
+              <div className="inline-block p-4 bg-gradient-to-br from-red-100 to-pink-100 rounded-2xl mb-4">
+                <Trash2 className="w-12 h-12 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-black bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent mb-2">
+                {t('Eliminar Pedido')}
+              </h2>
+              <p className="text-sm text-gray-600">
+                {t('¿Está seguro de eliminar el pedido')} <span className="font-bold text-amber-600">#{orderToDelete.order_number?.toString().padStart(3, '0') || orderToDelete.id.slice(-8)}</span>?
+              </p>
+            </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-              <p className="text-sm font-medium text-amber-800 mb-2">{t('Detalles del pedido:')}</p>
-              <div className="space-y-1 text-sm text-gray-700">
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-5 mb-6 shadow-lg">
+              <p className="text-sm font-bold text-amber-800 mb-3 flex items-center gap-2">
+                <span className="text-lg">📋</span>
+                {t('Detalles del pedido:')}
+              </p>
+              <div className="space-y-2 text-sm text-gray-700">
                 {orderToDelete.order_items.map((item, idx) => (
-                  <div key={idx}>
-                    {item.quantity}x {item.products?.name}
+                  <div key={idx} className="bg-white/80 rounded-xl px-3 py-2 font-semibold">
+                    <span className="inline-block w-6 h-6 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 text-white text-xs font-black flex items-center justify-center mr-2">
+                      {item.quantity}
+                    </span>
+                    {item.products?.name}
                     {item.product_sizes && ` (${item.product_sizes.size_name})`}
                   </div>
                 ))}
-                <div className="font-bold text-amber-600 pt-2 border-t border-amber-300">
+                <div className="font-black text-amber-700 text-lg pt-3 border-t-2 border-amber-300 bg-white/60 rounded-xl px-3 py-2">
                   {t('Total:')} {formatCurrency(orderToDelete.total)}
                 </div>
               </div>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-800 mb-3">
                 {t('Nota de eliminación (obligatoria):')}
               </label>
               <textarea
                 value={deletionNote}
                 onChange={(e) => setDeletionNote(e.target.value)}
                 placeholder={t('Ingrese la razón de la eliminación...')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                rows={3}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
+                rows={4}
                 maxLength={500}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-2 font-semibold">
                 {deletionNote.length}/500 {t('caracteres')}
               </p>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => {
                   setShowDeleteModal(false);
                   setOrderToDelete(null);
                   setDeletionNote('');
                 }}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-bold text-gray-700 shadow-md hover:shadow-lg"
                 disabled={deleteLoading}
               >
                 {t('Cancelar')}
@@ -1056,16 +1114,16 @@ export function OrdersDashboard() {
               <button
                 onClick={handleDeleteOrder}
                 disabled={deleteLoading || !deletionNote.trim()}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5"
               >
                 {deleteLoading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
                     {t('Eliminando...')}
                   </>
                 ) : (
                   <>
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-5 h-5" />
                     {t('Eliminar Pedido')}
                   </>
                 )}
@@ -1077,23 +1135,34 @@ export function OrdersDashboard() {
 
       {/* Payment Method Modal */}
       {showPaymentModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Seleccionar Método de Pago')}</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 transform scale-100 transition-all">
+            <div className="text-center mb-8">
+              <div className="inline-block p-4 bg-gradient-to-br from-amber-100 to-orange-100 rounded-2xl mb-4">
+                <CreditCard className="w-12 h-12 text-amber-600" />
+              </div>
+              <h2 className="text-3xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                {t('Seleccionar Método de Pago')}
+              </h2>
+              <p className="text-sm text-gray-600 mt-2">{t('Elija cómo se realizará el pago')}</p>
+            </div>
 
-            <div className="grid grid-cols-1 gap-3 mb-6">
+            <div className="grid grid-cols-1 gap-4 mb-8">
               <button
                 onClick={() => {
                   setSelectedPaymentMethod('cash');
                   completeOrderWithPayment();
                 }}
-                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+                className="group flex items-center gap-4 p-6 rounded-2xl border-3 bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 transition-all hover:border-green-500 hover:shadow-xl transform hover:-translate-y-1 hover:scale-102"
               >
-                <Banknote className="w-6 h-6 text-green-600" />
-                <div className="text-left">
-                  <div className="font-medium text-gray-900">{t('Efectivo')}</div>
-                  <div className="text-sm text-gray-600">{t('Pago en efectivo')}</div>
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+                  <Banknote className="w-8 h-8 text-white" />
                 </div>
+                <div className="text-left flex-1">
+                  <div className="font-black text-gray-900 text-lg">{t('Efectivo')}</div>
+                  <div className="text-sm text-gray-600 font-semibold">{t('Pago en efectivo')}</div>
+                </div>
+                <div className="text-3xl opacity-0 group-hover:opacity-100 transition-opacity">💵</div>
               </button>
 
               <button
@@ -1101,13 +1170,16 @@ export function OrdersDashboard() {
                   setSelectedPaymentMethod('card');
                   completeOrderWithPayment();
                 }}
-                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+                className="group flex items-center gap-4 p-6 rounded-2xl border-3 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-300 transition-all hover:border-blue-500 hover:shadow-xl transform hover:-translate-y-1 hover:scale-102"
               >
-                <CreditCard className="w-6 h-6 text-blue-600" />
-                <div className="text-left">
-                  <div className="font-medium text-gray-900">{t('Tarjeta')}</div>
-                  <div className="text-sm text-gray-600">{t('Pago con tarjeta')}</div>
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+                  <CreditCard className="w-8 h-8 text-white" />
                 </div>
+                <div className="text-left flex-1">
+                  <div className="font-black text-gray-900 text-lg">{t('Tarjeta')}</div>
+                  <div className="text-sm text-gray-600 font-semibold">{t('Pago con tarjeta')}</div>
+                </div>
+                <div className="text-3xl opacity-0 group-hover:opacity-100 transition-opacity">💳</div>
               </button>
 
               <button
@@ -1115,24 +1187,27 @@ export function OrdersDashboard() {
                   setSelectedPaymentMethod('digital');
                   completeOrderWithPayment();
                 }}
-                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+                className="group flex items-center gap-4 p-6 rounded-2xl border-3 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300 transition-all hover:border-purple-500 hover:shadow-xl transform hover:-translate-y-1 hover:scale-102"
               >
-                <Smartphone className="w-6 h-6 text-purple-600" />
-                <div className="text-left">
-                  <div className="font-medium text-gray-900">{t('Digital')}</div>
-                  <div className="text-sm text-gray-600">{t('Pago digital')}</div>
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+                  <Smartphone className="w-8 h-8 text-white" />
                 </div>
+                <div className="text-left flex-1">
+                  <div className="font-black text-gray-900 text-lg">{t('Digital')}</div>
+                  <div className="text-sm text-gray-600 font-semibold">{t('Pago digital')}</div>
+                </div>
+                <div className="text-3xl opacity-0 group-hover:opacity-100 transition-opacity">📱</div>
               </button>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end">
               <button
                 onClick={() => {
                   setShowPaymentModal(false);
                   setOrderToComplete(null);
                   setSelectedPaymentMethod('');
                 }}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-bold text-gray-700 shadow-md hover:shadow-lg"
               >
                 {t('Cancelar')}
               </button>

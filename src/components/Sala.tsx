@@ -300,15 +300,15 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   const statusColor = (status: TableStatus) => {
     switch (status) {
       case 'available':
-        return 'border-green-200 bg-green-50 text-green-700';
+        return 'border-green-300 bg-gradient-to-br from-green-50 to-emerald-100 text-green-800 shadow-lg shadow-green-500/20';
       case 'occupied':
-        return 'border-yellow-200 bg-yellow-50 text-yellow-700';
+        return 'border-amber-300 bg-gradient-to-br from-amber-50 to-orange-100 text-amber-800 shadow-lg shadow-amber-500/30';
       case 'reserved':
-        return 'border-blue-200 bg-blue-50 text-blue-700';
+        return 'border-blue-300 bg-gradient-to-br from-blue-50 to-sky-100 text-blue-800 shadow-lg shadow-blue-500/20';
       case 'dirty':
-        return 'border-red-200 bg-red-50 text-red-700';
+        return 'border-red-300 bg-gradient-to-br from-red-50 to-rose-100 text-red-800 shadow-lg shadow-red-500/20';
       default:
-        return 'border-gray-200 bg-gray-50';
+        return 'border-gray-200 bg-gray-50 shadow-md';
     }
   };
 
@@ -337,32 +337,33 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       }}
     >
       {/* Overlay para mantener legibilidad */}
-      <div className="absolute inset-0 bg-white/20"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-white/20 to-white/30"></div>
 
       {/* Contenido sobre la imagen */}
       <div className="relative z-10">
         {/* Header móvil */}
-        <div className="bg-white/90 backdrop-blur-sm p-4 border-b border-amber-200/50 sticky top-0 z-10">
-          <h2 className="text-xl font-bold text-gray-900">{t('Gestión de Sala')}</h2>
+        <div className="bg-white/95 backdrop-blur-md p-6 border-b border-amber-200/50 sticky top-0 z-10 shadow-lg">
+          <h2 className="text-3xl font-black bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 bg-clip-text text-transparent">{t('Gestión de Sala')}</h2>
           {tableId && (
-            <p className="text-sm text-amber-600 mt-1">
+            <p className="text-sm font-semibold text-amber-600 mt-2 flex items-center gap-2">
+              <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
               {t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}
             </p>
           )}
         </div>
 
         {/* Botones de acción */}
-        <div className="p-4 bg-white/80 backdrop-blur-sm border-b border-amber-200/50 flex gap-2">
+        <div className="p-4 bg-gradient-to-r from-white/90 via-white/80 to-white/90 backdrop-blur-md border-b border-amber-200/50 flex gap-3">
         <button
           onClick={clearSelection}
-          className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
+          className="flex-1 px-6 py-3 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-xl text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
         >
           {t('Para llevar')}
         </button>
         {tables.length === 0 && (
           <button
             onClick={seedTables}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 transition-all duration-300 hover:scale-105"
           >
             {t('Añadir 6 mesas')}
           </button>
@@ -370,41 +371,41 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       </div>
 
       {/* Lista de mesas móvil */}
-      <div className="p-4 space-y-3">
+      <div className="p-6 space-y-4">
         {tables.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">{t('No hay mesas configuradas')}</p>
+          <div className="text-center py-16 bg-white/70 backdrop-blur-md rounded-2xl shadow-xl">
+            <p className="text-gray-600 text-lg font-medium">{t('No hay mesas configuradas')}</p>
           </div>
         ) : (
           tables.map((table) => (
             <button
               key={table.id}
               onClick={() => selectTable(table)}
-              className={`w-full bg-white rounded-xl shadow-sm border-2 p-4 text-left transition-all ${
+              className={`w-full rounded-2xl border-3 p-5 text-left transition-all duration-300 hover:scale-102 ${
                 statusColor(table.status)
               } ${
-                tableId === table.id ? 'ring-4 ring-amber-500 ring-offset-2' : ''
+                tableId === table.id ? 'ring-4 ring-amber-500 ring-offset-2 scale-105' : ''
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full ${
-                    table.status === 'occupied' ? 'bg-yellow-500 animate-pulse' :
-                    table.status === 'available' ? 'bg-green-500' : 'bg-gray-400'
+                <div className="flex items-center gap-4">
+                  <div className={`w-5 h-5 rounded-full shadow-lg ${
+                    table.status === 'occupied' ? 'bg-amber-500 animate-pulse shadow-amber-500/50' :
+                    table.status === 'available' ? 'bg-green-500 shadow-green-500/50' : 'bg-gray-400'
                   }`}></div>
                   <div>
-                    <h3 className="font-bold text-gray-900 text-lg">{table.name}</h3>
-                    <p className="text-sm text-gray-600">
+                    <h3 className="font-black text-gray-900 text-xl">{table.name}</h3>
+                    <p className="text-sm font-semibold text-gray-700 mt-1">
                       👥 {table.seats} {t('personas')}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                    table.status === 'available' ? 'bg-green-100 text-green-700' :
-                    table.status === 'occupied' ? 'bg-yellow-100 text-yellow-700' :
-                    table.status === 'reserved' ? 'bg-blue-100 text-blue-700' :
-                    'bg-red-100 text-red-700'
+                  <span className={`inline-block px-4 py-2 rounded-xl text-xs font-bold shadow-md ${
+                    table.status === 'available' ? 'bg-green-200 text-green-800' :
+                    table.status === 'occupied' ? 'bg-amber-200 text-amber-800' :
+                    table.status === 'reserved' ? 'bg-blue-200 text-blue-800' :
+                    'bg-red-200 text-red-800'
                   }`}>
                     {table.status === 'available' ? t('Disponible') :
                      table.status === 'occupied' ? t('Ocupada') :
@@ -418,15 +419,15 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       </div>
 
       {/* Leyenda móvil */}
-      <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-amber-200/50 fixed bottom-0 left-0 right-0 z-10">
-        <div className="flex justify-around text-xs">
+      <div className="p-5 bg-white/95 backdrop-blur-lg border-t-2 border-amber-300/50 fixed bottom-0 left-0 right-0 z-10 shadow-2xl">
+        <div className="flex justify-around text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span className="text-gray-600">{t('Disponible')}</span>
+            <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg shadow-green-500/50"></div>
+            <span className="text-gray-800 font-semibold">{t('Disponible')}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-            <span className="text-gray-600">{t('Ocupada')}</span>
+            <div className="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-lg shadow-amber-500/50"></div>
+            <span className="text-gray-800 font-semibold">{t('Ocupada')}</span>
           </div>
         </div>
       </div>
@@ -453,26 +454,29 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         }}
       >
         {/* Overlay para mantener legibilidad en toda la página */}
-        <div className="absolute inset-0 bg-white/20"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-white/20 to-white/30"></div>
 
         {/* Contenido sobre la imagen */}
-        <div className="relative z-10 p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900 drop-shadow-sm">{t('Sala')}</h2>
-            <div className="flex gap-2 items-center">
+        <div className="relative z-10 p-8">
+          <div className="flex flex-col items-center mb-8">
+            <h2 className="text-5xl font-black bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 bg-clip-text text-transparent drop-shadow-lg mb-6 text-center">{t('Sala')}</h2>
+            <div className="flex gap-3 items-center justify-center">
               <button
                 onClick={clearSelection}
-                className="px-3 py-2 bg-white/90 hover:bg-white backdrop-blur-sm rounded-lg shadow-sm border border-gray-200"
+                className="px-6 py-3 bg-white/95 hover:bg-white backdrop-blur-md rounded-xl shadow-xl border-2 border-gray-200 hover:border-gray-300 font-bold transition-all duration-300 hover:scale-105"
               >
                 {t('Para llevar')}
               </button>
               {tableId && (
-                <span className="px-3 py-2 bg-amber-100/90 backdrop-blur-sm text-amber-700 rounded-lg shadow-sm border border-amber-200">{t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}</span>
+                <span className="px-6 py-3 bg-gradient-to-r from-amber-100 to-orange-100 backdrop-blur-md text-amber-800 font-bold rounded-xl shadow-xl border-2 border-amber-300 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                  {t('Mesa seleccionada:')}{' '}{tables.find(t => t.id === tableId)?.name}
+                </span>
               )}
               {tables.length === 0 && (
                 <button
                   onClick={seedTables}
-                  className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md"
+                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl shadow-xl shadow-green-500/30 hover:shadow-2xl hover:shadow-green-500/40 transition-all duration-300 hover:scale-105"
                 >
                   {t('Añadir 6 mesas')}
                 </button>
@@ -481,75 +485,75 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           </div>
 
           {/* Plano de la sala con mesas objetuales */}
-          <div className="border-2 border-white/30 rounded-2xl p-8 min-h-[calc(100vh-12rem)] shadow-inner relative overflow-hidden">
+          <div className="border-4 border-white/40 rounded-3xl p-10 min-h-[calc(100vh-12rem)] shadow-2xl bg-white/10 backdrop-blur-sm relative overflow-hidden">
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 place-items-center relative z-10">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8 place-items-center relative z-10">
           {tables.map((table) => (
             <button
               key={table.id}
               onClick={() => selectTable(table)}
-              className={`relative w-36 h-36 rounded-2xl border-4 shadow-lg transition-all duration-300 hover:scale-110 hover:shadow-xl flex flex-col items-center justify-center ${statusColor(table.status)} ${tableId === table.id ? 'ring-4 ring-amber-500 ring-offset-2' : ''}`}
+              className={`relative w-40 h-40 rounded-3xl border-4 shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-3xl flex flex-col items-center justify-center ${statusColor(table.status)} ${tableId === table.id ? 'ring-4 ring-amber-500 ring-offset-4 scale-105' : ''}`}
               title={`${table.name} • ${table.seats} sillas • ${table.status}`}
             >
-              {/* Mesa circular con patas */}
+              {/* Mesa circular con patas mejorada */}
               <div className="relative">
-                <div className="w-20 h-16 bg-amber-800 rounded-t-full shadow-md"></div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-16 h-4 bg-amber-900 rounded-b-lg"></div>
-                {/* Patas de la mesa */}
-                <div className="absolute -bottom-2 left-2 w-1 h-3 bg-amber-900 rounded"></div>
-                <div className="absolute -bottom-2 right-2 w-1 h-3 bg-amber-900 rounded"></div>
+                <div className="w-24 h-20 bg-gradient-to-br from-amber-800 to-amber-900 rounded-t-full shadow-2xl"></div>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-20 h-5 bg-gradient-to-b from-amber-900 to-amber-950 rounded-b-lg shadow-lg"></div>
+                {/* Patas de la mesa con sombra */}
+                <div className="absolute -bottom-3 left-3 w-1.5 h-4 bg-amber-950 rounded shadow-md"></div>
+                <div className="absolute -bottom-3 right-3 w-1.5 h-4 bg-amber-950 rounded shadow-md"></div>
               </div>
 
-              {/* Información de la mesa */}
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg border border-white/20">
-                <div className="text-sm font-bold text-gray-800">{table.name}</div>
-                <div className="text-xs text-gray-600 flex items-center justify-center gap-1">
+              {/* Información de la mesa con mejor diseño */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-center bg-white/95 backdrop-blur-md rounded-xl px-4 py-2.5 shadow-2xl border-2 border-white/40">
+                <div className="text-sm font-black text-gray-900">{table.name}</div>
+                <div className="text-xs font-bold text-gray-700 flex items-center justify-center gap-1 mt-1">
                   <span>👥</span>
                   {table.seats} {t('personas')}
                 </div>
               </div>
 
-              {/* Indicadores de estado visual */}
-              <div className="absolute top-2 right-2">
-                {table.status === 'occupied' && <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse shadow-sm"></div>}
-                {table.status === 'available' && <div className="w-3 h-3 bg-green-500 rounded-full shadow-sm"></div>}
+              {/* Indicadores de estado visual mejorados */}
+              <div className="absolute top-3 right-3">
+                {table.status === 'occupied' && <div className="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-lg shadow-amber-500/50"></div>}
+                {table.status === 'available' && <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg shadow-green-500/50"></div>}
               </div>
             </button>
           ))}
         </div>
 
         {/* Leyenda mejorada */}
-        <div className="mt-8 flex flex-wrap justify-center gap-4 relative z-10">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm border border-green-200 shadow-sm">
-            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span className="text-sm font-medium text-green-700">{t('Disponible')}</span>
+        <div className="mt-10 flex flex-wrap justify-center gap-5 relative z-10">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-white/95 backdrop-blur-md border-2 border-green-300 shadow-xl">
+            <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg shadow-green-500/50"></div>
+            <span className="text-sm font-bold text-green-800">{t('Disponible')}</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm border border-yellow-200 shadow-sm">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-            <span className="text-sm font-medium text-yellow-700">{t('Ocupada')}</span>
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-white/95 backdrop-blur-md border-2 border-amber-300 shadow-xl">
+            <div className="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-lg shadow-amber-500/50"></div>
+            <span className="text-sm font-bold text-amber-800">{t('Ocupada')}</span>
           </div>
         </div>
       </div>
         </div>
 
       {showOrdersModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-3">{t('Pedidos en')} {selectedTableName}</h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8">
+            <h3 className="text-2xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent mb-6">{t('Pedidos en')} {selectedTableName}</h3>
             {ordersForTable.length === 0 ? (
-              <p className="text-sm text-gray-600 mb-4">{t('No hay pedidos en preparación para esta mesa.')}</p>
+              <p className="text-base text-gray-600 mb-6 font-medium">{t('No hay pedidos en preparación para esta mesa.')}</p>
             ) : (
-              <div className="space-y-2 mb-4">
+              <div className="space-y-3 mb-6">
                 {ordersForTable.map(order => (
-                  <div key={order.id} className="border rounded-lg p-2 flex items-center justify-between">
+                  <div key={order.id} className="border-2 border-gray-200 rounded-2xl p-4 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white shadow-md hover:shadow-lg transition-all">
                     <div>
-                      <p className="text-sm font-semibold">{t('Pedido')} #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(0,8)}</p>
-                      <p className="text-xs text-gray-600">{t('Total:')} {formatCurrency(order.total)}</p>
-                      <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
+                      <p className="text-base font-black text-gray-900">{t('Pedido')} #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(0,8)}</p>
+                      <p className="text-sm font-bold text-amber-600 mt-1">{t('Total:')} {formatCurrency(order.total)}</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">{new Date(order.created_at).toLocaleString()}</p>
                     </div>
                     <div className="flex gap-2">
                       <button
-                        className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs"
+                        className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-amber-500/30 hover:shadow-xl transition-all duration-300 hover:scale-105"
                         onClick={() => {
                           setActiveOrderId(order.id);
                           setShowOrdersModal(false);
@@ -561,7 +565,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                       </button>
                       {profile?.role !== 'waiter' && (
                         <button
-                          className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs"
+                          className="px-4 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-green-500/30 hover:shadow-xl transition-all duration-300 hover:scale-105"
                           onClick={() => setShowPaymentSelector(order.id)}
                         >
                           {t('Validar')}
@@ -575,52 +579,52 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
 
             {/* Selector de método de pago */}
             {showPaymentSelector && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">{t('Método de Pago')}</h4>
-                <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="mt-6 p-5 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200">
+                <h4 className="text-lg font-black text-gray-900 mb-4">{t('Método de Pago')}</h4>
+                <div className="grid grid-cols-3 gap-3 mb-4">
                   <button
                     onClick={() => setSelectedPaymentMethod('cash')}
-                    className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${
+                    className={`p-4 rounded-xl border-3 bg-white transition-all duration-300 hover:scale-105 ${
                       selectedPaymentMethod === 'cash'
-                        ? 'border-amber-600 bg-amber-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-amber-600 bg-gradient-to-br from-amber-50 to-orange-50 shadow-lg shadow-amber-500/30'
+                        : 'border-gray-200 hover:border-gray-300 shadow-md'
                     }`}
                   >
-                    <Banknote className="w-4 h-4 mx-auto mb-1" />
-                    <span className="text-xs">{t('Efectivo')}</span>
+                    <Banknote className="w-6 h-6 mx-auto mb-2" />
+                    <span className="text-sm font-bold">{t('Efectivo')}</span>
                   </button>
                   <button
                     onClick={() => setSelectedPaymentMethod('card')}
-                    className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${
+                    className={`p-4 rounded-xl border-3 bg-white transition-all duration-300 hover:scale-105 ${
                       selectedPaymentMethod === 'card'
-                        ? 'border-amber-600 bg-amber-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-amber-600 bg-gradient-to-br from-amber-50 to-orange-50 shadow-lg shadow-amber-500/30'
+                        : 'border-gray-200 hover:border-gray-300 shadow-md'
                     }`}
                   >
-                    <CreditCard className="w-4 h-4 mx-auto mb-1" />
-                    <span className="text-xs">{t('Tarjeta')}</span>
+                    <CreditCard className="w-6 h-6 mx-auto mb-2" />
+                    <span className="text-sm font-bold">{t('Tarjeta')}</span>
                   </button>
                   <button
                     onClick={() => setSelectedPaymentMethod('digital')}
-                    className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${
+                    className={`p-4 rounded-xl border-3 bg-white transition-all duration-300 hover:scale-105 ${
                       selectedPaymentMethod === 'digital'
-                        ? 'border-amber-600 bg-amber-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-amber-600 bg-gradient-to-br from-amber-50 to-orange-50 shadow-lg shadow-amber-500/30'
+                        : 'border-gray-200 hover:border-gray-300 shadow-md'
                     }`}
                   >
-                    <Smartphone className="w-4 h-4 mx-auto mb-1" />
-                    <span className="text-xs">{t('Digital')}</span>
+                    <Smartphone className="w-6 h-6 mx-auto mb-2" />
+                    <span className="text-sm font-bold">{t('Digital')}</span>
                   </button>
                 </div>
-                <div className="flex gap-2 justify-end">
+                <div className="flex gap-3 justify-end">
                   <button
-                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs"
+                    className="px-5 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
                     onClick={() => setShowPaymentSelector(null)}
                   >
                     {t('Cancelar')}
                   </button>
                   <button
-                    className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs"
+                    className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-green-500/30 hover:shadow-xl transition-all duration-300 hover:scale-105"
                     onClick={() => validateOrderFromSala(showPaymentSelector, selectedPaymentMethod)}
                   >
                     {t('Confirmar Validación')}
@@ -629,9 +633,9 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
               </div>
             )}
 
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-3 justify-end mt-6">
               <button
-                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+                className="px-6 py-3 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
                 onClick={() => {
                   setShowOrdersModal(false);
                   setShowPaymentSelector(null);

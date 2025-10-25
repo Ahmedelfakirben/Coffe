@@ -5,7 +5,7 @@ import { useCart } from '../contexts/CartContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { Category, Product, ProductSize } from '../types/supabase';
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { toast } from 'react-hot-toast';
 
@@ -550,14 +550,15 @@ export function POS() {
   const renderMobileView = () => (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-gray-50">
       {/* Filtros de categoría móvil */}
-      <div className="bg-white p-3 border-b">
-        <div className="flex gap-2 overflow-x-auto pb-2">
+      {/* Sección de Categorías Móvil - Diseño Minimalista */}
+      <div className="bg-white border-b border-gray-200 px-3 py-4">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${
+            className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 ${
               selectedCategory === 'all'
-                ? 'bg-amber-600 text-white'
-                : 'bg-gray-100 text-gray-700'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
+                : 'bg-gray-50 text-gray-700 border border-gray-200'
             }`}
           >
             {t('Todos')}
@@ -566,10 +567,10 @@ export function POS() {
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${
+              className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 ${
                 selectedCategory === cat.id
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
+                  : 'bg-gray-50 text-gray-700 border border-gray-200'
               }`}
             >
               {cat.name}
@@ -792,31 +793,34 @@ export function POS() {
       {/* Vista Desktop */}
       <div className="hidden md:flex h-[calc(100vh-5rem)] bg-gray-50">
         <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="bg-gradient-to-r from-amber-100 to-orange-100 p-4 border-b border-amber-200">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-amber-300 scrollbar-track-transparent">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 whitespace-nowrap ${
-                selectedCategory === 'all'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
-              }`}
-            >
-              Todos
-            </button>
-            {categories.map(cat => (
+        {/* Sección de Categorías - Diseño Minimalista Moderno */}
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-8 py-6">
+            <div className="flex items-center justify-center gap-3 flex-wrap">
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 whitespace-nowrap ${
-                  selectedCategory === cat.id
-                    ? 'bg-amber-600 text-white shadow-md'
-                    : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
+                onClick={() => setSelectedCategory('all')}
+                className={`px-8 py-3 rounded-xl font-semibold text-sm tracking-wide transition-all duration-300 ${
+                  selectedCategory === 'all'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:shadow-md border border-gray-200'
                 }`}
               >
-                {cat.name}
+                Todos
               </button>
-            ))}
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-8 py-3 rounded-xl font-semibold text-sm tracking-wide transition-all duration-300 ${
+                    selectedCategory === cat.id
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
+                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:shadow-md border border-gray-200'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -826,47 +830,51 @@ export function POS() {
               const productSizesList = productSizes(product.id);
 
             return (
-              <div key={product.id} className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 border border-gray-100 hover:border-amber-200 group">
+              <div key={product.id} className="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 p-5 border-2 border-gray-100 hover:border-amber-300 group relative overflow-hidden">
+                {/* Gradient Overlay on Hover */}
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-50/0 to-orange-50/0 group-hover:from-amber-50/50 group-hover:to-orange-50/50 transition-all duration-300 rounded-3xl pointer-events-none"></div>
+
                 {product.image_url && product.image_url.length > 0 && (
-                  <div className="w-full h-32 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl overflow-hidden mb-3 shadow-inner">
-                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  <div className="relative w-full h-36 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl overflow-hidden mb-4 shadow-md group-hover:shadow-lg transition-shadow duration-300">
+                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                   </div>
                 )}
-                <div className="space-y-2">
-                  <h3 className="font-bold text-gray-900 text-sm leading-tight">{product.name}</h3>
+                <div className="space-y-3 relative z-10">
+                  <h3 className="font-extrabold text-gray-900 text-base leading-tight group-hover:text-amber-700 transition-colors">{product.name}</h3>
                   <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{product.description}</p>
-                  <div className="flex items-center justify-between">
-                    <p className="text-lg font-bold text-amber-600">{formatCurrency(product.base_price)}</p>
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-xs text-green-600 font-medium">Disponible</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <p className="text-xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{formatCurrency(product.base_price)}</p>
+                    <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded-full">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-green-700 font-bold">Stock</span>
                     </div>
                   </div>
                 </div>
 
                 {productSizesList.length > 0 ? (
-                  <div className="space-y-2 mt-3">
+                  <div className="space-y-2 mt-4 relative z-10">
                     {productSizesList.map(size => (
                       <button
                         key={size.id}
                         onClick={() => addItem(product, size)}
-                        className="w-full bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-700 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 flex justify-between items-center border border-amber-200 hover:border-amber-300 shadow-sm hover:shadow-md"
+                        className="w-full bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-800 py-2.5 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex justify-between items-center border-2 border-amber-300 hover:border-amber-400 shadow-md hover:shadow-xl transform hover:-translate-y-0.5"
                       >
                         <span className="flex items-center gap-2">
-                          <span className="text-xs">📏</span>
-                          {size.size_name}
+                          <span className="text-base">📏</span>
+                          <span>{size.size_name}</span>
                         </span>
-                        <span className="font-bold">+{formatCurrency(size.price_modifier)}</span>
+                        <span className="font-black text-amber-900">+{formatCurrency(size.price_modifier)}</span>
                       </button>
                     ))}
                   </div>
                 ) : (
                   <button
                     onClick={() => addItem(product)}
-                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 px-4 rounded-lg font-bold transition-all duration-200 mt-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 px-4 rounded-xl font-black transition-all duration-200 mt-4 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 relative z-10"
                   >
                     <span className="flex items-center justify-center gap-2">
-                      <span className="text-sm">➕</span>
+                      <Plus className="w-5 h-5" />
                       {t('Agregar al carrito')}
                     </span>
                   </button>
@@ -889,15 +897,15 @@ export function POS() {
         </div>
       </div>
 
-      <div className="w-80 bg-gradient-to-b from-white to-gray-50 border-l border-gray-200 flex flex-col shadow-xl">
-        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+      <div className="w-80 bg-gradient-to-b from-gray-50 to-white border-l-2 border-amber-200 flex flex-col shadow-2xl">
+        <div className="p-5 border-b-2 border-amber-200 bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-              <ShoppingCart className="w-5 h-5" />
+            <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-md">
+              <ShoppingCart className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">{t('Carrito de Compras')}</h2>
-              <p className="text-xs opacity-90">{cart.length} productos</p>
+              <h2 className="text-xl font-black">{t('Carrito de Compras')}</h2>
+              <p className="text-sm font-semibold opacity-95">{cart.length} productos</p>
             </div>
           </div>
         </div>
@@ -962,54 +970,54 @@ export function POS() {
           </div>
         )}
 
-        <div className="flex-1 overflow-auto p-3">
+        <div className="flex-1 overflow-auto p-4 bg-gradient-to-b from-gray-50 to-white">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <ShoppingCart className="w-8 h-8 text-gray-400" />
+              <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-orange-100 rounded-3xl flex items-center justify-center mb-4 shadow-lg">
+                <ShoppingCart className="w-10 h-10 text-amber-600" />
               </div>
-              <p className="text-gray-500 text-sm font-medium">{t('El carrito está vacío')}</p>
-              <p className="text-gray-400 text-xs mt-1">{t('Selecciona productos para comenzar')}</p>
+              <p className="text-gray-600 text-base font-bold">{t('El carrito está vacío')}</p>
+              <p className="text-gray-400 text-sm mt-2">{t('Selecciona productos para comenzar')}</p>
             </div>
           ) : (
             <div className="space-y-3">
               {cart.slice().reverse().map((item, index) => (
-                <div key={cart.length - 1 - index} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-2">
+                <div key={cart.length - 1 - index} className="bg-white rounded-2xl shadow-md border-2 border-gray-100 p-4 hover:shadow-xl hover:border-amber-200 transition-all duration-200">
+                  <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h4 className="font-bold text-gray-900 text-sm leading-tight">
+                      <h4 className="font-black text-gray-900 text-sm leading-tight">
                         {item.quantity}x {item.product.name}
                         {item.size && ` (${item.size.size_name})`}
                       </h4>
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-xs text-gray-500 mt-1 font-semibold">
                         c/u {formatCurrency(item.product.base_price + (item.size?.price_modifier || 0))}
                       </p>
                     </div>
                     <button
                       onClick={() => removeItem(cart.length - 1 - index)}
-                      className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
+                      className="text-red-500 hover:text-white hover:bg-red-500 p-2 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
                       title="Eliminar producto"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
+                    <div className="flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-1.5 border border-amber-200">
                       <button
                         onClick={() => updateQuantity(cart.length - 1 - index, -1)}
-                        className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                        className="w-7 h-7 rounded-lg bg-white border-2 border-amber-300 flex items-center justify-center hover:bg-amber-100 transition-all shadow-sm"
                       >
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-3.5 h-3.5 text-amber-700" />
                       </button>
-                      <span className="w-8 text-center font-bold text-sm text-gray-900">{item.quantity}</span>
+                      <span className="w-9 text-center font-black text-base text-amber-900">{item.quantity}</span>
                       <button
                         onClick={() => updateQuantity(cart.length - 1 - index, 1)}
-                        className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                        className="w-7 h-7 rounded-lg bg-white border-2 border-amber-300 flex items-center justify-center hover:bg-amber-100 transition-all shadow-sm"
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5 text-amber-700" />
                       </button>
                     </div>
-                    <span className="font-bold text-amber-600 text-sm bg-amber-50 px-2 py-1 rounded-lg">
+                    <span className="font-black text-amber-700 text-base bg-gradient-to-r from-amber-100 to-orange-100 px-3 py-1.5 rounded-xl border-2 border-amber-300 shadow-sm">
                       {formatCurrency((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity)}
                     </span>
                   </div>
@@ -1019,11 +1027,11 @@ export function POS() {
           )}
         </div>
 
-        <div className="p-4 border-t bg-gradient-to-b from-gray-50 to-white space-y-4">
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center text-xl font-bold">
-              <span className="text-gray-700">{activeOrderId ? 'Añadir:' : 'Total:'}</span>
-              <span className="text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">{formatCurrency(total)}</span>
+        <div className="p-5 border-t-2 border-amber-200 bg-gradient-to-b from-white to-gray-50 space-y-4 shadow-inner">
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-5 shadow-lg border-2 border-amber-200">
+            <div className="flex justify-between items-center text-2xl font-black">
+              <span className="text-gray-800">{activeOrderId ? 'Añadir:' : 'Total:'}</span>
+              <span className="bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent px-4 py-1 rounded-xl">{formatCurrency(total)}</span>
             </div>
 
             {activeOrderId && (
@@ -1083,18 +1091,18 @@ export function POS() {
           <button
             onClick={handleCheckout}
             disabled={cart.length === 0 || loading}
-            className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-4 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+            className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-white font-black py-5 px-6 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-base shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 hover:scale-105 disabled:transform-none border-2 border-amber-400"
           >
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-3">
               {loading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Procesando...
+                  <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Procesando...</span>
                 </>
               ) : (
                 <>
-                  <span className="text-base">✅</span>
-                  {t('Confirmar Pedido')}
+                  <CreditCard className="w-6 h-6" />
+                  <span>{t('Confirmar Pedido')}</span>
                 </>
               )}
             </span>
@@ -1105,49 +1113,66 @@ export function POS() {
 
       {/* Payment Method Modal */}
       {showPaymentModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Seleccionar Método de Pago')}</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 transform scale-100 transition-all">
+            <div className="text-center mb-8">
+              <div className="inline-block p-4 bg-gradient-to-br from-amber-100 to-orange-100 rounded-2xl mb-4">
+                <CreditCard className="w-12 h-12 text-amber-600" />
+              </div>
+              <h2 className="text-3xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                {t('Seleccionar Método de Pago')}
+              </h2>
+              <p className="text-sm text-gray-600 mt-2">{t('Elija cómo se realizará el pago')}</p>
+            </div>
 
-            <div className="grid grid-cols-1 gap-3 mb-6">
+            <div className="grid grid-cols-1 gap-4 mb-8">
               <button
                 onClick={() => handlePaymentMethodSelection('cash')}
-                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+                className="group flex items-center gap-4 p-6 rounded-2xl border-3 bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 transition-all hover:border-green-500 hover:shadow-xl transform hover:-translate-y-1 hover:scale-102"
               >
-                <Banknote className="w-6 h-6 text-green-600" />
-                <div className="text-left">
-                  <div className="font-medium text-gray-900">{t('Efectivo')}</div>
-                  <div className="text-sm text-gray-600">{t('Pago en efectivo')}</div>
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+                  <Banknote className="w-8 h-8 text-white" />
                 </div>
+                <div className="text-left flex-1">
+                  <div className="font-black text-gray-900 text-lg">{t('Efectivo')}</div>
+                  <div className="text-sm text-gray-600 font-semibold">{t('Pago en efectivo')}</div>
+                </div>
+                <div className="text-3xl opacity-0 group-hover:opacity-100 transition-opacity">💵</div>
               </button>
 
               <button
                 onClick={() => handlePaymentMethodSelection('card')}
-                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+                className="group flex items-center gap-4 p-6 rounded-2xl border-3 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-300 transition-all hover:border-blue-500 hover:shadow-xl transform hover:-translate-y-1 hover:scale-102"
               >
-                <CreditCard className="w-6 h-6 text-blue-600" />
-                <div className="text-left">
-                  <div className="font-medium text-gray-900">{t('Tarjeta')}</div>
-                  <div className="text-sm text-gray-600">{t('Pago con tarjeta')}</div>
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+                  <CreditCard className="w-8 h-8 text-white" />
                 </div>
+                <div className="text-left flex-1">
+                  <div className="font-black text-gray-900 text-lg">{t('Tarjeta')}</div>
+                  <div className="text-sm text-gray-600 font-semibold">{t('Pago con tarjeta')}</div>
+                </div>
+                <div className="text-3xl opacity-0 group-hover:opacity-100 transition-opacity">💳</div>
               </button>
 
               <button
                 onClick={() => handlePaymentMethodSelection('digital')}
-                className="flex items-center gap-3 p-4 rounded-lg border-2 bg-white transition-colors hover:border-amber-600 hover:bg-amber-50"
+                className="group flex items-center gap-4 p-6 rounded-2xl border-3 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300 transition-all hover:border-purple-500 hover:shadow-xl transform hover:-translate-y-1 hover:scale-102"
               >
-                <Smartphone className="w-6 h-6 text-purple-600" />
-                <div className="text-left">
-                  <div className="font-medium text-gray-900">{t('Digital')}</div>
-                  <div className="text-sm text-gray-600">{t('Pago digital')}</div>
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+                  <Smartphone className="w-8 h-8 text-white" />
                 </div>
+                <div className="text-left flex-1">
+                  <div className="font-black text-gray-900 text-lg">{t('Digital')}</div>
+                  <div className="text-sm text-gray-600 font-semibold">{t('Pago digital')}</div>
+                </div>
+                <div className="text-3xl opacity-0 group-hover:opacity-100 transition-opacity">📱</div>
               </button>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end">
               <button
                 onClick={() => setShowPaymentModal(false)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-bold text-gray-700 shadow-md hover:shadow-lg"
               >
                 {t('Cancelar')}
               </button>
@@ -1158,28 +1183,41 @@ export function POS() {
 
       {/* Validation Modal */}
       {showValidationModal && pendingOrderData && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('Confirmar Pedido')}</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 transform scale-100 transition-all">
+            <div className="text-center mb-6">
+              <div className="inline-block p-4 bg-gradient-to-br from-green-100 to-emerald-100 rounded-2xl mb-4">
+                <CheckCircle className="w-12 h-12 text-green-600" />
+              </div>
+              <h2 className="text-3xl font-black bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
+                {t('Confirmar Pedido')}
+              </h2>
+              <p className="text-sm text-gray-600">{t('Pedido creado exitosamente')}</p>
+            </div>
 
             <div className="mb-6">
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium text-gray-900">{t('Total del Pedido:')}</span>
-                  <span className="font-bold text-amber-600 text-xl">{formatCurrency(pendingOrderData.total)}</span>
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-6 mb-4 shadow-lg">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="font-bold text-gray-800 text-sm">{t('Total del Pedido:')}</span>
+                  <span className="font-black text-3xl bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                    {formatCurrency(pendingOrderData.total)}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-medium text-gray-900">{t('Método de Pago:')}</span>
-                  <span className="font-medium text-gray-700">{pendingOrderData.paymentMethod}</span>
+                <div className="flex justify-between items-center pt-3 border-t-2 border-amber-300">
+                  <span className="font-bold text-gray-800 text-sm">{t('Método de Pago:')}</span>
+                  <span className="font-bold text-amber-700 bg-white/60 px-3 py-1 rounded-lg">
+                    {pendingOrderData.paymentMethod}
+                  </span>
                 </div>
               </div>
 
-              <p className="text-sm text-gray-600 mb-4">
-                El pedido se ha procesado correctamente. ¿Desea validar e imprimir el ticket ahora?
+              <p className="text-sm text-gray-600 mb-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <span className="font-bold text-blue-800">ℹ️ {t('Información:')}</span><br/>
+                {t('El pedido se ha procesado correctamente. ¿Desea validar e imprimir el ticket ahora?')}
               </p>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => {
                   console.log('Order left pending - will be validated later');
@@ -1195,13 +1233,13 @@ export function POS() {
 
                   toast.success('Pedido pendiente de validación');
                 }}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-bold text-gray-700 shadow-md hover:shadow-lg"
               >
                 {t('Después')}
               </button>
               <button
                 onClick={handleValidateAndPrint}
-                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors"
+                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl transition-all font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5"
               >
                 {t('Validar e Imprimir')}
               </button>

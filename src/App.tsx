@@ -23,6 +23,7 @@ import { CompanySettings } from './components/CompanySettings';
 import { AppSettings } from './components/AppSettings';
 import { ServerManager } from './components/ServerManager';
 import { BackupManager } from './components/BackupManager';
+import { TableManager } from './components/TableManager';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -225,6 +226,7 @@ function AppContent() {
         {currentView === 'role-management' && userPermissions['role-management'] && <RoleManagement />}
         {currentView === 'company-settings' && userPermissions['company-settings'] && <CompanySettings />}
         {currentView === 'app-settings' && userPermissions['app-settings'] && <AppSettings />}
+        {currentView === 'tables' && userPermissions['tables'] && <TableManager />}
         {currentView === 'server' && userPermissions['server'] && <ServerManager />}
         {currentView === 'backup' && userPermissions['backup'] && <BackupManager />}
       </div>
