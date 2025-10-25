@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { CurrencyProvider } from './contexts/CurrencyContext';
 import { LoginForm } from './components/LoginForm';
 import { Navigation } from './components/Navigation';
 import { POS } from './components/POS';
@@ -21,6 +22,7 @@ import { RoleManagement } from './components/RoleManagement';
 import { CompanySettings } from './components/CompanySettings';
 import { AppSettings } from './components/AppSettings';
 import { ServerManager } from './components/ServerManager';
+import { BackupManager } from './components/BackupManager';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -224,6 +226,7 @@ function AppContent() {
         {currentView === 'company-settings' && userPermissions['company-settings'] && <CompanySettings />}
         {currentView === 'app-settings' && userPermissions['app-settings'] && <AppSettings />}
         {currentView === 'server' && userPermissions['server'] && <ServerManager />}
+        {currentView === 'backup' && userPermissions['backup'] && <BackupManager />}
       </div>
 
       {showOpenCashModal && (
@@ -296,7 +299,9 @@ function App() {
       <CartProvider>
         <LanguageProvider>
           <ThemeProvider>
-            <AppContent />
+            <CurrencyProvider>
+              <AppContent />
+            </CurrencyProvider>
           </ThemeProvider>
         </LanguageProvider>
       </CartProvider>

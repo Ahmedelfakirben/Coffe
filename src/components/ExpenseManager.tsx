@@ -3,6 +3,7 @@ import { Plus, Filter, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { toast } from 'react-hot-toast';
 import { Expense, ExpenseCategory, Supplier } from '../types/expenses';
 
@@ -18,6 +19,7 @@ const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
 export function ExpenseManager() {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -145,7 +147,7 @@ export function ExpenseManager() {
         EXPENSE_CATEGORIES.find(cat => cat.value === expense.category)?.label ||
         expense.category,
         expense.description,
-        expense.amount.toFixed(2)
+        formatCurrency(expense.amount)
       ])
     ].map(row => row.join(',')).join('\n');
 
@@ -333,7 +335,7 @@ export function ExpenseManager() {
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-medium text-gray-900">{t('Lista de Gastos')}</h3>
             <div className="text-lg font-bold text-amber-600">
-              {t('Total')}: ${calculateTotal().toFixed(2)}
+              {t('Total')}: {formatCurrency(calculateTotal())}
             </div>
           </div>
         </div>
@@ -370,7 +372,7 @@ export function ExpenseManager() {
                     {expense.description}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                    ${expense.amount.toFixed(2)}
+                    {formatCurrency(expense.amount)}
                   </td>
                 </tr>
               ))}

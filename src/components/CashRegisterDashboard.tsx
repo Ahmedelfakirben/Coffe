@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { Calendar, DollarSign, Filter, RefreshCw, Printer } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -42,6 +43,7 @@ interface Order {
 export function CashRegisterDashboard() {
   const { user, profile } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency: formatCurrencyFromContext } = useCurrency();
   const [sessions, setSessions] = useState<CashSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -158,12 +160,8 @@ export function CashRegisterDashboard() {
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
-  };
+  // Usar formatCurrency del contexto global
+  const formatCurrency = formatCurrencyFromContext;
 
   const fetchEmployees = async () => {
     try {

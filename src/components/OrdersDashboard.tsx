@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
@@ -66,6 +67,7 @@ interface CashEvent {
 export function OrdersDashboard() {
   const { profile, user } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('preparing');
@@ -610,7 +612,7 @@ export function OrdersDashboard() {
   };
 
   const printReport = () => {
-    const content = `Resultados\nHoy: $${totals.day.toFixed(2)}\nSemana: $${totals.week.toFixed(2)}\nMes: $${totals.month.toFixed(2)}`;
+    const content = `Resultados\nHoy: ${formatCurrency(totals.day)}\nSemana: ${formatCurrency(totals.week)}\nMes: ${formatCurrency(totals.month)}`;
     const w = window.open('', '', 'height=600,width=800');
     if (!w) return;
     w.document.write(`<pre style="font-family: monospace; padding: 16px;">${content}</pre>`);
@@ -749,15 +751,15 @@ export function OrdersDashboard() {
             <div className="flex gap-2 items-center ml-auto">
               <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
                 <span className="font-medium text-gray-700">{t('Hoy:')}</span>
-                <span className="font-bold text-amber-600 ml-1">${totals.day.toFixed(2)}</span>
+                <span className="font-bold text-amber-600 ml-1">{formatCurrency(totals.day)}</span>
               </div>
               <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
                 <span className="font-medium text-gray-700">{t('Semana:')}</span>
-                <span className="font-bold text-amber-600 ml-1">${totals.week.toFixed(2)}</span>
+                <span className="font-bold text-amber-600 ml-1">{formatCurrency(totals.week)}</span>
               </div>
               <div className="px-4 py-2 rounded-lg border bg-white shadow-sm">
                 <span className="font-medium text-gray-700">{t('Mes:')}</span>
-                <span className="font-bold text-amber-600 ml-1">${totals.month.toFixed(2)}</span>
+                <span className="font-bold text-amber-600 ml-1">{formatCurrency(totals.month)}</span>
               </div>
             </div>
           </div>
@@ -828,7 +830,7 @@ export function OrdersDashboard() {
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold text-amber-600">
-                      ${order.total.toFixed(2)}
+                      {formatCurrency(order.total)}
                     </p>
                   </div>
                 </div>
@@ -935,7 +937,7 @@ export function OrdersDashboard() {
                         {history.action === 'cancelled' && t('Cancelada')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600">
-                        ${history.total.toFixed(2)}
+                        {formatCurrency(history.total)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {history.employee_profiles?.full_name || 'N/A'}
@@ -977,7 +979,7 @@ export function OrdersDashboard() {
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold text-amber-600">
-                      ${event.amount.toFixed(2)}
+                      {formatCurrency(event.amount)}
                     </p>
                   </div>
                 </div>
@@ -1017,7 +1019,7 @@ export function OrdersDashboard() {
                   </div>
                 ))}
                 <div className="font-bold text-amber-600 pt-2 border-t border-amber-300">
-                  {t('Total:')} ${orderToDelete.total.toFixed(2)}
+                  {t('Total:')} {formatCurrency(orderToDelete.total)}
                 </div>
               </div>
             </div>

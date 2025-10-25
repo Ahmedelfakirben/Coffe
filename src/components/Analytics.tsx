@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { TrendingUp, DollarSign, ShoppingBag, Users, Clock, Activity, AlertTriangle, Bell, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -54,6 +55,7 @@ interface CompanySettings {
 export function Analytics() {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [stats, setStats] = useState({
     todaySales: 0,
     todayOrders: 0,
@@ -1455,7 +1457,7 @@ export function Analytics() {
             <DollarSign className="w-6 h-6 opacity-80" />
             <span className="text-xs font-medium opacity-90">{t('Hoy')}</span>
           </div>
-          <p className="text-2xl font-bold mb-1">${stats.todaySales.toFixed(2)}</p>
+          <p className="text-2xl font-bold mb-1">{formatCurrency(stats.todaySales)}</p>
           <p className="text-xs opacity-90">{t('Ventas del día')}</p>
         </div>
 
@@ -1505,16 +1507,16 @@ export function Analytics() {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">{t('Ventas:')}</span>
-                <span className="font-semibold text-green-600">${summary.sales.toFixed(2)}</span>
+                <span className="font-semibold text-green-600">{formatCurrency(summary.sales)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">{t('Gastos:')}</span>
-                <span className="font-semibold text-red-600">${summary.expenses.toFixed(2)}</span>
+                <span className="font-semibold text-red-600">{formatCurrency(summary.expenses)}</span>
               </div>
               <div className="flex justify-between border-t pt-2">
                 <span className="text-sm font-medium text-gray-900">{t('Beneficio:')}</span>
                 <span className={`font-bold ${summary.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${summary.profit.toFixed(2)}
+                  {formatCurrency(summary.profit)}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -1572,7 +1574,7 @@ export function Analytics() {
                     <div className="flex gap-4 text-xs text-gray-600 mt-1">
                       <span>{emp.total_sessions_today} {t('sesiones')}</span>
                       <span>{emp.total_orders_today} {t('pedidos')}</span>
-                      <span>${emp.total_sales_today.toFixed(2)}</span>
+                      <span>{formatCurrency(emp.total_sales_today)}</span>
                     </div>
                   </div>
                 </div>
@@ -1603,7 +1605,7 @@ export function Analytics() {
                         <p className="text-xs text-gray-700">{notif.note}</p>
                         {notif.total && (
                           <p className="text-xs font-bold text-red-600 mt-1">
-                            {t('Total')}: ${notif.total.toFixed(2)}
+                            {t('Total')}: {formatCurrency(notif.total)}
                           </p>
                         )}
                       </div>
@@ -1643,7 +1645,7 @@ export function Analytics() {
                       })}
                     </span>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">${day.total.toFixed(2)}</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(day.total)}</p>
                       <p className="text-xs text-gray-500">{day.order_count} {t('órdenes')}</p>
                     </div>
                   </div>
@@ -1670,7 +1672,7 @@ export function Analytics() {
                       <p className="text-sm text-gray-500">{product.quantity_sold} {t('unidades')}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-amber-600">${product.revenue.toFixed(2)}</p>
+                      <p className="font-semibold text-amber-600">{formatCurrency(product.revenue)}</p>
                     </div>
                   </div>
                 ))}

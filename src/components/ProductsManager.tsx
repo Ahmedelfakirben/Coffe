@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Save, X, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 interface Category {
   id: string;
@@ -29,6 +30,7 @@ interface ProductSize {
 
 export function ProductsManager() {
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [sizes, setSizes] = useState<ProductSize[]>([]);
@@ -537,7 +539,7 @@ export function ProductsManager() {
                       className="w-20 px-2 py-1 border border-gray-300 rounded"
                     />
                   ) : (
-                    `$${product.base_price.toFixed(2)}`
+                    formatCurrency(product.base_price)
                   )}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-600">

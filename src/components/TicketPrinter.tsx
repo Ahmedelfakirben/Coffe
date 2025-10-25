@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 // Add a function to refresh company info that can be called from outside
 export const refreshCompanyInfo = async () => {
@@ -51,6 +52,7 @@ export function TicketPrinter({
   forceRefresh = false,
 }: TicketProps) {
   const ticketRef = useRef<HTMLDivElement>(null);
+  const { formatCurrency } = useCurrency();
   const [companyInfo, setCompanyInfo] = useState({
     company_name: 'El Fakir',
     address: 'Calle Principal #123, Ciudad',
@@ -350,8 +352,8 @@ export function TicketPrinter({
                     <div>{item.name}</div>
                     {item.size && <div style={{ fontSize: '9px', color: '#666' }}>{item.size}</div>}
                   </td>
-                  <td>${item.price.toFixed(2)}</td>
-                  <td>${(item.price * item.quantity).toFixed(2)}</td>
+                  <td>{formatCurrency(item.price)}</td>
+                  <td>{formatCurrency(item.price * item.quantity)}</td>
                 </tr>
               ))}
             </tbody>
@@ -360,7 +362,7 @@ export function TicketPrinter({
           {/* Total */}
           <div className="total-section">
             <div style={{ textAlign: 'right', marginBottom: '3px' }}>
-              TOTAL: ${total.toFixed(2)}
+              TOTAL: {formatCurrency(total)}
             </div>
             <div style={{ fontSize: '10px', color: '#666' }}>
               Pago: {paymentMethod}

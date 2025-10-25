@@ -34,6 +34,7 @@ const translations = {
     'nav.company-settings': 'Información Empresa',
     'nav.app-settings': 'Configuración',
     'nav.server': 'Servidor',
+    'nav.backup': 'Backup',
 
     // Acciones comunes
     'common.save': 'Guardar',
@@ -746,6 +747,7 @@ const translations = {
     'nav.company-settings': 'Informations Entreprise',
     'nav.app-settings': 'Configuration',
     'nav.server': 'Serveur',
+    'nav.backup': 'Sauvegarde',
 
     // Actions communes
     'common.save': 'Enregistrer',

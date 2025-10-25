@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { Category, Product, ProductSize } from '../types/supabase';
 import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
@@ -13,6 +14,7 @@ const ITEMS_PER_PAGE = 12;
 export function POS() {
   const { user, profile } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const {
     items: cart,
     total,
@@ -592,7 +594,7 @@ export function POS() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 text-sm">{product.name}</h3>
                     <p className="text-xs text-gray-500 truncate">{product.description}</p>
-                    <p className="text-lg font-bold text-amber-600 mt-1">${product.base_price.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-amber-600 mt-1">{formatCurrency(product.base_price)}</p>
                   </div>
                 </div>
 
@@ -605,7 +607,7 @@ export function POS() {
                         className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 py-2 px-3 rounded-lg text-sm font-medium flex justify-between items-center"
                       >
                         <span>{size.size_name}</span>
-                        <span className="font-bold">+${size.price_modifier.toFixed(2)}</span>
+                        <span className="font-bold">+{formatCurrency(size.price_modifier)}</span>
                       </button>
                     ))}
                   </div>
@@ -629,7 +631,7 @@ export function POS() {
         <div className="flex justify-between items-center">
           <div>
             <p className="text-xs text-gray-600">Total del pedido</p>
-            <p className="text-2xl font-bold text-amber-600">${total.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-amber-600">{formatCurrency(total)}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-gray-600">Items</p>
@@ -714,11 +716,11 @@ export function POS() {
 
                 const itemPrice = document.createElement('p');
                 itemPrice.className = 'text-xs text-gray-500';
-                itemPrice.textContent = `$${(item.product.base_price + (item.size?.price_modifier || 0)).toFixed(2)} c/u`;
+                itemPrice.textContent = `${formatCurrency(item.product.base_price + (item.size?.price_modifier || 0))} c/u`;
 
                 const itemTotal = document.createElement('p');
                 itemTotal.className = 'font-bold text-amber-600';
-                itemTotal.textContent = `$${((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity).toFixed(2)}`;
+                itemTotal.textContent = formatCurrency((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity);
 
                 itemInfo.appendChild(itemName);
                 itemInfo.appendChild(itemPrice);
@@ -738,7 +740,7 @@ export function POS() {
 
               const totalAmount = document.createElement('span');
               totalAmount.className = 'font-bold text-amber-600 text-xl';
-              totalAmount.textContent = `$${total.toFixed(2)}`;
+              totalAmount.textContent = formatCurrency(total);
 
               totalDiv.appendChild(totalLabel);
               totalDiv.appendChild(totalAmount);
@@ -834,7 +836,7 @@ export function POS() {
                   <h3 className="font-bold text-gray-900 text-sm leading-tight">{product.name}</h3>
                   <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{product.description}</p>
                   <div className="flex items-center justify-between">
-                    <p className="text-lg font-bold text-amber-600">${product.base_price.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-amber-600">{formatCurrency(product.base_price)}</p>
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="text-xs text-green-600 font-medium">Disponible</span>
@@ -854,7 +856,7 @@ export function POS() {
                           <span className="text-xs">📏</span>
                           {size.size_name}
                         </span>
-                        <span className="font-bold">+${size.price_modifier.toFixed(2)}</span>
+                        <span className="font-bold">+{formatCurrency(size.price_modifier)}</span>
                       </button>
                     ))}
                   </div>
@@ -905,7 +907,7 @@ export function POS() {
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">Pedido activo #{activeOrderId}</h3>
-                <p className="text-xs text-gray-600">Total actual: <span className="font-semibold">${existingOrderTotal.toFixed(2)}</span></p>
+                <p className="text-xs text-gray-600">Total actual: <span className="font-semibold">{formatCurrency(existingOrderTotal)}</span></p>
                 <p className="text-xs text-amber-600 font-medium">Pendiente de validación</p>
               </div>
               <div className="flex gap-2">
@@ -950,9 +952,9 @@ export function POS() {
                       <div className="text-xs text-gray-900 font-medium">
                         {it.quantity}x {it.name}{it.size ? ` (${it.size})` : ''}
                       </div>
-                      <div className="text-xs font-semibold text-amber-700">${it.subtotal.toFixed(2)}</div>
+                      <div className="text-xs font-semibold text-amber-700">{formatCurrency(it.subtotal)}</div>
                     </div>
-                    <div className="text-[11px] text-gray-600">c/u ${it.price.toFixed(2)}</div>
+                    <div className="text-[11px] text-gray-600">c/u {formatCurrency(it.price)}</div>
                   </div>
                 ))
               )}
@@ -980,7 +982,7 @@ export function POS() {
                         {item.size && ` (${item.size.size_name})`}
                       </h4>
                       <p className="text-xs text-gray-600 mt-1">
-                        c/u ${ (item.product.base_price + (item.size?.price_modifier || 0)).toFixed(2) }
+                        c/u {formatCurrency(item.product.base_price + (item.size?.price_modifier || 0))}
                       </p>
                     </div>
                     <button
@@ -1008,7 +1010,7 @@ export function POS() {
                       </button>
                     </div>
                     <span className="font-bold text-amber-600 text-sm bg-amber-50 px-2 py-1 rounded-lg">
-                      ${((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity).toFixed(2)}
+                      {formatCurrency((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity)}
                     </span>
                   </div>
                 </div>
@@ -1021,18 +1023,18 @@ export function POS() {
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <div className="flex justify-between items-center text-xl font-bold">
               <span className="text-gray-700">{activeOrderId ? 'Añadir:' : 'Total:'}</span>
-              <span className="text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">${total.toFixed(2)}</span>
+              <span className="text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">{formatCurrency(total)}</span>
             </div>
 
             {activeOrderId && (
               <div className="mt-3 space-y-2 pt-3 border-t border-gray-200">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">Total pedido actual:</span>
-                  <span className="font-semibold text-gray-900">${existingOrderTotal.toFixed(2)}</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(existingOrderTotal)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">Total después de añadir:</span>
-                  <span className="font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded">${(existingOrderTotal + total).toFixed(2)}</span>
+                  <span className="font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded">{formatCurrency(existingOrderTotal + total)}</span>
                 </div>
               </div>
             )}
@@ -1164,7 +1166,7 @@ export function POS() {
               <div className="bg-gray-50 rounded-lg p-4 mb-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-medium text-gray-900">{t('Total del Pedido:')}</span>
-                  <span className="font-bold text-amber-600 text-xl">${pendingOrderData.total.toFixed(2)}</span>
+                  <span className="font-bold text-amber-600 text-xl">{formatCurrency(pendingOrderData.total)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-900">{t('Método de Pago:')}</span>

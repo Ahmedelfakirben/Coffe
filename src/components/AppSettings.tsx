@@ -1,12 +1,14 @@
-import { Settings, Globe, Palette, Check } from 'lucide-react';
+import { Settings, Globe, Palette, Check, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme, Theme } from '../contexts/ThemeContext';
+import { useCurrency, Currency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
 
 export function AppSettings() {
   const { currentLanguage, setLanguage, t } = useLanguage();
   const { currentTheme, setTheme } = useTheme();
+  const { currentCurrency, setCurrency, availableCurrencies } = useCurrency();
   const { profile } = useAuth();
   const isSuperAdmin = profile?.role === 'super_admin';
 
@@ -26,6 +28,16 @@ export function AppSettings() {
       toast.success(t('Tema cambiado correctamente'));
     } catch (error) {
       console.error('Error changing theme:', error);
+      toast.error(t('common.error'));
+    }
+  };
+
+  const handleCurrencyChange = async (newCurrency: Currency) => {
+    try {
+      await setCurrency(newCurrency);
+      toast.success(t('Divisa cambiada correctamente'));
+    } catch (error) {
+      console.error('Error changing currency:', error);
       toast.error(t('common.error'));
     }
   };
@@ -170,12 +182,61 @@ export function AppSettings() {
         </div>
       )}
 
+      {/* Configuración de divisa - Solo para Super Admin */}
+      {isSuperAdmin && (
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <DollarSign className="w-5 h-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">{t('Configuración de Divisa')}</h3>
+            <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-700 rounded">
+              {t('Super Administrador')}
+            </span>
+          </div>
+
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              <strong>⚠️ {t('Información')}:</strong> {t('El cambio de divisa se aplicará a todos los usuarios del sistema de forma inmediata.')}
+            </p>
+          </div>
+
+          <p className="text-sm text-gray-600 mb-4">{t('Selecciona la divisa que se utilizará en toda la aplicación')}</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
+            {availableCurrencies.map((currency) => (
+              <button
+                key={currency.code}
+                onClick={() => handleCurrencyChange(currency)}
+                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                  currentCurrency.code === currency.code
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                  currentCurrency.code === currency.code ? 'border-blue-500' : 'border-gray-300'
+                }`}>
+                  {currentCurrency.code === currency.code && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-semibold">{currency.symbol}</span>
+                    <span className="font-medium text-sm">{currency.code}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 truncate">{currency.name}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Información adicional */}
       <div className="bg-gray-50 rounded-xl p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('Información')}</h3>
         <div className="space-y-3 text-sm text-gray-600">
           <p>• {t('Los cambios de idioma se aplican inmediatamente a toda la aplicación')}</p>
           <p>• {t('Los cambios de tema se aplican inmediatamente a todos los usuarios')}</p>
+          <p>• {t('Los cambios de divisa se aplican inmediatamente a todos los usuarios')}</p>
           <p>• {t('Solo el Super Administrador puede cambiar estos ajustes')}</p>
           <p>• {t('Los cambios se sincronizan en tiempo real')}</p>
         </div>
