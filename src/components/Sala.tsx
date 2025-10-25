@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { toast } from 'react-hot-toast';
 import { CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
@@ -21,6 +22,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   const { user, profile } = useAuth();
   const { tableId, setTableId, setServiceType, setActiveOrderId } = useCart();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -542,7 +544,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                   <div key={order.id} className="border rounded-lg p-2 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold">{t('Pedido')} #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(0,8)}</p>
-                      <p className="text-xs text-gray-600">{t('Total:')} ${order.total?.toFixed?.(2) ?? Number(order.total).toFixed(2)}</p>
+                      <p className="text-xs text-gray-600">{t('Total:')} {formatCurrency(order.total)}</p>
                       <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
                     </div>
                     <div className="flex gap-2">

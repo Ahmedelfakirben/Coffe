@@ -1,0 +1,46 @@
+# Node modules
+node_modules
+npm-debug.log
+
+# Build output
+dist
+.vite
+
+# Environment files
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.sublime-*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Supabase Edge Functions (no deben ejecutarse en Coolify)
+supabase/functions
+
+# Migraciones SQL
+supabase/migrations
+
+# Backup files
+*.bak
+*.backup
+
+# Logs
+logs
+*.log
+
+# Testing
+coverage
+.nyc_output
+
+# Misc
+*.md
+!README.md

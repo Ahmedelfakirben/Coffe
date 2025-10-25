@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { Clock, Calendar, DollarSign, TrendingUp, Download, User, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -54,6 +55,7 @@ interface MonthStats {
 export function EmployeeTimeTracking() {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -287,9 +289,9 @@ export function EmployeeTimeTracking() {
         ['📅 Días Trabajados', monthStats.total_days_worked],
         ['⏰ Horas Totales', `${monthStats.total_hours_worked.toFixed(2)} hrs`],
         ['📊 Promedio Horas/Día', `${monthStats.average_hours_per_day.toFixed(2)} hrs`],
-        ['💰 Ventas Generadas', `$${monthStats.total_sales.toFixed(2)}`],
+        ['💰 Ventas Generadas', `${formatCurrency(monthStats.total_sales)}`],
         ['📦 Pedidos Completados', monthStats.total_orders],
-        ['💵 Ventas/Hora', monthStats.total_hours_worked > 0 ? `$${(monthStats.total_sales / monthStats.total_hours_worked).toFixed(2)}` : '$0.00'],
+        ['💵 Ventas/Hora', monthStats.total_hours_worked > 0 ? `${formatCurrency(monthStats.total_sales / monthStats.total_hours_worked)}` : formatCurrency(0)],
       ];
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
@@ -335,9 +337,9 @@ export function EmployeeTimeTracking() {
           exit,
           `${day.total_hours.toFixed(2)} hrs`,
           day.sessions.length,
-          `$${day.total_sales.toFixed(2)}`,
+          `${formatCurrency(day.total_sales)}`,
           day.orders_count,
-          `$${salesPerHour.toFixed(2)}/hr`,
+          `${formatCurrency(salesPerHour)}/hr`,
         ]);
       });
 
@@ -381,9 +383,9 @@ export function EmployeeTimeTracking() {
             opened,
             closed,
             duration,
-            `$${session.opening_amount.toFixed(2)}`,
-            session.closing_amount ? `$${session.closing_amount.toFixed(2)}` : 'N/A',
-            `$${difference.toFixed(2)}`,
+            `${formatCurrency(session.opening_amount)}`,
+            session.closing_amount ? `${formatCurrency(session.closing_amount)}` : 'N/A',
+            `${formatCurrency(difference)}`,
             session.status === 'closed' ? 'Cerrada' : 'Abierta',
           ]);
         });
@@ -581,7 +583,7 @@ export function EmployeeTimeTracking() {
                           {day.sessions.length}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                          ${day.total_sales.toFixed(2)}
+                          {formatCurrency(day.total_sales)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {day.orders_count}
