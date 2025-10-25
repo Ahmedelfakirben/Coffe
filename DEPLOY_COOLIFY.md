@@ -11,8 +11,9 @@ does not provide an export named 'PutObjectCommand'
 **Causa:** Coolify estaba intentando ejecutar los archivos de Edge Functions de Supabase (archivos TypeScript para Deno) que están en `supabase/functions/`.
 
 **Solución:**
-- ✅ Creado `.dockerignore` para excluir `supabase/functions`
+- ✅ Creado `.dockerignore` para excluir toda la carpeta `supabase/`
 - ✅ Creado `Dockerfile` optimizado para Coolify
+- ✅ Creado `nixpacks.toml` para forzar build correcto
 - ✅ Las Edge Functions NO deben ejecutarse en Coolify (son para Supabase)
 
 ---

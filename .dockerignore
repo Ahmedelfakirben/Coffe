@@ -23,11 +23,8 @@ Thumbs.db
 .git
 .gitignore
 
-# Supabase Edge Functions (no deben ejecutarse en Coolify)
-supabase/functions
-
-# Migraciones SQL
-supabase/migrations
+# Supabase completo (Edge Functions y migraciones no deben ejecutarse en Coolify)
+supabase/
 
 # Backup files
 *.bak
