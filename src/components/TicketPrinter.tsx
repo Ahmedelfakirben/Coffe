@@ -291,11 +291,17 @@ export function TicketPrinter({
 
       printWindow.document.close();
       printWindow.focus();
+      
+      // Auto-close only after print dialog is closed (printed or cancelled)
+      printWindow.onafterprint = () => {
+        printWindow.close();
+      };
+
       printWindow.print();
-      printWindow.close();
+      // printWindow.close(); // REMOVED: Caused window to close immediately if print() is non-blocking
 
       // Disparar evento de impresión completada
-      console.log('✅ TICKET: Print completed, dispatching event');
+      console.log('✅ TICKET: Print initiated, dispatching event');
       window.dispatchEvent(new CustomEvent('ticketPrinted'));
     } else {
       console.error('❌ TICKET: Failed to open print window');
