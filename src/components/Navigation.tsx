@@ -219,11 +219,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           onViewChange(item.id);
           setOpenMenu(null);
         }}
-        className={`flex items-center gap-3 w-full px-4 py-3 text-sm transition-all duration-200 rounded-xl mx-2 ${
-          isActive
+        className={`flex items-center gap-3 w-full px-4 py-3 text-sm transition-all duration-200 rounded-xl mx-2 ${isActive
             ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold shadow-md'
             : 'text-gray-700 hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 font-medium'
-        }`}
+          }`}
       >
         <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-amber-600'}`} />
         <span>{item.label}</span>
@@ -257,11 +256,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               <button
                 key={item.id}
                 onClick={() => onViewChange(item.id)}
-                className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all duration-200 shadow-sm ${
-                  isActive
+                className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all duration-200 shadow-sm ${isActive
                     ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
                     : 'text-gray-700 hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 hover:shadow-md'
-                }`}
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 <span>{item.label}</span>
@@ -275,32 +273,29 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     const isActive = visibleItems.some(item => currentView === item.id);
 
     return (
-      <div 
+      <div
         key={group.name}
         className={`relative ${isMobile ? 'flex-shrink-0' : ''}`}
         ref={el => dropdownRefs.current[group.name] = el}
       >
         <button
           onClick={(e) => handleMenuClick(group.name, e)}
-          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all duration-200 shadow-sm ${
-            isActive
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all duration-200 shadow-sm ${isActive
               ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
               : 'text-gray-700 hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 hover:shadow-md'
-          }`}
+            }`}
         >
           <span>{group.name}</span>
-          <ChevronDown 
-            className={`w-4 h-4 transition-transform ${
-              openMenu === group.name ? 'transform rotate-180' : ''
-            }`}
+          <ChevronDown
+            className={`w-4 h-4 transition-transform ${openMenu === group.name ? 'transform rotate-180' : ''
+              }`}
           />
         </button>
 
         {openMenu === group.name && (
           <div
-            className={`absolute top-full left-0 mt-2 ${
-              isMobile ? 'w-44' : 'w-52'
-            } py-2 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 z-50 nav-dropdown animate-fadeIn`}
+            className={`absolute top-full left-0 mt-2 ${isMobile ? 'w-44' : 'w-52'
+              } py-2 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 z-50 nav-dropdown animate-fadeIn`}
             onClick={(e) => e.stopPropagation()}
           >
             {visibleItems.map(renderMenuItem)}
@@ -560,11 +555,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
             <strong>${t('Cierre Real')}:</strong> ${formatCurrency(amount)}
           </div>
 
-          <div style="margin-bottom: 5px; padding: 5px; background-color: ${
-            difference === 0 ? '#e8f5e9' : difference > 0 ? '#e3f2fd' : '#ffebee'
-          }; border: 1px solid ${
-            difference === 0 ? '#4caf50' : difference > 0 ? '#2196f3' : '#f44336'
-          };">
+          <div style="margin-bottom: 5px; padding: 5px; background-color: ${difference === 0 ? '#e8f5e9' : difference > 0 ? '#e3f2fd' : '#ffebee'
+        }; border: 1px solid ${difference === 0 ? '#4caf50' : difference > 0 ? '#2196f3' : '#f44336'
+        };">
             <strong>${t('Diferencia')}:</strong> ${formatCurrency(difference)} ${difference === 0 ? '✓' : ''}
           </div>
 
@@ -675,7 +668,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   return (
     <>
       <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="w-full px-4 lg:px-6">
           <div className="flex items-center justify-between h-20">
             <div className="flex-shrink-0 flex items-center gap-3">
               <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
@@ -693,21 +686,40 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-6" ref={el => dropdownRefs.current['user-profile'] = el}>
               {profile && (
-                <div className="text-right bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-2 rounded-xl border border-amber-100 shadow-sm">
-                  <p className="text-sm font-bold text-gray-900">{profile.full_name}</p>
-                  <p className="text-xs text-amber-600 capitalize font-semibold">{profile.role}</p>
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenMenu(openMenu === 'user-profile' ? null : 'user-profile')}
+                    className="flex items-center gap-3 bg-gradient-to-br from-amber-50 to-orange-50 pl-4 pr-3 py-2 rounded-xl border border-amber-100 shadow-sm hover:shadow-md transition-all hover:bg-orange-50 group"
+                  >
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900 group-hover:text-amber-700 transition-colors">{profile.full_name}</p>
+                      <p className="text-xs text-amber-600 capitalize font-semibold">{profile.role}</p>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-amber-600 transition-transform ${openMenu === 'user-profile' ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {openMenu === 'user-profile' && (
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 z-50 animate-fadeIn p-2 flex flex-col gap-2">
+                      <div className="p-2 border-b border-gray-100 mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('Estado')}</p>
+                        <div className="mt-2">
+                          <OnlineStatusToggle />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleLogoutClick}
+                        className="flex items-center gap-3 w-full px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>{t('Salir')}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-              <OnlineStatusToggle />
-              <button
-                onClick={handleLogoutClick}
-                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5"
-              >
-                <LogOut className="w-5 h-5" />
-                <span>{t('Salir')}</span>
-              </button>
             </div>
 
           </div>
@@ -722,11 +734,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 {userPermissions['pos'] && (
                   <button
                     onClick={() => onViewChange('pos')}
-                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-                      currentView === 'pos'
+                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${currentView === 'pos'
                         ? 'bg-amber-100 text-amber-700'
                         : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                      }`}
                   >
                     <ShoppingCart className="w-5 h-5" />
                     <span className="text-xs font-medium">{t('Punto de Venta')}</span>
@@ -735,11 +746,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 {userPermissions['floor'] && (
                   <button
                     onClick={() => onViewChange('floor')}
-                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-                      currentView === 'floor'
+                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${currentView === 'floor'
                         ? 'bg-amber-100 text-amber-700'
                         : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                      }`}
                   >
                     <Users className="w-5 h-5" />
                     <span className="text-xs font-medium">{t('Sala')}</span>
@@ -748,11 +758,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                 {userPermissions['orders'] && (
                   <button
                     onClick={() => onViewChange('orders')}
-                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
-                      currentView === 'orders'
+                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${currentView === 'orders'
                         ? 'bg-amber-100 text-amber-700'
                         : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                      }`}
                   >
                     <ClipboardList className="w-5 h-5" />
                     <span className="text-xs font-medium">{t('Pedidos')}</span>
@@ -827,11 +836,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                                 onViewChange(item.id);
                                 setMobileMenuOpen(false);
                               }}
-                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${
-                                isActive
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${isActive
                                   ? 'bg-amber-100 text-amber-700'
                                   : 'text-gray-700 hover:bg-gray-100'
-                              }`}
+                                }`}
                             >
                               <Icon className="w-5 h-5" />
                               <span>{item.label}</span>
@@ -949,40 +957,36 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
               {/* Difference Display */}
               {closingAmount && !isNaN(parseFloat(closingAmount)) && (
-                <div className={`mt-4 p-3 rounded-lg ${
-                  parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
+                <div className={`mt-4 p-3 rounded-lg ${parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
                     ? 'bg-green-50 border border-green-200'
                     : parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
-                    ? 'bg-blue-50 border border-blue-200'
-                    : 'bg-red-50 border border-red-200'
-                }`}>
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'bg-red-50 border border-red-200'
+                  }`}>
                   <div className="flex justify-between items-center">
-                    <span className={`text-sm font-semibold ${
-                      parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
+                    <span className={`text-sm font-semibold ${parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
                         ? 'text-green-900'
                         : parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
-                        ? 'text-blue-900'
-                        : 'text-red-900'
-                    }`}>
+                          ? 'text-blue-900'
+                          : 'text-red-900'
+                      }`}>
                       {t('Diferencia')}:
                     </span>
-                    <span className={`text-lg font-bold ${
-                      parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
+                    <span className={`text-lg font-bold ${parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0
                         ? 'text-green-900'
                         : parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
-                        ? 'text-blue-900'
-                        : 'text-red-900'
-                    }`}>
+                          ? 'text-blue-900'
+                          : 'text-red-900'
+                      }`}>
                       {formatCurrency(parseFloat(closingAmount) - cashBreakdown.expectedClosing)}
                       {parseFloat(closingAmount) - cashBreakdown.expectedClosing === 0 && ' ✓'}
                     </span>
                   </div>
                   {parseFloat(closingAmount) - cashBreakdown.expectedClosing !== 0 && (
-                    <p className={`text-xs mt-1 ${
-                      parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
+                    <p className={`text-xs mt-1 ${parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
                         ? 'text-blue-700'
                         : 'text-red-700'
-                    }`}>
+                      }`}>
                       {parseFloat(closingAmount) - cashBreakdown.expectedClosing > 0
                         ? t('Hay más dinero del esperado')
                         : t('Hay menos dinero del esperado')}
