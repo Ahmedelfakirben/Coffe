@@ -51,6 +51,11 @@ export function ProductsManager() {
   const [updatingProduct, setUpdatingProduct] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // States for manual sizes
+  const [tempSizes, setTempSizes] = useState<{ size_name: string; price_modifier: number }[]>([]);
+  const [newSizeName, setNewSizeName] = useState('');
+  const [newSizePrice, setNewSizePrice] = useState('');
+
   useEffect(() => {
     fetchCategories();
     fetchProducts();
@@ -155,11 +160,31 @@ export function ProductsManager() {
         }
       }
 
+      // Insert Manual Sizes if any
+      if (created && tempSizes.length > 0) {
+        const sizesToInsert = tempSizes.map(s => ({
+          product_id: created.id,
+          size_name: s.size_name,
+          price_modifier: s.price_modifier
+        }));
+
+        const { error: sizesError } = await supabase
+          .from('product_sizes')
+          .insert(sizesToInsert);
+
+        if (sizesError) {
+          console.error('Error creating sizes:', sizesError);
+          toast.error(t('Producto creado pero hubo error al guardar los tamaños'));
+        }
+      }
+
       setShowNewProduct(false);
       setNewProduct({ name: '', description: '', category_id: '', base_price: 0, available: true });
       setNewProductImage(null);
       setNewProductPreviewUrl(null);
+      setTempSizes([]);
       fetchProducts();
+      fetchSizes();
       toast.success(t('Producto creado correctamente'));
     } catch (err) {
       console.error('Error creando producto:', err);
@@ -167,6 +192,17 @@ export function ProductsManager() {
     } finally {
       setCreatingProduct(false);
     }
+  };
+
+  const handleAddTempSize = () => {
+    if (!newSizeName || !newSizePrice) return;
+    setTempSizes([...tempSizes, { size_name: newSizeName, price_modifier: parseFloat(newSizePrice) }]);
+    setNewSizeName('');
+    setNewSizePrice('');
+  };
+
+  const handleRemoveTempSize = (index: number) => {
+    setTempSizes(tempSizes.filter((_, i) => i !== index));
   };
 
   const handleUpdateProduct = async () => {
@@ -391,6 +427,51 @@ export function ProductsManager() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
+
+              {/* Sección de Tamaños Manuales */}
+              <div className="border-t border-b py-3 my-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('Tamaños / Variantes (Opcional)')}</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    placeholder={t('Nombre (ej: Grande)')}
+                    value={newSizeName}
+                    onChange={e => setNewSizeName(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                  <input
+                    type="number"
+                    placeholder={t('Precio')}
+                    value={newSizePrice}
+                    onChange={e => setNewSizePrice(e.target.value)}
+                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddTempSize}
+                    className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {tempSizes.length > 0 && (
+                  <div className="space-y-1 mt-2 max-h-32 overflow-y-auto">
+                    {tempSizes.map((s, idx) => (
+                      <div key={idx} className="flex justify-between items-center bg-gray-50 p-2 rounded text-sm">
+                        <span>{s.size_name} - {formatCurrency(s.price_modifier)}</span>
+                        <button onClick={() => handleRemoveTempSize(idx)} className="text-red-500 hover:text-red-700">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="text-xs text-blue-600 mt-1">
+                      {t('Nota: Si añades tamaños, se recomienda dejar el Precio Base en 0.')}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('Imagen (opcional)')}</label>
                 <div className="relative">
@@ -546,11 +627,10 @@ export function ProductsManager() {
                   {getProductSizes(product.id).map(s => s.size_name).join(', ') || t('Único')}
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    product.available
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${product.available
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
-                  }`}>
+                    }`}>
                     {product.available ? t('Disponible') : t('No disponible')}
                   </span>
                 </td>

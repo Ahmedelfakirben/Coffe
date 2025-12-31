@@ -53,7 +53,7 @@ export function CashRegisterDashboard() {
     employeeId: 'all' as string,
   });
 
-  const [employees, setEmployees] = useState<Array<{id: string, full_name: string}>>([]);
+  const [employees, setEmployees] = useState<Array<{ id: string, full_name: string }>>([]);
 
   const [totals, setTotals] = useState({
     totalOpening: 0,
@@ -92,6 +92,58 @@ export function CashRegisterDashboard() {
       groupSessionsByDay();
     }
   }, [sessions]);
+
+  useEffect(() => {
+    checkAutoClose();
+    const interval = setInterval(checkAutoClose, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  const checkAutoClose = async () => {
+    const now = new Date();
+    const currentHour = now.getHours();
+
+    // Only run this logic if it's past 2 AM
+    if (currentHour >= 2) {
+      const { data: openSessions } = await supabase
+        .from('cash_register_sessions')
+        .select('*')
+        .eq('status', 'open');
+
+      if (openSessions && openSessions.length > 0) {
+        for (const session of openSessions) {
+          const openTime = new Date(session.opened_at);
+          const today2AM = new Date();
+          today2AM.setHours(2, 0, 0, 0);
+
+          // If session opened before today's 2 AM boundary (e.g. yesterday)
+          if (openTime < today2AM) {
+            // Calculate expected totals
+            // Need to fetch sales and withdrawals for this specific session
+            // Approximate logic:
+            const { data: sales } = await supabase.from('orders').select('total').eq('employee_id', session.employee_id).gte('created_at', session.opened_at).eq('status', 'completed');
+            const totalSales = (sales || []).reduce((acc, curr) => acc + curr.total, 0);
+
+            const { data: wdraws } = await supabase.from('cash_withdrawals').select('amount').eq('session_id', session.id);
+            const totalWithdrawals = (wdraws || []).reduce((acc, curr) => acc + curr.amount, 0);
+
+            const expected = (session.opening_amount || 0) + totalSales - totalWithdrawals;
+
+            await supabase.from('cash_register_sessions').update({
+              status: 'closed',
+              closed_at: new Date().toISOString(),
+              closing_amount: expected,
+              notes: 'Auto-cierre 02:00 AM (Sistema)'
+            }).eq('id', session.id);
+
+            toast('Sesión cerrada automáticamente (02:00 AM)', { icon: '🌙' });
+          }
+        }
+        // Refresh if we closed anything
+        fetchSessions();
+      }
+    }
+  };
 
   const fetchSessions = async () => {
     if (!user) return;
@@ -974,7 +1026,7 @@ export function CashRegisterDashboard() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {dailySessions.map((day: any) => (
-                  <tr key={day.date} className="hover:bg-gray-50">
+                  <tr key={`${day.date}-${day.employee_id}`} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : t('Tú')}
                     </td>
@@ -1003,10 +1055,9 @@ export function CashRegisterDashboard() {
                       {formatCurrency(day.totalClosing || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                      <span className={`px-2 py-1 rounded ${
-                        Math.abs(day.difference) < 0.01 ? 'bg-green-100 text-green-700' :
+                      <span className={`px-2 py-1 rounded ${Math.abs(day.difference) < 0.01 ? 'bg-green-100 text-green-700' :
                         day.difference > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                      }`}>
+                        }`}>
                         {formatCurrency(day.difference || 0)}
                       </span>
                     </td>

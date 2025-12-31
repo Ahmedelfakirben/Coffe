@@ -1044,21 +1044,21 @@ export function POS() {
 
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">Servicio</label>
+              <label className="block text-xs font-medium text-gray-700 mb-2">{t('Servicio')}</label>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <button
                   onClick={() => setServiceType('takeaway')}
                   className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${serviceType === 'takeaway' ? 'border-amber-600 bg-amber-50' : 'border-gray-200 hover:border-gray-300'
                     }`}
                 >
-                  Para llevar
+                  {t('Para llevar')}
                 </button>
                 <button
                   onClick={() => setServiceType('dine_in')}
                   className={`p-2 rounded-lg border-2 bg-white transition-colors text-xs ${serviceType === 'dine_in' ? 'border-amber-600 bg-amber-50' : 'border-gray-200 hover:border-gray-300'
                     }`}
                 >
-                  En sala
+                  {t('En sala')}
                 </button>
               </div>
               {serviceType === 'dine_in' && (

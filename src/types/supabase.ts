@@ -57,3 +57,27 @@ export interface EmployeeProfile {
   created_at: string;
   updated_at: string;
 }
+
+export interface CashRegisterSession {
+  id: string;
+  employee_id: string;
+  opening_amount: number;
+  closing_amount: number | null;
+  opening_time: string;
+  closing_time: string | null;
+  status: 'open' | 'closed';
+  notes: string | null;
+  total_sales: number;
+  total_withdrawals: number;
+  expected_closing_amount: number | null;
+  discrepancy: number | null;
+}
+
+export interface CashWithdrawal {
+  id: string;
+  session_id: string;
+  amount: number;
+  reason: string;
+  performed_by: string;
+  created_at: string;
+}
