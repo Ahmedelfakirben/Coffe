@@ -9,7 +9,7 @@ import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, Ch
 import { TicketPrinter } from './TicketPrinter';
 import { toast } from 'react-hot-toast';
 
-const ITEMS_PER_PAGE = 12;
+// Removed pagination - show all products per category
 
 export function POS() {
   const { user, profile } = useAuth();
@@ -38,8 +38,7 @@ export function POS() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  // Removed pagination states
   const [error, setError] = useState<string | null>(null);
   const [tables, setTables] = useState<{ id: string; name: string; seats: number; status: string }[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -214,11 +213,10 @@ export function POS() {
   };
 
   const fetchInitialProducts = async () => {
-    setPage(1);
-    await fetchProducts(true);
+    await fetchProducts();
   };
 
-  const fetchProducts = async (reset = false) => {
+  const fetchProducts = async () => {
     try {
       let query = supabase
         .from('products')
@@ -230,17 +228,13 @@ export function POS() {
         query = query.eq('category_id', selectedCategory);
       }
 
-      query = query
-        .range((reset ? 0 : (page - 1) * ITEMS_PER_PAGE),
-          (reset ? ITEMS_PER_PAGE - 1 : page * ITEMS_PER_PAGE - 1));
-
+      // Fetch all products without pagination
       const { data, error } = await query;
 
       if (error) throw error;
 
       if (data) {
-        setProducts(prev => reset ? data : [...prev, ...data]);
-        setHasMore(data.length === ITEMS_PER_PAGE);
+        setProducts(data);
       }
     } catch (err) {
       console.error('Error fetching products:', err);
@@ -268,10 +262,7 @@ export function POS() {
     fetchInitialProducts();
   }, [selectedCategory]);
 
-  const handleLoadMore = () => {
-    setPage(prev => prev + 1);
-    fetchProducts();
-  };
+  // Removed handleLoadMore - no longer needed
 
   const productSizes = (productId: string) => sizes.filter(s => s.product_id === productId);
 
@@ -878,16 +869,7 @@ export function POS() {
               })}
             </div>
 
-            {hasMore && (
-              <div className="mt-8 text-center">
-                <button
-                  onClick={handleLoadMore}
-                  className="bg-white hover:bg-gray-50 text-amber-600 font-medium py-3 px-6 rounded-lg shadow-sm transition-colors"
-                >
-                  {t('Cargar más productos')}
-                </button>
-              </div>
-            )}
+            {/* Removed "Load More" button - all products now shown by default */}
           </div>
         </div>
 
