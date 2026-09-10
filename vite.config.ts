@@ -78,5 +78,16 @@ export default defineConfig({
   },
   build: {
     modulePreload: false,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-ui': ['lucide-react', 'react-hot-toast', 'react-rnd', 'react-zoom-pan-pinch'],
+          'vendor-utils': ['date-fns', 'xlsx'],
+        },
+      },
+    },
   },
 });
