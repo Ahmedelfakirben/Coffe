@@ -58,6 +58,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       items: [
         { id: 'products', label: t('nav.products'), icon: Package, roles: ['super_admin', 'admin'] },
         { id: 'categories', label: t('nav.categories'), icon: Tag, roles: ['super_admin', 'admin'] },
+        { id: 'tables', label: t('nav.tables'), icon: Grid3x3, roles: ['super_admin', 'admin'] },
         { id: 'users', label: t('nav.users'), icon: Users, roles: ['super_admin', 'admin'] },
       ]
     },
@@ -77,7 +78,6 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         { id: 'role-management', label: t('nav.role-management'), icon: Shield, roles: ['super_admin'] },
         { id: 'company-settings', label: t('nav.company-settings'), icon: Building2, roles: ['super_admin'] },
         { id: 'app-settings', label: t('nav.app-settings'), icon: Settings, roles: ['super_admin'] },
-        { id: 'tables', label: t('nav.tables'), icon: Grid3x3, roles: ['super_admin'] },
         { id: 'server', label: t('nav.server'), icon: Server, roles: ['super_admin'] },
         { id: 'backup', label: t('nav.backup'), icon: Database, roles: ['super_admin'] },
       ]
@@ -669,7 +669,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     <>
       <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg sticky top-0 z-50">
         <div className="w-full px-4 lg:px-6">
-          <div className="flex items-center justify-between h-20">
+          <div className="hidden lg:flex items-center justify-between h-20">
             <div className="flex-shrink-0 flex items-center gap-3">
               <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                 <Coffee className="w-8 h-8 text-white" />
@@ -725,67 +725,83 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           </div>
         </div>
 
-        {/* Navegación móvil simplificada */}
-        <div className="lg:hidden border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-around px-4 py-2">
-            {profile?.role === 'cashier' || profile?.role === 'barista' || profile?.role === 'waiter' ? (
-              // Vista simplificada para cajeros, baristas y camareros - basado en permisos
+        {/* Navegación móvil compacta */}
+        <div className="lg:hidden bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow">
+                <Coffee className="w-4 h-4 text-white" />
+              </div>
+            </div>
+
+            {profile?.role === 'waiter' ? (
               <>
-                {userPermissions['pos'] && (
-                  <button
-                    onClick={() => onViewChange('pos')}
-                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${currentView === 'pos'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                  >
-                    <ShoppingCart className="w-5 h-5" />
-                    <span className="text-xs font-medium">{t('Punto de Venta')}</span>
-                  </button>
-                )}
-                {userPermissions['floor'] && (
+                <div className="flex items-center justify-center gap-1.5 flex-1 mx-2 overflow-x-auto scrollbar-hide py-0.5">
                   <button
                     onClick={() => onViewChange('floor')}
-                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${currentView === 'floor'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'text-gray-600 hover:bg-gray-100'
-                      }`}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
+                      currentView === 'floor'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   >
-                    <Users className="w-5 h-5" />
-                    <span className="text-xs font-medium">{t('Sala')}</span>
+                    <Users className="w-3.5 h-3.5" />
+                    <span>{t('nav.floor')}</span>
                   </button>
-                )}
-                {userPermissions['orders'] && (
+
+                  <button
+                    onClick={() => onViewChange('pos')}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
+                      currentView === 'pos'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    <span>{t('nav.pos')}</span>
+                  </button>
+
                   <button
                     onClick={() => onViewChange('orders')}
-                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${currentView === 'orders'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'text-gray-600 hover:bg-gray-100'
-                      }`}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
+                      currentView === 'orders'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   >
-                    <ClipboardList className="w-5 h-5" />
-                    <span className="text-xs font-medium">{t('Pedidos')}</span>
+                    <ClipboardList className="w-3.5 h-3.5" />
+                    <span>{t('nav.orders')}</span>
                   </button>
-                )}
+                </div>
+
+                <button
+                  onClick={handleLogoutClick}
+                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                  title={t('Salir')}
+                >
+                  <LogOut className="w-4 h-4 text-red-500" />
+                </button>
               </>
             ) : (
-              // Vista para admin - Botón de menú hamburguesa centrado
-              <div className="w-full flex justify-center">
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-amber-600 text-lg">LIN-Caisse</span>
+                </div>
                 <button
                   onClick={() => setMobileMenuOpen(true)}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors shadow-md"
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors shadow-sm text-sm font-medium"
                 >
-                  <Menu className="w-5 h-5" />
-                  <span className="font-medium">{t('Menú de Navegación')}</span>
+                  <Menu className="w-4 h-4" />
+                  <span>{t('Menú de Navegación')}</span>
                 </button>
-              </div>
+              </>
             )}
           </div>
         </div>
       </nav>
 
-      {/* Menú lateral móvil para admin y super_admin */}
-      {mobileMenuOpen && (profile?.role === 'admin' || profile?.role === 'super_admin') && (
+      {/* Menú lateral móvil */}
+      {mobileMenuOpen && profile && (
         <>
           {/* Overlay */}
           <div

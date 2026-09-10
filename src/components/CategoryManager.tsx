@@ -8,6 +8,7 @@ interface Category {
   id: string;
   name: string;
   description: string;
+  preparation_zone?: string | null;
   created_at: string;
 }
 
@@ -15,6 +16,7 @@ export function CategoryManager() {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<Category[]>([]);
   const [newCategory, setNewCategory] = useState('');
+  const [preparationZone, setPreparationZone] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -60,7 +62,10 @@ export function CategoryManager() {
         console.log('Updating category:', editingCategory.id, 'to:', newCategory);
         const { data, error } = await supabase
           .from('categories')
-          .update({ name: newCategory })
+          .update({ 
+            name: newCategory,
+            preparation_zone: preparationZone || null
+          })
           .eq('id', editingCategory.id)
           .select();
 
@@ -75,7 +80,10 @@ export function CategoryManager() {
         console.log('Creating new category:', newCategory);
         const { data, error } = await supabase
           .from('categories')
-          .insert({ name: newCategory })
+          .insert({ 
+            name: newCategory,
+            preparation_zone: preparationZone || null
+          })
           .select();
 
         if (error) {
@@ -88,6 +96,7 @@ export function CategoryManager() {
       }
 
       setNewCategory('');
+      setPreparationZone('');
       setEditingCategory(null);
       await fetchCategories();
     } catch (err: any) {
@@ -102,6 +111,7 @@ export function CategoryManager() {
     console.log('Editing category:', category);
     setEditingCategory(category);
     setNewCategory(category.name);
+    setPreparationZone(category.preparation_zone || '');
   };
 
   const handleDelete = async (id: string) => {
@@ -177,6 +187,18 @@ export function CategoryManager() {
               required
             />
           </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Zona de Impresión (QZ Tray)
+            </label>
+            <input
+              type="text"
+              value={preparationZone}
+              onChange={(e) => setPreparationZone(e.target.value)}
+              placeholder="Ej: EPSON_Cocina, POS-Crepes"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+          </div>
           <button
             type="submit"
             disabled={loading || !newCategory.trim()}
@@ -190,6 +212,7 @@ export function CategoryManager() {
               onClick={() => {
                 setEditingCategory(null);
                 setNewCategory('');
+                setPreparationZone('');
               }}
               className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
             >
@@ -221,6 +244,11 @@ export function CategoryManager() {
               <li key={category.id} className="px-4 py-4 flex items-center justify-between hover:bg-gray-50">
                 <div className="flex-1">
                   <span className="text-gray-900 font-medium">{category.name}</span>
+                  {category.preparation_zone && (
+                    <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      🖨️ {category.preparation_zone}
+                    </span>
+                  )}
                   <div className="text-sm text-gray-500 mt-1">
                     {t('Creada:')} {new Date(category.created_at).toLocaleDateString('es-ES')}
                   </div>

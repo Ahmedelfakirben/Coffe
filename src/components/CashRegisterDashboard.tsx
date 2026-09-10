@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { Calendar, DollarSign, Filter, RefreshCw, Printer } from 'lucide-react';
+import { Calendar, DollarSign, Filter, RefreshCw, Printer, Users, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, UserCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface CashSession {
@@ -40,12 +40,36 @@ interface Order {
   }>;
 }
 
+interface WaiterReport {
+  employeeId: string;
+  employeeName: string;
+  role: string;
+  totalOrders: number;
+  completedOrders: number;
+  pendingOrders: number;
+  totalSales: number;
+  orders: Array<{
+    id: string;
+    order_number: number | null;
+    created_at: string;
+    total: number;
+    status: string;
+    tableName?: string | null;
+    itemsSummary?: string;
+  }>;
+}
+
 export function CashRegisterDashboard() {
   const { user, profile } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency: formatCurrencyFromContext } = useCurrency();
   const [sessions, setSessions] = useState<CashSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'sessions' | 'waiters'>('sessions');
+  const [waiterReports, setWaiterReports] = useState<WaiterReport[]>([]);
+  const [loadingWaiters, setLoadingWaiters] = useState(false);
+  const [expandedWaiterId, setExpandedWaiterId] = useState<string | null>(null);
+
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -81,7 +105,10 @@ export function CashRegisterDashboard() {
     fetchSessions();
     fetchCurrentCashStatus();
     fetchWithdrawals();
-  }, [filters, profile]);
+    if (activeTab === 'waiters') {
+      fetchWaiterReports();
+    }
+  }, [filters, profile, activeTab]);
 
   useEffect(() => {
     fetchEmployees();
@@ -203,7 +230,7 @@ export function CashRegisterDashboard() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('es-ES', {
+    return new Date(dateStr).toLocaleString('fr-FR', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -363,11 +390,10 @@ export function CashRegisterDashboard() {
       const endOfDay = new Date(dayData.date);
       endOfDay.setHours(23, 59, 59, 999);
 
-      // Obtener ventas del día (pedidos confirmados)
+      // Obtener todas las ventas completadas del día (todas las ventas van a la caja)
       const { data: orders } = await supabase
         .from('orders')
         .select('total')
-        .eq('employee_id', dayData.employee_id)
         .eq('status', 'completed')
         .gte('created_at', startOfDay.toISOString())
         .lte('created_at', endOfDay.toISOString());
@@ -432,90 +458,90 @@ export function CashRegisterDashboard() {
       const orderTotal = (orders || []).reduce((sum, order) => sum + order.total, 0);
       const orderCount = orders?.length || 0;
 
-      // Create professional invoice-style print content
+      // Create professional invoice-style print content in French
       const printContent = `
         <div class="report">
           <div class="header">
             <h1>LIN-Caisse</h1>
-            <p>Sistema de Gestión Integral</p>
-            <p>Reporte Diario de Caja</p>
+            <p>Système de Gestion Intégré</p>
+            <p>Rapport Journalier de Caisse</p>
           </div>
 
           <div class="info-section">
             <div class="info-item">
-              <strong>${new Date(day.date).toLocaleDateString('es-ES')}</strong>
-              <span>Fecha del Reporte</span>
+              <strong>${new Date(day.date).toLocaleDateString('fr-FR')}</strong>
+              <span>Date du Rapport</span>
             </div>
             <div class="info-item">
-              <strong>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : 'Tú'}</strong>
-              <span>Empleado</span>
+              <strong>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : 'Vous'}</strong>
+              <span>Employé</span>
             </div>
             <div class="info-item">
               <strong>${orderCount}</strong>
-              <span>Total Pedidos</span>
+              <span>Total Commandes</span>
             </div>
             <div class="info-item">
               <strong>${formatCurrency(orderTotal)}</strong>
-              <span>Total Ventas</span>
+              <span>Ventes Totales</span>
             </div>
           </div>
 
-          <div class="section-title">RESUMEN FINANCIERO DEL DÍA</div>
+          <div class="section-title">RÉSUMÉ FINANCIER DU JOUR</div>
           <div class="summary-grid">
             <div class="summary-item">
               <strong>${formatCurrency(day.totalOpening)}</strong>
-              <span>Total Inicial</span>
+              <span>Fond de Caisse Initial</span>
             </div>
             <div class="summary-item">
               <strong>${formatCurrency(day.totalClosing)}</strong>
-              <span>Total Final</span>
+              <span>Fond de Caisse Final</span>
             </div>
             <div class="summary-item">
               <strong>${formatCurrency(day.totalClosing - day.totalOpening)}</strong>
-              <span>Balance del Día</span>
+              <span>Solde du Jour</span>
             </div>
             <div class="summary-item">
               <strong>${day.sessions.length}</strong>
-              <span>Sesiones de Caja</span>
+              <span>Sessions de Caisse</span>
             </div>
           </div>
 
-          <div class="section-title">DETALLE DE SESIONES</div>
+          <div class="section-title">DÉTAIL DES SESSIONS</div>
           <div class="table-container">
             <table>
               <thead>
                 <tr>
-                  <th>Sesión</th>
-                  <th>Hora Apertura</th>
-                  <th>Monto Inicial</th>
-                  <th>Hora Cierre</th>
-                  <th>Monto Final</th>
-                  <th>Estado</th>
+                  <th>Session</th>
+                  <th>Heure Ouverture</th>
+                  <th>Montant Initial</th>
+                  <th>Heure Fermeture</th>
+                  <th>Montant Final</th>
+                  <th>Statut</th>
                 </tr>
               </thead>
               <tbody>
                 ${day.sessions.map((session: CashSession, index: number) => `
                   <tr>
                     <td>${index + 1}</td>
-                    <td>${new Date(session.opened_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td>${new Date(session.opened_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
                     <td>${formatCurrency(session.opening_amount)}</td>
-                    <td>${session.closed_at ? new Date(session.closed_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                    <td>${session.closed_at ? new Date(session.closed_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
                     <td>${session.closing_amount ? formatCurrency(session.closing_amount) : '-'}</td>
-                    <td>${session.closed_at ? 'Cerrada' : 'Abierta'}</td>
+                    <td>${session.closed_at ? 'Fermée' : 'Ouverte'}</td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
           </div>
 
-          <div class="section-title">DETALLE DE PEDIDOS</div>
+          <div class="section-title">DÉTAIL DES COMMANDES</div>
           <div class="table-container">
             <table>
               <thead>
                 <tr>
-                  <th>N° Pedido</th>
-                  <th>Hora</th>
-                  <th>Productos</th>
+                  <th>N° Commande</th>
+                  <th>Heure</th>
+                  <th>Produits</th>
                   <th>Total</th>
                 </tr>
               </thead>
@@ -523,13 +549,13 @@ export function CashRegisterDashboard() {
                 ${(orders || []).map(order => `
                   <tr>
                     <td>${order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8)}</td>
-                    <td>${new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</td>
-                    <td>${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || 'Producto'}`).join(', ')}</td>
+                    <td>${new Date(order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td>${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || 'Produit'}`).join(', ')}</td>
                     <td>${formatCurrency(order.total)}</td>
                   </tr>
                 `).join('')}
                 <tr class="total-row">
-                  <td colspan="3" style="text-align: right; font-weight: bold;">TOTAL DEL DÍA</td>
+                  <td colspan="3" style="text-align: right; font-weight: bold;">TOTAL DU JOUR</td>
                   <td style="font-weight: bold; font-size: 16px;">${formatCurrency(orderTotal)}</td>
                 </tr>
               </tbody>
@@ -538,17 +564,17 @@ export function CashRegisterDashboard() {
 
           <div class="signature-section">
             <div class="signature-box">
-              <p>Firma del Empleado</p>
-              <p>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : profile?.full_name || 'Usuario'}</p>
+              <p>Signature de l'Employé</p>
+              <p>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : profile?.full_name || 'Utilisateur'}</p>
             </div>
             <div class="signature-box">
-              <p>Firma del Administrador</p>
+              <p>Signature de l'Administrateur</p>
             </div>
           </div>
 
           <div class="footer">
-            <p>Este documento es oficial y forma parte del registro contable de LIN-Caisse</p>
-            <p>Reporte generado el ${new Date().toLocaleString('es-ES')}</p>
+            <p>Ce document est officiel et fait partie de la comptabilité de LIN-Caisse</p>
+            <p>Rapport généré le ${new Date().toLocaleString('fr-FR')}</p>
           </div>
         </div>
       `;
@@ -741,63 +767,63 @@ export function CashRegisterDashboard() {
       const orderTotal = (orders || []).reduce((sum, order) => sum + order.total, 0);
       const orderCount = orders?.length || 0;
 
-      // Create print content
+      // Create print content in French
       const printContent = `
         <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
-          <h2 style="text-align: center; margin-bottom: 10px;">REPORTE DE CAJA</h2>
+          <h2 style="text-align: center; margin-bottom: 10px;">RAPPORT DE CAISSE</h2>
           <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>Empleado:</strong> ${profile?.role === 'admin' || profile?.role === 'super_admin' ? session.employee_profiles?.full_name || 'N/A' : 'Tú'}
+            <strong>Employé:</strong> ${profile?.role === 'admin' || profile?.role === 'super_admin' ? session.employee_profiles?.full_name || 'N/A' : 'Vous'}
           </div>
 
           <div style="margin-bottom: 10px;">
-            <strong>Fecha de Apertura:</strong> ${formatDate(session.opened_at)}
+            <strong>Date d'Ouverture:</strong> ${formatDate(session.opened_at)}
           </div>
 
           ${session.closed_at ? `<div style="margin-bottom: 10px;">
-            <strong>Fecha de Cierre:</strong> ${formatDate(session.closed_at)}
+            <strong>Date de Fermeture:</strong> ${formatDate(session.closed_at)}
           </div>` : ''}
 
           <div style="margin-bottom: 10px;">
-            <strong>Monto Inicial:</strong> ${formatCurrency(session.opening_amount)}
+            <strong>Montant Initial:</strong> ${formatCurrency(session.opening_amount)}
           </div>
 
           ${session.closing_amount ? `<div style="margin-bottom: 10px;">
-            <strong>Monto Final:</strong> ${formatCurrency(session.closing_amount)}
+            <strong>Montant Final:</strong> ${formatCurrency(session.closing_amount)}
           </div>` : ''}
 
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>RESUMEN DE PEDIDOS</strong>
+            <strong>RÉSUMÉ DES COMMANDES</strong>
           </div>
 
           <div style="margin-bottom: 5px;">
-            <strong>Total Pedidos:</strong> ${orderCount}
+            <strong>Total Commandes:</strong> ${orderCount}
           </div>
 
           <div style="margin-bottom: 10px;">
-            <strong>Total Ventas:</strong> ${formatCurrency(orderTotal)}
+            <strong>Ventes Totales:</strong> ${formatCurrency(orderTotal)}
           </div>
 
           ${session.closing_amount ? `<div style="margin-bottom: 10px;">
-            <strong>Balance:</strong> ${formatCurrency(session.closing_amount - session.opening_amount)}
+            <strong>Solde:</strong> ${formatCurrency(session.closing_amount - session.opening_amount)}
           </div>` : ''}
 
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>DETALLE DE PEDIDOS</strong>
+            <strong>DÉTAIL DES COMMANDES</strong>
           </div>
 
           ${(orders || []).map(order => `
             <div style="margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
-              <div><strong>Pedido #${order.id.slice(-8)}</strong></div>
-              <div>Hora: ${new Date(order.created_at).toLocaleTimeString('es-ES')}</div>
+              <div><strong>Commande #${order.id.slice(-8)}</strong></div>
+              <div>Heure: ${new Date(order.created_at).toLocaleTimeString('fr-FR')}</div>
               <div>Total: ${formatCurrency(order.total)}</div>
               <div style="font-size: 12px; margin-top: 3px;">
-                ${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || 'Producto'}`).join(', ')}
+                ${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || 'Produit'}`).join(', ')}
               </div>
             </div>
           `).join('')}
@@ -805,7 +831,7 @@ export function CashRegisterDashboard() {
           <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
 
           <div style="text-align: center; margin-top: 20px; font-size: 12px;">
-            Generado el ${new Date().toLocaleString('es-ES')}
+            Généré le ${new Date().toLocaleString('fr-FR')}
           </div>
         </div>
       `;
@@ -816,7 +842,7 @@ export function CashRegisterDashboard() {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Reporte de Caja</title>
+              <title>Rapport de Caisse</title>
               <style>
                 @media print {
                   body { margin: 0; }
@@ -836,261 +862,634 @@ export function CashRegisterDashboard() {
         printWindow.onafterprint = () => printWindow.close();
       }
     } catch (err) {
-      console.error('Error generating report:', err);
+      console.error('Error generating session report:', err);
       toast.error(t('Error al generar el reporte'));
+    }
+  };
+
+  const fetchWaiterReports = async () => {
+    setLoadingWaiters(true);
+    try {
+      const { data: employeesData, error: empErr } = await supabase
+        .from('employee_profiles')
+        .select('id, full_name, role')
+        .neq('role', 'super_admin')
+        .order('full_name');
+
+      if (empErr) throw empErr;
+
+      const now = new Date();
+      let workdayStart = new Date(now);
+      if (workdayStart.getHours() < 2) {
+        workdayStart.setDate(workdayStart.getDate() - 1);
+      }
+      workdayStart.setHours(2, 0, 0, 0);
+
+      const startDateIso = filters.startDate ? new Date(filters.startDate).toISOString() : workdayStart.toISOString();
+      let endDateIso = new Date().toISOString();
+      if (filters.endDate) {
+        const ed = new Date(filters.endDate);
+        ed.setDate(ed.getDate() + 1);
+        endDateIso = ed.toISOString();
+      }
+
+      const { data: ordersData, error: ordersErr } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          order_number,
+          total,
+          status,
+          created_at,
+          employee_id,
+          tables (name),
+          order_items (
+            quantity,
+            unit_price,
+            products (name)
+          )
+        `)
+        .gte('created_at', startDateIso)
+        .lte('created_at', endDateIso)
+        .order('created_at', { ascending: false });
+
+      if (ordersErr) throw ordersErr;
+
+      const reportsMap = new Map<string, WaiterReport>();
+
+      (employeesData || []).forEach(emp => {
+        reportsMap.set(emp.id, {
+          employeeId: emp.id,
+          employeeName: emp.full_name || 'Empleado',
+          role: emp.role || 'camarero',
+          totalOrders: 0,
+          completedOrders: 0,
+          pendingOrders: 0,
+          totalSales: 0,
+          orders: [],
+        });
+      });
+
+      (ordersData || []).forEach((ord: any) => {
+        if (!ord.employee_id) return;
+
+        let report = reportsMap.get(ord.employee_id);
+        if (!report) {
+          report = {
+            employeeId: ord.employee_id,
+            employeeName: 'Empleado sin perfil',
+            role: 'waiter',
+            totalOrders: 0,
+            completedOrders: 0,
+            pendingOrders: 0,
+            totalSales: 0,
+            orders: [],
+          };
+          reportsMap.set(ord.employee_id, report);
+        }
+
+        const orderTotal = typeof ord.total === 'string' ? parseFloat(ord.total) : (ord.total || 0);
+        report.totalOrders += 1;
+        if (ord.status === 'completed') {
+          report.completedOrders += 1;
+          report.totalSales += orderTotal;
+        } else if (ord.status !== 'cancelled') {
+          report.pendingOrders += 1;
+        }
+
+        const itemsSummary = (ord.order_items || [])
+          .map((i: any) => `${i.quantity}x ${Array.isArray(i.products) ? i.products[0]?.name : i.products?.name || 'Item'}`)
+          .join(', ');
+
+        report.orders.push({
+          id: ord.id,
+          order_number: ord.order_number,
+          created_at: ord.created_at,
+          total: orderTotal,
+          status: ord.status,
+          tableName: ord.tables ? (Array.isArray(ord.tables) ? ord.tables[0]?.name : ord.tables?.name) : null,
+          itemsSummary,
+        });
+      });
+
+      const result = Array.from(reportsMap.values())
+        .filter(r => r.totalOrders > 0 || profile?.role === 'admin' || profile?.role === 'super_admin')
+        .sort((a, b) => b.totalSales - a.totalSales);
+
+      setWaiterReports(result);
+    } catch (err) {
+      console.error('Error al generar reporte de camareros:', err);
+      toast.error(t('Error al cargar reporte de camareros'));
+    } finally {
+      setLoadingWaiters(false);
+    }
+  };
+
+  const printWaiterReportTicket = (report: WaiterReport) => {
+    const ticketContent = `
+      <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
+        <h2 style="text-align: center; margin-bottom: 5px;">LIN-Caisse</h2>
+        <h3 style="text-align: center; margin: 0 0 10px 0; font-size: 14px;">RAPPORT DE SERVEUR</h3>
+        <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
+
+        <div style="margin-bottom: 5px;">
+          <strong>Serveur:</strong> ${report.employeeName}
+        </div>
+        <div style="margin-bottom: 5px;">
+          <strong>Rôle:</strong> ${report.role}
+        </div>
+        <div style="margin-bottom: 10px;">
+          <strong>Date:</strong> ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+        </div>
+
+        <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+
+        <div style="margin-bottom: 5px;">
+          <strong>Total Commandes:</strong> ${report.totalOrders}
+        </div>
+        <div style="margin-bottom: 5px; color: green;">
+          <strong>Encaissées:</strong> ${report.completedOrders}
+        </div>
+        <div style="margin-bottom: 5px; color: orange;">
+          <strong>En attente:</strong> ${report.pendingOrders}
+        </div>
+
+        <div style="margin-bottom: 10px; padding: 8px; background-color: #e8f5e9; border: 1px solid #4caf50; font-size: 16px;">
+          <strong>TOTAL VENTES:</strong> ${formatCurrency(report.totalSales)}
+        </div>
+
+        <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+        <div style="margin-bottom: 10px; font-weight: bold;">DÉTAIL DES COMMANDES:</div>
+
+        ${report.orders.map(ord => `
+          <div style="margin-bottom: 6px; border-bottom: 1px dashed #ccc; padding-bottom: 4px; font-size: 12px;">
+            <div><strong>#${ord.order_number ? String(ord.order_number).padStart(3, '0') : ord.id.slice(-6)}</strong> - ${new Date(ord.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (${ord.tableName ? 'Table ' + ord.tableName : 'À emporter'})</div>
+            <div>Statut: ${ord.status === 'completed' ? 'PAYÉE' : 'EN ATTENTE'}</div>
+            <div style="font-weight: bold;">Total: ${formatCurrency(ord.total)}</div>
+          </div>
+        `).join('')}
+
+        <div style="border-bottom: 1px solid #000; margin: 15px 0;"></div>
+
+        <div style="margin-top: 30px; display: flex; justify-content: space-between; font-size: 11px;">
+          <div style="text-align: center; border-top: 1px solid #000; width: 45%; padding-top: 4px;">
+            Signature Serveur
+          </div>
+          <div style="text-align: center; border-top: 1px solid #000; width: 45%; padding-top: 4px;">
+            Signature Caissier
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 20px; font-size: 10px; color: #666;">
+          LIN-Caisse - Généré le ${new Date().toLocaleString('fr-FR')}
+        </div>
+      </div>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Reporte Camarero - ${report.employeeName}</title>
+            <style>
+              @media print {
+                body { margin: 0; }
+                @page { size: auto; margin: 5mm; }
+              }
+            </style>
+          </head>
+          <body>
+            ${ticketContent}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.onafterprint = () => printWindow.close();
     }
   };
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('Gestión de Caja')}</h1>
-        <p className="text-gray-600">{t('Historial de aperturas y cierres de caja')}</p>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{t('Gestión de Caja')}</h1>
+          <p className="text-gray-600">{t('Historial de aperturas, cierres y resumen por camarero')}</p>
+        </div>
+
+        {/* Selector de Pestañas */}
+        <div className="flex gap-2 bg-gray-200 p-1.5 rounded-2xl shadow-inner">
+          <button
+            onClick={() => setActiveTab('sessions')}
+            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${
+              activeTab === 'sessions'
+                ? 'bg-white text-amber-700 shadow-md scale-102'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+            }`}
+          >
+            💵 {t('Sesiones de Caja')}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('waiters');
+              fetchWaiterReports();
+            }}
+            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${
+              activeTab === 'waiters'
+                ? 'bg-white text-amber-700 shadow-md scale-102'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+            }`}
+          >
+            👔 {t('Ventas por Camarero')}
+          </button>
+        </div>
       </div>
 
-      {/* Totales */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-5 h-5 text-green-600" />
-            <span className="text-sm font-medium text-gray-700">{t('Total Aperturas')}</span>
+      {activeTab === 'sessions' ? (
+        <>
+          {/* Totales */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white p-4 rounded-lg shadow-sm border">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium text-gray-700">{t('Total Aperturas')}</span>
+              </div>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(totals.totalOpening)}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm border">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-5 h-5 text-blue-600" />
+                <span className="text-sm font-medium text-gray-700">{t('Total Cierres')}</span>
+              </div>
+              <p className="text-2xl font-bold text-blue-600">{formatCurrency(totals.totalClosing)}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm border">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-5 h-5 text-amber-600" />
+                <span className="text-sm font-medium text-gray-700">{t('Balance')}</span>
+              </div>
+              <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(totals.balance)}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm border">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-5 h-5 text-purple-600" />
+                <span className="text-sm font-medium text-gray-700">{t('Estado Actual')}</span>
+              </div>
+              <p className="text-2xl font-bold text-purple-600">{formatCurrency(currentCashStatus.currentAmount)}</p>
+              <p className="text-xs text-gray-500">
+                {currentCashStatus.lastSessionStatus === 'open' ? t('Caja Abierta') : t('Caja Cerrada')}
+                {currentCashStatus.lastSessionTime && (
+                  <span className="block">
+                    {new Date(currentCashStatus.lastSessionTime).toLocaleString('es-ES', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(totals.totalOpening)}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">{t('Total Cierres')}</span>
-          </div>
-          <p className="text-2xl font-bold text-blue-600">{formatCurrency(totals.totalClosing)}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-5 h-5 text-amber-600" />
-            <span className="text-sm font-medium text-gray-700">{t('Balance')}</span>
-          </div>
-          <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {formatCurrency(totals.balance)}
-          </p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-5 h-5 text-purple-600" />
-            <span className="text-sm font-medium text-gray-700">{t('Estado Actual')}</span>
-          </div>
-          <p className="text-2xl font-bold text-purple-600">{formatCurrency(currentCashStatus.currentAmount)}</p>
-          <p className="text-xs text-gray-500">
-            {currentCashStatus.lastSessionStatus === 'open' ? t('Caja Abierta') : t('Caja Cerrada')}
-            {currentCashStatus.lastSessionTime && (
-              <span className="block">
-                {new Date(currentCashStatus.lastSessionTime).toLocaleString('es-ES', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </span>
+
+          {/* Filtros */}
+          {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
+            <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Filter className="w-5 h-5 text-gray-600" />
+                <span className="font-medium text-gray-900">{t('Filtros')}</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('Fecha Inicio')}</label>
+                  <input
+                    type="date"
+                    value={filters.startDate}
+                    onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('Fecha Fin')}</label>
+                  <input
+                    type="date"
+                    value={filters.endDate}
+                    onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('Estado')}</label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  >
+                    <option value="all">{t('Todos')}</option>
+                    <option value="open">{t('Abiertas')}</option>
+                    <option value="closed">{t('Cerradas')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('Empleado')}</label>
+                  <select
+                    value={filters.employeeId}
+                    onChange={(e) => setFilters(prev => ({ ...prev, employeeId: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  >
+                    <option value="all">{t('Todos los empleados')}</option>
+                    {employees.map(employee => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={fetchSessions}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md transition-colors flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    {t('Actualizar')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Para cajeros: mostrar solo el día actual */}
+          {profile?.role === 'cashier' && (
+            <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="w-5 h-5 text-gray-600" />
+                <span className="font-medium text-gray-900">{t('Sesiones de Hoy')}</span>
+              </div>
+              <div className="text-sm text-gray-600">
+                {t('Mostrando todas tus sesiones de caja del día actual')}
+              </div>
+            </div>
+          )}
+
+          {/* Tabla */}
+          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center">
+                <div className="w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">{t('Cargando sesiones...')}</p>
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="p-8 text-center">
+                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">{t('No hay sesiones de caja para mostrar')}</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Empleado')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Fecha')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Primera Apertura')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Último Cierre')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Apertura')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Ventas')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Retiros')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Cierre Esperado')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Cierre Real')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Diferencia')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('Acciones')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {dailySessions.map((day: any) => (
+                      <tr key={`${day.date}-${day.employee_id}`} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : t('Tú')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(day.date).toLocaleDateString('es-ES')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(day.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {day.lastClose ? new Date(day.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
+                          {formatCurrency(day.totalOpening)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                          {formatCurrency(day.totalSales || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600">
+                          {formatCurrency(day.totalWithdrawals || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                          {formatCurrency(day.expectedClosing || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-purple-600">
+                          {formatCurrency(day.totalClosing || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                          <span className={`px-2 py-1 rounded ${Math.abs(day.difference) < 0.01 ? 'bg-green-100 text-green-700' :
+                            day.difference > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                            {formatCurrency(day.difference || 0)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => printDailyReport(day)}
+                              className="text-amber-600 hover:text-amber-900 p-1 rounded-md hover:bg-amber-50 transition-colors"
+                              title={t('Imprimir reporte diario')}
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                            {(profile?.role === 'admin' || profile?.role === 'super_admin') && day.sessions.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  setSelectedSessionForWithdrawal(day.sessions[0].id);
+                                  setShowWithdrawalModal(true);
+                                }}
+                                className="text-blue-600 hover:text-blue-900 px-2 py-1 rounded-md hover:bg-blue-50 transition-colors text-xs"
+                                title={t('Registrar retiro de caja')}
+                              >
+                                {t('Retiro')}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </p>
-        </div>
-      </div>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-6">
+          {/* Header & Refresh de Ventas por Camarero */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Users className="w-5 h-5 text-amber-600" />
+                {t('Resumen de Ventas por Camarero')}
+              </h2>
+              <p className="text-sm text-gray-500">
+                {t('Revise los pedidos de cada camarero e imprima su ticket individual de cierre')}
+              </p>
+            </div>
+            <button
+              onClick={fetchWaiterReports}
+              disabled={loadingWaiters}
+              className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingWaiters ? 'animate-spin' : ''}`} />
+              {t('Actualizar')}
+            </button>
+          </div>
 
-      {/* Filtros */}
-      {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
-        <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Filter className="w-5 h-5 text-gray-600" />
-            <span className="font-medium text-gray-900">{t('Filtros')}</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Fecha Inicio')}</label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              />
+          {loadingWaiters ? (
+            <div className="p-12 text-center bg-white rounded-xl shadow-sm border">
+              <div className="w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600">{t('Cargando resumen de camareros...')}</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Fecha Fin')}</label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              />
+          ) : waiterReports.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-xl shadow-sm border">
+              <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 text-lg font-bold">{t('No hay ventas registradas para los camareros')}</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Estado')}</label>
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value as any }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              >
-                <option value="all">{t('Todos')}</option>
-                <option value="open">{t('Abiertas')}</option>
-                <option value="closed">{t('Cerradas')}</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('Empleado')}</label>
-              <select
-                value={filters.employeeId}
-                onChange={(e) => setFilters(prev => ({ ...prev, employeeId: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              >
-                <option value="all">{t('Todos los empleados')}</option>
-                {employees.map(employee => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.full_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-end">
-              <button
-                onClick={fetchSessions}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md transition-colors flex items-center justify-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                {t('Actualizar')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {waiterReports.map(report => {
+                const isExpanded = expandedWaiterId === report.employeeId;
+                return (
+                  <div key={report.employeeId} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-5 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-gray-50 to-white">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md text-white font-bold text-xl">
+                          {report.employeeName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-extrabold text-gray-900">{report.employeeName}</h3>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 capitalize">
+                              {report.role}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {report.totalOrders} {t('pedidos realizados')} ({report.completedOrders} {t('cobrados')}, {report.pendingOrders} {t('pendientes')})
+                          </p>
+                        </div>
+                      </div>
 
-      {/* Para cajeros: mostrar solo el día actual */}
-      {profile?.role === 'cashier' && (
-        <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-gray-600" />
-            <span className="font-medium text-gray-900">{t('Sesiones de Hoy')}</span>
-          </div>
-          <div className="text-sm text-gray-600">
-            {t('Mostrando todas tus sesiones de caja del día actual')}
-          </div>
-        </div>
-      )}
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500 font-semibold">{t('Total Recaudado')}</p>
+                          <p className="text-2xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                            {formatCurrency(report.totalSales)}
+                          </p>
+                        </div>
 
-      {/* Tabla */}
-      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center">
-            <div className="w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">{t('Cargando sesiones...')}</p>
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="p-8 text-center">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">{t('No hay sesiones de caja para mostrar')}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Empleado')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Fecha')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Primera Apertura')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Último Cierre')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Apertura')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Ventas')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Retiros')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Cierre Esperado')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Cierre Real')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Diferencia')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('Acciones')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {dailySessions.map((day: any) => (
-                  <tr key={`${day.date}-${day.employee_id}`} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : t('Tú')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(day.date).toLocaleDateString('es-ES')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(day.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {day.lastClose ? new Date(day.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
-                      {formatCurrency(day.totalOpening)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                      {formatCurrency(day.totalSales || 0)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600">
-                      {formatCurrency(day.totalWithdrawals || 0)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                      {formatCurrency(day.expectedClosing || 0)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-purple-600">
-                      {formatCurrency(day.totalClosing || 0)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                      <span className={`px-2 py-1 rounded ${Math.abs(day.difference) < 0.01 ? 'bg-green-100 text-green-700' :
-                        day.difference > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                        {formatCurrency(day.difference || 0)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
                         <button
-                          onClick={() => printDailyReport(day)}
-                          className="text-amber-600 hover:text-amber-900 p-1 rounded-md hover:bg-amber-50 transition-colors"
-                          title={t('Imprimir reporte diario')}
+                          onClick={() => printWaiterReportTicket(report)}
+                          className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
+                          title={t('Imprimir ticket para ajustar cuentas con el camarero')}
                         >
                           <Printer className="w-4 h-4" />
+                          <span>{t('Imprimir Ticket Camarero')}</span>
                         </button>
-                        {(profile?.role === 'admin' || profile?.role === 'super_admin') && day.sessions.length > 0 && (
-                          <button
-                            onClick={() => {
-                              setSelectedSessionForWithdrawal(day.sessions[0].id);
-                              setShowWithdrawalModal(true);
-                            }}
-                            className="text-blue-600 hover:text-blue-900 px-2 py-1 rounded-md hover:bg-blue-50 transition-colors text-xs"
-                            title={t('Registrar retiro de caja')}
-                          >
-                            {t('Retiro')}
-                          </button>
+
+                        <button
+                          onClick={() => setExpandedWaiterId(isExpanded ? null : report.employeeId)}
+                          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                          title={t('Ver detalle de pedidos')}
+                        >
+                          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Lista desplegable de pedidos del camarero */}
+                    {isExpanded && (
+                      <div className="p-5 border-t border-gray-100 bg-gray-50/50">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                          {t('Detalle de Pedidos de')} {report.employeeName}
+                        </h4>
+                        {report.orders.length === 0 ? (
+                          <p className="text-sm text-gray-500">{t('Sin pedidos registrados')}</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {report.orders.map(ord => (
+                              <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-extrabold text-gray-900 text-sm">
+                                      #{ord.order_number ? String(ord.order_number).padStart(3, '0') : ord.id.slice(-6)}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      • {new Date(ord.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    {ord.tableName && (
+                                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                                        Mesa {ord.tableName}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    {ord.itemsSummary || t('Artículos del pedido')}
+                                  </p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                                    ord.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {ord.status === 'completed' ? t('Cobrado') : t('Pendiente')}
+                                  </span>
+                                  <p className="font-bold text-gray-900 text-sm mt-0.5">
+                                    {formatCurrency(ord.total)}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal para registrar retiros de caja */}
       {showWithdrawalModal && (

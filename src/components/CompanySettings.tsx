@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Building2, MapPin, Phone, Save, AlertCircle } from 'lucide-react';
+import { Building2, MapPin, Phone, Save, AlertCircle, Printer, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useLanguage } from '../contexts/LanguageContext';
+import { qzService } from '../lib/qzTray';
 
 interface CompanySettings {
   id: string;
@@ -10,6 +11,7 @@ interface CompanySettings {
   address: string;
   phone: string;
   language?: 'es' | 'fr';
+  qz_server_ip?: string;
 }
 
 export function CompanySettings() {
@@ -19,11 +21,14 @@ export function CompanySettings() {
     company_name: '',
     address: '',
     phone: '',
+    qz_server_ip: localStorage.getItem('qz_server_ip') || '',
   });
   const [originalSettings, setOriginalSettings] = useState<CompanySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [qzPrinters, setQzPrinters] = useState<string[]>([]);
+  const [checkingQZ, setCheckingQZ] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -57,6 +62,9 @@ export function CompanySettings() {
         }
       } else if (data) {
         console.log('✅ COMPANY SETTINGS: Settings loaded successfully:', data);
+        if (data.qz_server_ip !== undefined) {
+          localStorage.setItem('qz_server_ip', data.qz_server_ip || '');
+        }
         setSettings(data);
         setOriginalSettings(data);
       } else {
@@ -179,6 +187,23 @@ export function CompanySettings() {
     toast.success(t('Impresoras de tickets actualizadas'));
   };
 
+  const handleTestQZ = async () => {
+    setCheckingQZ(true);
+    try {
+      const printers = await qzService.getPrinters();
+      setQzPrinters(printers);
+      if (printers.length > 0) {
+        toast.success(`Conexión QZ Tray exitosa. ${printers.length} impresoras encontradas.`);
+      } else {
+        toast.error('QZ Tray conectado, pero no se encontraron impresoras.');
+      }
+    } catch (err) {
+      toast.error('No se pudo conectar a QZ Tray. Asegúrate de que el programa esté abierto.');
+    } finally {
+      setCheckingQZ(false);
+    }
+  };
+
   const checkDatabaseDirectly = async () => {
     try {
       console.log('🔍 COMPANY SETTINGS: Checking database directly...');
@@ -208,11 +233,16 @@ export function CompanySettings() {
 
     setSaving(true);
     try {
-      const settingsData = {
+      const settingsData: any = {
         company_name: settings.company_name.trim(),
         address: settings.address ? settings.address.trim() : null,
         phone: settings.phone ? settings.phone.trim() : null,
+        qz_server_ip: settings.qz_server_ip ? settings.qz_server_ip.trim() : null,
       };
+
+      if (settings.qz_server_ip !== undefined) {
+        localStorage.setItem('qz_server_ip', settings.qz_server_ip.trim());
+      }
 
       console.log('💾 COMPANY SETTINGS: Saving company settings:', settingsData);
       console.log('📝 COMPANY SETTINGS: Current settings state:', settings);
@@ -496,6 +526,66 @@ export function CompanySettings() {
             <div className="border-t border-gray-300 my-3"></div>
             <p className="text-xs text-gray-500 text-center">{t('Información de pedido...')}</p>
           </div>
+        </div>
+      </div>
+
+      {/* Configuración de Impresión Avanzada (QZ Tray) */}
+      <div className="bg-white rounded-xl shadow-sm p-6 max-w-2xl mt-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+            <Printer className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Enrutamiento de Comandas (QZ Tray)</h3>
+            <p className="text-sm text-gray-500">Impresión silenciosa multi-zona</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-1">
+              IP del Servidor QZ Tray (Caja Central)
+            </label>
+            <input
+              type="text"
+              value={settings.qz_server_ip || ''}
+              onChange={(e) => setSettings({ ...settings, qz_server_ip: e.target.value })}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm font-mono"
+              placeholder="Ej: 192.168.1.100 (dejar vacío para localhost)"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Escribe aquí la IP local del PC de Caja. Todos los dispositivos portátiles de los camareros se conectarán a esta IP para imprimir comanda sin configurar nada en sus móviles.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div>
+              <p className="font-semibold text-gray-900">Conexión con QZ Tray</p>
+              <p className="text-sm text-gray-600">Verifica que QZ Tray esté en ejecución en este equipo.</p>
+            </div>
+            <button
+              onClick={handleTestQZ}
+              disabled={checkingQZ}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors font-medium text-sm disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${checkingQZ ? 'animate-spin' : ''}`} />
+              Testear Conexión
+            </button>
+          </div>
+
+          {qzPrinters.length > 0 && (
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <p className="font-semibold text-emerald-800 mb-2">✅ Impresoras detectadas:</p>
+              <ul className="list-disc list-inside text-sm text-emerald-700 space-y-1">
+                {qzPrinters.map(printer => (
+                  <li key={printer}>{printer}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-emerald-600 mt-3">
+                Copia exactamente el nombre de la impresora y pégalo en la "Zona de Impresión" de tus categorías.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

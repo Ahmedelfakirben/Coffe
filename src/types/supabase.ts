@@ -1,6 +1,7 @@
 export interface Category {
   id: string;
   name: string;
+  preparation_zone?: string | null;
   created_at: string;
 }
 
@@ -81,3 +82,57 @@ export interface CashWithdrawal {
   performed_by: string;
   created_at: string;
 }
+
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: string | null;
+  unit: string;
+  current_stock: number;
+  min_stock_level: number;
+  unit_cost: number;
+  expiry_date: string | null;
+  supplier_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryReceipt {
+  id: string;
+  supplier_id: string | null;
+  received_by: string | null;
+  receipt_date: string;
+  total_amount: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface InventoryReceiptItem {
+  id: string;
+  receipt_id: string;
+  item_id: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  created_at: string;
+}
+
+export interface InventoryIssue {
+  id: string;
+  issued_by: string | null;
+  issue_date: string;
+  issue_type: 'internal_use' | 'loss' | 'expired' | 'adjustment';
+  notes: string | null;
+  created_at: string;
+}
+
+export interface InventoryIssueItem {
+  id: string;
+  issue_id: string;
+  item_id: string;
+  quantity: number;
+  unit_cost: number;
+  total_value: number;
+  created_at: string;
+}

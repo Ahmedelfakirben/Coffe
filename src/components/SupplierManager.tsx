@@ -249,6 +249,9 @@ export function SupplierManager() {
                 {t('Dirección')}
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                {t('economat.supplier_status')}
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {t('Acciones')}
               </th>
             </tr>
@@ -268,6 +271,12 @@ export function SupplierManager() {
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-sm text-gray-900">{supplier.address || '-'}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className={`text-sm font-bold ${supplier.balance > 0 ? 'text-red-600' : supplier.balance < 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                    {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Math.abs(supplier.balance || 0))}
+                    {supplier.balance > 0 ? ` (${t('economat.debit')})` : supplier.balance < 0 ? ` (${t('economat.credit')})` : ''}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button

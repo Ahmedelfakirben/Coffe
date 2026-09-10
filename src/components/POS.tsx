@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { Category, Product, ProductSize } from '../types/supabase';
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { toast } from 'react-hot-toast';
+import { qzService } from '../lib/qzTray';
 
 // Removed pagination - show all products per category
 
@@ -15,6 +16,27 @@ export function POS() {
   const { user, profile } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
+
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const mobileCategoryScrollRef = useRef<HTMLDivElement>(null);
+
+  const handleCategoryWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  };
+
+  const scrollCategoryLeft = (ref: React.RefObject<HTMLDivElement>) => {
+    if (ref.current) {
+      ref.current.scrollBy({ left: -200, behavior: 'smooth' });
+    }
+  };
+
+  const scrollCategoryRight = (ref: React.RefObject<HTMLDivElement>) => {
+    if (ref.current) {
+      ref.current.scrollBy({ left: 200, behavior: 'smooth' });
+    }
+  };
   const {
     items: cart,
     total,
@@ -220,7 +242,7 @@ export function POS() {
     try {
       let query = supabase
         .from('products')
-        .select('*')
+        .select('*, categories(preparation_zone)')
         .eq('available', true)
         .order('name');
 
@@ -452,6 +474,85 @@ export function POS() {
     }
   };
 
+  const executeKitchenRouting = async (orderNum: string, cartItems: typeof cart) => {
+    try {
+      const tableName = tableId ? (tables.find(t => t.id === tableId)?.name || '') : '';
+      const zones = new Map<string, typeof cart>();
+
+      cartItems.forEach(cartItem => {
+        const zone = cartItem.product.categories?.preparation_zone || 'General';
+        if (!zones.has(zone)) zones.set(zone, []);
+        zones.get(zone)!.push(cartItem);
+      });
+
+      for (const [zone, items] of zones.entries()) {
+        const html = `
+          <html>
+            <head>
+              <style>
+                 body { font-family: 'Courier New', monospace; font-size: 14px; margin: 0; padding: 5px; }
+                 h1 { font-size: 18px; text-align: center; margin: 5px 0; }
+                 .item { font-size: 16px; font-weight: bold; margin-bottom: 5px; border-bottom: 1px dotted #ccc; padding-bottom: 5px; }
+                 .qty { font-size: 20px; font-weight: 900; border: 2px solid #000; padding: 2px 6px; margin-right: 5px; }
+              </style>
+            </head>
+            <body>
+              <h1>🎫 ${zone.toUpperCase()}</h1>
+              <p>Pedido: <b>#${orderNum}</b></p>
+              <p>Tipo: <b>${serviceType === 'dine_in' ? 'MESA ' + tableName : 'PARA LLEVAR'}</b></p>
+              <p>Hora: ${new Date().toLocaleTimeString()}</p>
+              <hr>
+              ${items.map(i => `
+                <div class="item">
+                  <span class="qty">${i.quantity}</span> 
+                  ${i.product.name} ${i.size ? `(${i.size.size_name})` : ''}
+                </div>
+              `).join('')}
+              <hr>
+            </body>
+          </html>
+        `;
+
+        console.log(`🖨️ KITCHEN ROUTING: Enviando ticket a zona "${zone}"...`);
+        qzService.printHTML(zone, html).catch(err => {
+          console.error('Error enviando a QZ Tray:', err);
+        });
+      }
+    } catch (err) {
+      console.error('Error procesando Kitchen Routing:', err);
+    }
+  };
+
+  const handleSendToPreparation = async () => {
+    if (!pendingOrderData) return;
+
+    try {
+      // 1. Ejecutar impresión de cocina por categoría (QZ Tray)
+      const orderNum = pendingOrderData.orderNumber;
+      await executeKitchenRouting(orderNum, cart);
+
+      // 2. Si hay mesa, asegurar que el estado quede como 'occupied' en Sala
+      if (tableId) {
+        await updateTableStatus(tableId, 'occupied');
+      }
+
+      // 3. Resetear estados tras enviar a preparación
+      setShowValidationModal(false);
+      setPendingOrderData(null);
+
+      setActiveOrderId(null);
+      setTableId(null);
+      setServiceType('takeaway');
+      setPaymentMethod(null);
+      clearCart();
+
+      toast.success(t('¡Pedido enviado a preparación e impreso!'));
+    } catch (err) {
+      console.error('Error al enviar a preparación:', err);
+      toast.error(t('Error al enviar a preparación'));
+    }
+  };
+
   const handleValidateAndPrint = async () => {
     if (pendingOrderData) {
       console.log('Usuario eligió validar e imprimir - mostrando modal de pago');
@@ -489,7 +590,10 @@ export function POS() {
           selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital'
       };
 
-      // Imprimir ticket
+      // Imprimir comandas por zona (Kitchen Routing) si no se enviaron antes
+      await executeKitchenRouting(updatedTicketData.orderNumber, cart);
+
+      // Imprimir ticket de cliente (TicketPrinter estándar)
       console.log('Setting ticket for auto-print:', updatedTicketData);
       setTicket(updatedTicketData);
       setShowPaymentModal(false);
@@ -541,30 +645,52 @@ export function POS() {
   const renderMobileView = () => (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-gray-50">
       {/* Filtros de categoría móvil */}
-      {/* Sección de Categorías Móvil - Diseño Minimalista */}
-      <div className="bg-white border-b border-gray-200 px-3 py-4">
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+      {/* Sección de Categorías Móvil */}
+      <div className="bg-white border-b border-gray-200 px-2 py-3">
+        <div className="flex items-center gap-1">
           <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 ${selectedCategory === 'all'
-              ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
-              : 'bg-gray-50 text-gray-700 border border-gray-200'
-              }`}
+            onClick={() => scrollCategoryLeft(mobileCategoryScrollRef)}
+            className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+            title="Anterior"
           >
-            {t('Todos')}
+            <ChevronLeft className="w-4 h-4" />
           </button>
-          {categories.map(cat => (
+
+          <div
+            ref={mobileCategoryScrollRef}
+            onWheel={handleCategoryWheel}
+            className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin flex-1 select-none touch-pan-x"
+          >
             <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 ${selectedCategory === cat.id
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
-                : 'bg-gray-50 text-gray-700 border border-gray-200'
+              onClick={() => setSelectedCategory('all')}
+              className={`px-5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${selectedCategory === 'all'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md scale-102'
+                : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
                 }`}
             >
-              {cat.name}
+              {t('Todos')}
             </button>
-          ))}
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${selectedCategory === cat.id
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md scale-102'
+                  : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
+                  }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => scrollCategoryRight(mobileCategoryScrollRef)}
+            className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+            title="Siguiente"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -780,31 +906,53 @@ export function POS() {
       {/* Vista Desktop */}
       <div className="hidden md:flex h-[calc(100vh-5rem)] bg-gray-50">
         <div className="flex-1 overflow-hidden flex flex-col">
-          {/* Sección de Categorías - Diseño Minimalista Moderno */}
+          {/* Sección de Categorías - Desktop */}
           <div className="bg-white border-b border-gray-200">
-            <div className="w-full px-4 py-4">
-              <div className="flex items-center gap-3 overflow-x-auto pb-2 w-full [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300 transition-colors">
+            <div className="w-full px-4 py-3">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setSelectedCategory('all')}
-                  className={`flex-shrink-0 px-8 py-3 rounded-xl font-semibold text-sm tracking-wide transition-all duration-300 ${selectedCategory === 'all'
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:shadow-md border border-gray-200'
-                    }`}
+                  onClick={() => scrollCategoryLeft(categoryScrollRef)}
+                  className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+                  title="Anterior"
                 >
-                  {t('Todos')}
+                  <ChevronLeft className="w-5 h-5" />
                 </button>
-                {categories.map(cat => (
+
+                <div
+                  ref={categoryScrollRef}
+                  onWheel={handleCategoryWheel}
+                  className="flex items-center gap-3 overflow-x-auto pb-1.5 flex-1 scrollbar-thin select-none touch-pan-x"
+                >
                   <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`flex-shrink-0 px-8 py-3 rounded-xl font-semibold text-sm tracking-wide transition-all duration-300 ${selectedCategory === cat.id
+                    onClick={() => setSelectedCategory('all')}
+                    className={`flex-shrink-0 px-8 py-3 rounded-xl font-semibold text-sm tracking-wide transition-all duration-300 ${selectedCategory === 'all'
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
                       : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:shadow-md border border-gray-200'
                       }`}
                   >
-                    {cat.name}
+                    {t('Todos')}
                   </button>
-                ))}
+                  {categories.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`flex-shrink-0 px-8 py-3 rounded-xl font-semibold text-sm tracking-wide transition-all duration-300 ${selectedCategory === cat.id
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 scale-105'
+                        : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:shadow-md border border-gray-200'
+                        }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => scrollCategoryRight(categoryScrollRef)}
+                  className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+                  title="Siguiente"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
@@ -1173,13 +1321,13 @@ export function POS() {
             <div className="mb-6">
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-6 mb-4 shadow-lg">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="font-bold text-gray-800 text-sm">{t('Total del Pedido:')}</span>
+                  <span className="font-bold text-gray-800 text-sm">{t('Total de la Commande :')}</span>
                   <span className="font-black text-3xl bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
                     {formatCurrency(pendingOrderData.total)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t-2 border-amber-300">
-                  <span className="font-bold text-gray-800 text-sm">{t('Método de Pago:')}</span>
+                  <span className="font-bold text-gray-800 text-sm">{t('Mode de paiement :')}</span>
                   <span className="font-bold text-amber-700 bg-white/60 px-3 py-1 rounded-lg">
                     {pendingOrderData.paymentMethod}
                   </span>
@@ -1188,36 +1336,41 @@ export function POS() {
 
               <p className="text-sm text-gray-600 mb-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <span className="font-bold text-blue-800">ℹ️ {t('Información:')}</span><br />
-                {t('El pedido se ha procesado correctamente. ¿Desea validar e imprimir el ticket ahora?')}
+                {profile?.role === 'waiter'
+                  ? t('Haga clic en Préparer para enviar la comanda a preparación e imprimir en cocina/barra.')
+                  : t('Seleccione la acción requerida para este pedido.')}
               </p>
             </div>
 
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  console.log('Order left pending - will be validated later');
-                  setShowValidationModal(false);
-                  setPendingOrderData(null);
-
-                  // Reset states after leaving order pending
-                  setActiveOrderId(null);
-                  setTableId(null);
-                  setServiceType('takeaway');
-                  setPaymentMethod(null);
-                  clearCart();
-
-                  toast.success('Pedido pendiente de validación');
-                }}
-                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-bold text-gray-700 shadow-md hover:shadow-lg"
-              >
-                {t('Después')}
-              </button>
-              <button
-                onClick={handleValidateAndPrint}
-                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl transition-all font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5"
-              >
-                {t('Validar e Imprimir')}
-              </button>
+              {profile?.role === 'waiter' ? (
+                /* Para camareros: ÚNICO botón Préparer */
+                <button
+                  onClick={handleSendToPreparation}
+                  className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl transition-all font-black text-lg shadow-xl hover:shadow-2xl flex items-center justify-center gap-2 transform active:scale-95"
+                >
+                  <span>👨‍🍳</span>
+                  <span>{t('Préparer')}</span>
+                </button>
+              ) : (
+                /* Para cajeros y administradores */
+                <>
+                  <button
+                    onClick={handleSendToPreparation}
+                    className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all font-bold shadow-md hover:shadow-lg flex items-center gap-2"
+                  >
+                    <span>👨‍🍳</span>
+                    <span>{t('Préparer')}</span>
+                  </button>
+                  <button
+                    onClick={handleValidateAndPrint}
+                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl transition-all font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 flex items-center gap-2"
+                  >
+                    <span>💳</span>
+                    <span>{t('Valider et Imprimer')}</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -219,15 +219,22 @@ export function OrdersDashboard() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Aplicar filtro de fecha personalizado
+      // Aplicar filtro de fecha personalizado; si no hay filtro, mostrar solo el día actual
       if (startDate) {
         query = query.gte('created_at', startDate);
+      } else {
+        // Por defecto: mostrar solo desde las 2 AM del día actual
+        query = query.gte('created_at', getLast2AMTimestamp());
       }
       if (endDate) {
         // Add one day to end date to include the entire end date
         const endDateTime = new Date(endDate);
         endDateTime.setDate(endDateTime.getDate() + 1);
         query = query.lt('created_at', endDateTime.toISOString());
+      }
+
+      if (profile?.role === 'waiter' && user?.id) {
+        query = query.eq('employee_id', user.id);
       }
 
       const { data, error } = await query;
@@ -303,6 +310,11 @@ export function OrdersDashboard() {
       if (viewMode === 'current') {
         const last2AM = getLast2AMTimestamp();
         query = query.gte('created_at', last2AM);
+      }
+
+      // Si el usuario es camarero, solo ver sus propias órdenes
+      if (profile?.role === 'waiter' && user?.id) {
+        query = query.eq('employee_id', user.id);
       }
 
       query = query.limit(50);
@@ -895,7 +907,7 @@ export function OrdersDashboard() {
                       {t('Empleado:')} <span className="text-amber-700 font-bold">{order.employee_profiles?.full_name || profile?.full_name || (user?.email ?? 'N/A')}</span>
                     </p>
 
-                    {order.status === 'preparing' && (
+                    {order.status === 'preparing' && profile?.role !== 'waiter' && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => updateOrderStatus(order.id, 'completed')}

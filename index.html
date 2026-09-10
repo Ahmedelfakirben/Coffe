@@ -1,17 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
+    <!-- PWA Manifest (generado por vite-plugin-pwa) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
     <!-- Favicon for modern browsers -->
     <link rel="icon" type="image/svg+xml" href="/coffee-icon.svg" />
     <!-- Fallback favicon -->
     <link rel="alternate icon" href="/favicon.svg" />
-    <!-- Apple Touch Icon -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/coffee-icon.svg" />
+    <!-- Apple Touch Icon (iOS PWA) -->
+    <link rel="apple-touch-icon" sizes="192x192" href="/pwa-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/pwa-icon-512.png" />
     <!-- Theme color for mobile browsers -->
     <meta name="theme-color" content="#f59e0b" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- PWA iOS standalone -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LIN-Caisse" />
+    <!-- Description SEO -->
+    <meta name="description" content="LIN-Caisse - Système de point de vente pour café et restaurant" />
     <title>LIN-Caisse - Sistema de Gestión</title>
+    <script>window.process = { env: { NODE_ENV: 'development' } };</script>
   </head>
   <body>
     <div id="root"></div>
