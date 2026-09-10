@@ -2189,9 +2189,6 @@ const translations = {
     'Por favor completa todos los campos obligatorios': 'Veuillez remplir tous les champs obligatoires',
     'Retiro registrado exitosamente': 'Retrait enregistré avec succès',
     'Error al registrar el retiro': "Erreur lors de l'enregistrement du retrait",
-    'Error al cargar sesiones de caja': 'Erreur lors du chargement des sessions de caisse',
-    'Error al generar el reporte diario': 'Erreur lors de la génération du rapport journalier',
-    'Error al generar el reporte': 'Erreur lors de la génération du rapport',
     'Error al cargar reporte de camareros': 'Erreur lors du chargement du rapport des serveurs',
 
     // End of FR translations
