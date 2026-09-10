@@ -480,7 +480,7 @@ export function POS() {
       const zones = new Map<string, typeof cart>();
 
       cartItems.forEach(cartItem => {
-        const zone = cartItem.product.categories?.preparation_zone || 'General';
+        const zone = categories.find(c => c.id === cartItem.product.category_id)?.preparation_zone || 'General';
         if (!zones.has(zone)) zones.set(zone, []);
         zones.get(zone)!.push(cartItem);
       });
