@@ -1,5 +1,7 @@
 import qz from 'qz-tray';
 import { toast } from 'react-hot-toast';
+import forge from 'node-forge';
+import { QZ_CERTIFICATE, QZ_PRIVATE_KEY } from './qz_cert';
 
 export interface PrintData {
   printerName: string;
@@ -16,17 +18,27 @@ class QZTrayService {
 
     this.connecting = true;
     try {
-      // Configurar manejadores de seguridad básicos para QZ Tray
-      try {
-        qz.security.setCertificatePromise((resolve: any) => {
-          resolve(); // Conexión anónima / sin certificado comercial
-        });
-        qz.security.setSignaturePromise(() => (resolve: any) => {
-          resolve();
-        });
-      } catch (secErr) {
-        console.warn('Configurando seguridad QZ:', secErr);
-      }
+      // 1. Configurar Certificado Digital (HousePublique)
+      qz.security.setCertificatePromise((resolve: any) => {
+        resolve(QZ_CERTIFICATE);
+      });
+
+      // 2. Configurar Firma Digital con Clave Privada (SHA256withRSA)
+      qz.security.setSignatureAlgorithm('SHA256');
+      qz.security.setSignaturePromise((toSign: string) => {
+        return (resolve: any, reject: any) => {
+          try {
+            const privateKey = forge.pki.privateKeyFromPem(QZ_PRIVATE_KEY);
+            const md = forge.md.sha256.create();
+            md.update(toSign, 'utf8');
+            const signature = privateKey.sign(md);
+            resolve(forge.util.encode64(signature));
+          } catch (err) {
+            console.error('Error firmando petición QZ:', err);
+            reject(err);
+          }
+        };
+      });
 
       if (!qz.websocket.isActive()) {
         const hostInput = customHost || localStorage.getItem('qz_server_ip') || '';
@@ -101,7 +113,7 @@ class QZTrayService {
     if (!connected) return null;
 
     try {
-      const allPrinters = await qz.printers.find();
+      const allPrinters: string[] = await qz.printers.find();
       if (!allPrinters || allPrinters.length === 0) {
         console.warn('⚠️ No se encontraron impresoras en el sistema via QZ Tray');
         return null;

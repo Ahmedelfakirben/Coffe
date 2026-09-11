@@ -193,26 +193,33 @@ export function TicketPrinter({
           <head>
             <title>${t('ticket.title')}</title>
             <style>
+              @page {
+                size: auto;
+                margin: 0mm;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                background: white;
+              }
               body {
                 font-family: 'Courier New', monospace;
-                margin: 0;
-                padding: 5px;
-                background: white;
+                padding: 4px;
                 font-size: 12px;
                 line-height: 1.2;
               }
               .ticket {
-                width: 80mm;
-                max-width: 300px;
+                width: 76mm;
+                max-width: 76mm;
                 margin: 0 auto;
-                padding: 5px;
+                padding: 2px 2px 6px 2px;
                 background: white;
               }
               .header {
                 text-align: center;
                 border-bottom: 1px dashed #000;
-                padding-bottom: 5px;
-                margin-bottom: 5px;
+                padding-bottom: 4px;
+                margin-bottom: 4px;
               }
               .header h1 {
                 margin: 0;
@@ -220,25 +227,25 @@ export function TicketPrinter({
                 font-weight: bold;
               }
               .header p {
-                margin: 2px 0;
+                margin: 1px 0;
                 font-size: 10px;
               }
               .ticket-info {
-                margin-bottom: 8px;
+                margin-bottom: 6px;
                 font-size: 11px;
               }
               .ticket-info div {
-                margin-bottom: 2px;
+                margin-bottom: 1px;
               }
               .items-table {
                 width: 100%;
                 border-collapse: collapse;
-                margin-bottom: 8px;
+                margin-bottom: 6px;
                 font-size: 11px;
               }
               .items-table th,
               .items-table td {
-                padding: 2px 3px;
+                padding: 2px 1px;
                 text-align: left;
                 border-bottom: 1px dotted #ccc;
               }
@@ -248,37 +255,39 @@ export function TicketPrinter({
               }
               .total-section {
                 border-top: 1px dashed #000;
-                padding-top: 5px;
-                margin-top: 5px;
+                padding-top: 4px;
+                margin-top: 4px;
                 font-weight: bold;
                 font-size: 12px;
               }
               .footer {
                 text-align: center;
-                margin-top: 8px;
-                padding-top: 5px;
+                margin-top: 6px;
+                padding-top: 4px;
                 border-top: 1px dashed #000;
                 font-size: 9px;
-                color: #666;
+                color: #444;
               }
               .thanks {
-                margin: 5px 0;
+                margin: 4px 0;
                 font-weight: bold;
                 font-size: 10px;
+                text-align: center;
               }
               @media print {
-                body {
+                html, body {
                   background: white !important;
-                  margin: 0;
-                  padding: 0;
+                  margin: 0 !important;
+                  padding: 0 !important;
                 }
                 .ticket {
-                  width: 100%;
-                  max-width: none;
-                  padding: 0;
+                  width: 100% !important;
+                  max-width: 76mm !important;
+                  margin: 0 !important;
+                  padding: 2px !important;
                 }
                 .no-print {
-                  display: none;
+                  display: none !important;
                 }
               }
             </style>
