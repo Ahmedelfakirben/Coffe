@@ -161,11 +161,20 @@ export function ProductsManager() {
       }
 
       // Insert Manual Sizes if any
-      if (created && tempSizes.length > 0) {
-        const sizesToInsert = tempSizes.map(s => ({
+      const sizesList = [...tempSizes];
+      // Si el usuario rellenó nombre y precio pero no pulsó el botón '+', lo incluimos automáticamente
+      if (newSizeName.trim() && newSizePrice.trim()) {
+        const parsed = parseFloat(newSizePrice.replace(',', '.'));
+        if (!isNaN(parsed) && parsed >= 0) {
+          sizesList.push({ size_name: newSizeName.trim(), price_modifier: parsed });
+        }
+      }
+
+      if (created && sizesList.length > 0) {
+        const sizesToInsert = sizesList.map(s => ({
           product_id: created.id,
           size_name: s.size_name,
-          price_modifier: s.price_modifier
+          price_modifier: Number(s.price_modifier) || 0
         }));
 
         const { error: sizesError } = await supabase
@@ -174,7 +183,7 @@ export function ProductsManager() {
 
         if (sizesError) {
           console.error('Error creating sizes:', sizesError);
-          toast.error(t('Producto creado pero hubo error al guardar los tamaños'));
+          toast.error(`${t('Error al guardar tamaños:')} ${sizesError.message || t('Permiso denegado')}`);
         }
       }
 
@@ -183,6 +192,8 @@ export function ProductsManager() {
       setNewProductImage(null);
       setNewProductPreviewUrl(null);
       setTempSizes([]);
+      setNewSizeName('');
+      setNewSizePrice('');
       fetchProducts();
       fetchSizes();
       toast.success(t('Producto creado correctamente'));
@@ -195,8 +206,20 @@ export function ProductsManager() {
   };
 
   const handleAddTempSize = () => {
-    if (!newSizeName || !newSizePrice) return;
-    setTempSizes([...tempSizes, { size_name: newSizeName, price_modifier: parseFloat(newSizePrice) }]);
+    if (!newSizeName.trim()) {
+      toast.error(t('Ingrese un nombre para el tamaño'));
+      return;
+    }
+    if (!newSizePrice.trim()) {
+      toast.error(t('Ingrese un precio para el tamaño'));
+      return;
+    }
+    const parsedPrice = parseFloat(newSizePrice.replace(',', '.'));
+    if (isNaN(parsedPrice) || parsedPrice < 0) {
+      toast.error(t('Ingrese un precio válido para el tamaño'));
+      return;
+    }
+    setTempSizes([...tempSizes, { size_name: newSizeName.trim(), price_modifier: parsedPrice }]);
     setNewSizeName('');
     setNewSizePrice('');
   };
@@ -437,19 +460,33 @@ export function ProductsManager() {
                     placeholder={t('Nombre (ej: Grande)')}
                     value={newSizeName}
                     onChange={e => setNewSizeName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTempSize();
+                      }
+                    }}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   />
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     placeholder={t('Precio')}
                     value={newSizePrice}
                     onChange={e => setNewSizePrice(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTempSize();
+                      }
+                    }}
                     className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   />
                   <button
                     type="button"
                     onClick={handleAddTempSize}
-                    className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700"
+                    className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center"
+                    title={t('Añadir tamaño')}
                   >
                     <Plus className="w-5 h-5" />
                   </button>
