@@ -45,26 +45,87 @@ class QZTrayService {
   async getPrinters(): Promise<string[]> {
     const connected = await this.connect();
     if (!connected) {
-      toast.error('No se pudo conectar con el servicio de impresión local (QZ Tray).');
+      toast.error('No se pudo conectar con QZ Tray. Asegúrate de que esté abierto en la barra de tareas.');
       return [];
     }
 
     try {
       const printers = await qz.printers.find();
-      return printers;
+      return printers || [];
     } catch (err) {
       console.error('Error buscando impresoras:', err);
       return [];
     }
   }
 
-  async printHTML(printerName: string, htmlContent: string): Promise<boolean> {
+  async resolvePrinter(targetName?: string | null): Promise<string | null> {
     const connected = await this.connect();
-    if (!connected) return false;
+    if (!connected) return null;
 
     try {
-      const config = qz.configs.create(printerName, {
+      const allPrinters = await qz.printers.find();
+      if (!allPrinters || allPrinters.length === 0) {
+        console.warn('⚠️ No se encontraron impresoras en el sistema via QZ Tray');
+        return null;
+      }
+
+      if (targetName && targetName.trim() !== '') {
+        const cleanTarget = targetName.trim().toLowerCase();
+        
+        // 1. Coincidencia exacta
+        const exact = allPrinters.find(p => p.toLowerCase() === cleanTarget);
+        if (exact) return exact;
+
+        // 2. Coincidencia parcial (por ejemplo si pone "WD8260" y la impresora es "printer WD8260")
+        const partial = allPrinters.find(p => p.toLowerCase().includes(cleanTarget) || cleanTarget.includes(p.toLowerCase()));
+        if (partial) {
+          console.log(`ℹ️ Impresora "${targetName}" resuelta como "${partial}"`);
+          return partial;
+        }
+      }
+
+      // 3. Fallback: impresora predeterminada del sistema
+      try {
+        const defaultPrinter = await qz.printers.getDefault();
+        if (defaultPrinter) {
+          console.log(`ℹ️ Usando impresora predeterminada del sistema: "${defaultPrinter}"`);
+          return defaultPrinter;
+        }
+      } catch (defErr) {
+        console.warn('No se pudo obtener la impresora predeterminada:', defErr);
+      }
+
+      // 4. Si no hay default, tomar la primera impresora que no sea "OneNote" o "PDF" si existe una térmica
+      const physicalPrinter = allPrinters.find(p => !p.toLowerCase().includes('pdf') && !p.toLowerCase().includes('onenote') && !p.toLowerCase().includes('xps'));
+      return physicalPrinter || allPrinters[0];
+    } catch (err) {
+      console.error('Error resolviendo impresora:', err);
+      return null;
+    }
+  }
+
+  async printHTML(printerName: string, htmlContent: string): Promise<boolean> {
+    const connected = await this.connect();
+    if (!connected) {
+      toast.error('QZ Tray no está conectado. Abriendo ventana de impresión del navegador...');
+      this.fallbackBrowserPrint(htmlContent);
+      return false;
+    }
+
+    try {
+      const resolvedPrinter = await this.resolvePrinter(printerName);
+      if (!resolvedPrinter) {
+        toast.error(`No se encontró la impresora "${printerName}". Imprimiendo por navegador...`);
+        this.fallbackBrowserPrint(htmlContent);
+        return false;
+      }
+
+      console.log(`🖨️ Imprimiendo ticket en "${resolvedPrinter}" (solicitado: "${printerName}")...`);
+
+      const config = qz.configs.create(resolvedPrinter, {
         margins: { top: 0, right: 0, bottom: 0, left: 0 },
+        units: 'mm',
+        scaleContent: true,
       });
 
       const data = [{
@@ -74,11 +135,29 @@ class QZTrayService {
       }];
 
       await qz.print(config, data);
+      toast.success(`Ticket enviado a ${resolvedPrinter}`, { icon: '🖨️' });
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Error imprimiendo en ${printerName}:`, err);
-      toast.error(`Error al imprimir en: ${printerName}`);
+      toast.error(`Error al imprimir en: ${printerName || 'impresora'}. Mostrando ticket en pantalla...`);
+      this.fallbackBrowserPrint(htmlContent);
       return false;
+    }
+  }
+
+  fallbackBrowserPrint(htmlContent: string) {
+    try {
+      const win = window.open('', '', 'width=450,height=600');
+      if (win) {
+        win.document.write(htmlContent);
+        win.document.close();
+        win.focus();
+        setTimeout(() => {
+          win.print();
+        }, 250);
+      }
+    } catch (e) {
+      console.error('Error en fallbackBrowserPrint:', e);
     }
   }
 
@@ -87,7 +166,10 @@ class QZTrayService {
     if (!connected) return false;
 
     try {
-      const config = qz.configs.create(printerName);
+      const resolvedPrinter = await this.resolvePrinter(printerName);
+      if (!resolvedPrinter) return false;
+
+      const config = qz.configs.create(resolvedPrinter);
       await qz.print(config, rawData);
       return true;
     } catch (err) {

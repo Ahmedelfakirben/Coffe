@@ -3,6 +3,7 @@ import { PlusCircle, Edit, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useLanguage } from '../contexts/LanguageContext';
+import { qzService } from '../lib/qzTray';
 
 interface Category {
   id: string;
@@ -17,13 +18,26 @@ export function CategoryManager() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [newCategory, setNewCategory] = useState('');
   const [preparationZone, setPreparationZone] = useState('');
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
   useEffect(() => {
     fetchCategories();
+    loadPrinters();
   }, []);
+
+  const loadPrinters = async () => {
+    try {
+      const printers = await qzService.getPrinters();
+      if (printers && printers.length > 0) {
+        setAvailablePrinters(printers);
+      }
+    } catch (e) {
+      console.warn('Could not auto-load printers:', e);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -188,16 +202,48 @@ export function CategoryManager() {
             />
           </div>
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Zona de Impresión (QZ Tray)
-            </label>
-            <input
-              type="text"
-              value={preparationZone}
-              onChange={(e) => setPreparationZone(e.target.value)}
-              placeholder="Ej: EPSON_Cocina, POS-Crepes"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Impresora / Zona (QZ Tray)
+              </label>
+              {availablePrinters.length > 0 && (
+                <span className="text-xs text-emerald-600 font-medium">
+                  ● QZ detectado ({availablePrinters.length})
+                </span>
+              )}
+            </div>
+            {availablePrinters.length > 0 ? (
+              <div className="space-y-1">
+                <select
+                  value={preparationZone}
+                  onChange={(e) => setPreparationZone(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white text-sm"
+                >
+                  <option value="">-- Usar Impresora Predeterminada del Sistema --</option>
+                  {availablePrinters.map((p) => (
+                    <option key={p} value={p}>
+                      🖨️ {p}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-500">
+                  Selecciona la impresora física donde saldrá esta comanda.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <input
+                  type="text"
+                  value={preparationZone}
+                  onChange={(e) => setPreparationZone(e.target.value)}
+                  placeholder="Ej: printer WD8260"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Escribe el nombre de la impresora en Windows (Ej: printer WD8260)
+                </p>
+              </div>
+            )}
           </div>
           <button
             type="submit"

@@ -480,43 +480,79 @@ export function POS() {
       const zones = new Map<string, typeof cart>();
 
       cartItems.forEach(cartItem => {
-        const zone = categories.find(c => c.id === cartItem.product.category_id)?.preparation_zone || 'General';
+        // Si no tiene zona configurada, lo dejamos vacío para que use la impresora por defecto
+        const rawZone = categories.find(c => c.id === cartItem.product.category_id)?.preparation_zone;
+        const zone = (rawZone && rawZone.trim() !== '') ? rawZone.trim() : '';
         if (!zones.has(zone)) zones.set(zone, []);
         zones.get(zone)!.push(cartItem);
       });
 
       for (const [zone, items] of zones.entries()) {
+        const zoneTitle = zone ? zone.toUpperCase() : 'COMANDA COCINA';
         const html = `
+          <!DOCTYPE html>
           <html>
             <head>
+              <meta charset="utf-8">
+              <title>Comanda ${zoneTitle}</title>
               <style>
-                 body { font-family: 'Courier New', monospace; font-size: 14px; margin: 0; padding: 5px; }
-                 h1 { font-size: 18px; text-align: center; margin: 5px 0; }
-                 .item { font-size: 16px; font-weight: bold; margin-bottom: 5px; border-bottom: 1px dotted #ccc; padding-bottom: 5px; }
-                 .qty { font-size: 20px; font-weight: 900; border: 2px solid #000; padding: 2px 6px; margin-right: 5px; }
+                 @page { margin: 0; }
+                 body {
+                   font-family: 'Courier New', Courier, monospace, sans-serif;
+                   width: 76mm;
+                   max-width: 76mm;
+                   margin: 0 auto;
+                   padding: 8px 4px;
+                   color: #000;
+                   background: #fff;
+                   font-size: 13px;
+                   line-height: 1.25;
+                 }
+                 .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }
+                 .header h1 { font-size: 20px; font-weight: 900; margin: 2px 0; text-transform: uppercase; }
+                 .header .meta { font-size: 13px; font-weight: bold; margin: 2px 0; }
+                 .badge { display: inline-block; font-size: 16px; font-weight: 900; border: 2px solid #000; padding: 2px 8px; margin-top: 4px; }
+                 .items { margin: 8px 0; }
+                 .item-row { display: flex; align-items: flex-start; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dotted #888; }
+                 .qty { font-size: 18px; font-weight: 900; min-width: 32px; }
+                 .name { font-size: 15px; font-weight: 700; flex: 1; word-break: break-word; }
+                 .notes { font-size: 12px; font-style: italic; margin-top: 2px; }
+                 .footer { text-align: center; border-top: 2px dashed #000; padding-top: 6px; margin-top: 8px; font-size: 11px; }
               </style>
             </head>
             <body>
-              <h1>🎫 ${zone.toUpperCase()}</h1>
-              <p>Pedido: <b>#${orderNum}</b></p>
-              <p>Tipo: <b>${serviceType === 'dine_in' ? 'MESA ' + tableName : 'PARA LLEVAR'}</b></p>
-              <p>Hora: ${new Date().toLocaleTimeString()}</p>
-              <hr>
-              ${items.map(i => `
-                <div class="item">
-                  <span class="qty">${i.quantity}</span> 
-                  ${i.product.name} ${i.size ? `(${i.size.size_name})` : ''}
+              <div class="header">
+                <h1>${zoneTitle}</h1>
+                <div class="badge">#${orderNum}</div>
+                <div class="meta" style="margin-top: 4px;">
+                  ${serviceType === 'dine_in' ? '🍽️ MESA: ' + (tableName || 'Sin mesa') : '🥡 PARA LLEVAR'}
                 </div>
-              `).join('')}
-              <hr>
+                <div class="meta" style="font-size: 11px; font-weight: normal; color: #333;">
+                  ${new Date().toLocaleDateString()} - ${new Date().toLocaleTimeString()}
+                </div>
+              </div>
+
+              <div class="items">
+                ${items.map(i => `
+                  <div class="item-row">
+                    <div class="qty">${i.quantity}x</div>
+                    <div class="name">
+                      ${i.product.name}
+                      ${i.size ? `<span style="font-weight: normal;"> (${i.size.size_name})</span>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div class="footer">
+                TOTAL ARTÍCULOS: ${items.reduce((sum, item) => sum + item.quantity, 0)}
+              </div>
             </body>
           </html>
         `;
 
-        console.log(`🖨️ KITCHEN ROUTING: Enviando ticket a zona "${zone}"...`);
-        qzService.printHTML(zone, html).catch(err => {
-          console.error('Error enviando a QZ Tray:', err);
-        });
+        console.log(`🖨️ KITCHEN ROUTING: Enviando ticket a zona/impresora "${zone || 'Default'}"...`);
+        await qzService.printHTML(zone, html);
       }
     } catch (err) {
       console.error('Error procesando Kitchen Routing:', err);
