@@ -26,7 +26,7 @@ export function TableManager() {
     seats: 4,
   });
 
-  const isSuperAdmin = profile?.role === 'super_admin';
+  const isSuperAdmin = profile?.role === 'super_admin' || profile?.role === 'admin';
 
   useEffect(() => {
     fetchTables();
@@ -212,7 +212,7 @@ export function TableManager() {
             </div>
             <div className="text-sm text-blue-900">
               <p className="font-bold mb-2 text-base">{t('Solo lectura')}</p>
-              <p className="font-medium">{t('Solo el Super Administrador puede añadir, editar o eliminar mesas.')}</p>
+              <p className="font-medium">{t('Solo el Administrador puede añadir, editar o eliminar mesas.')}</p>
             </div>
           </div>
         </div>
