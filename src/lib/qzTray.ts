@@ -42,18 +42,21 @@ class QZTrayService {
     }
   }
 
-  async getPrinters(): Promise<string[]> {
-    const connected = await this.connect();
+  async getPrinters(customHost?: string): Promise<string[]> {
+    const connected = await this.connect(customHost);
     if (!connected) {
       toast.error('No se pudo conectar con QZ Tray. Asegúrate de que esté abierto en la barra de tareas.');
       return [];
     }
 
     try {
+      console.log('🔍 Solicitando lista de impresoras a QZ Tray...');
       const printers = await qz.printers.find();
-      return printers || [];
-    } catch (err) {
-      console.error('Error buscando impresoras:', err);
+      console.log('📋 Impresoras devueltas por QZ Tray:', printers);
+      return Array.isArray(printers) ? printers : [];
+    } catch (err: any) {
+      console.error('Error buscando impresoras en QZ Tray:', err);
+      toast.error(`Error buscando impresoras: ${err?.message || err}`);
       return [];
     }
   }

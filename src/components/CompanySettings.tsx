@@ -190,15 +190,19 @@ export function CompanySettings() {
   const handleTestQZ = async () => {
     setCheckingQZ(true);
     try {
-      const printers = await qzService.getPrinters();
+      if (settings.qz_server_ip !== undefined) {
+        localStorage.setItem('qz_server_ip', (settings.qz_server_ip || '').trim());
+      }
+      await qzService.disconnect();
+      const printers = await qzService.getPrinters(settings.qz_server_ip?.trim() || undefined);
       setQzPrinters(printers);
       if (printers.length > 0) {
         toast.success(`Conexión QZ Tray exitosa. ${printers.length} impresoras encontradas.`);
       } else {
-        toast.error('QZ Tray conectado, pero no se encontraron impresoras.');
+        toast.error('QZ Tray respondió pero devolvió lista vacía de impresoras. Revisa el certificado o permisos en QZ Tray.');
       }
-    } catch (err) {
-      toast.error('No se pudo conectar a QZ Tray. Asegúrate de que el programa esté abierto.');
+    } catch (err: any) {
+      toast.error(`No se pudo conectar a QZ Tray: ${err?.message || err}`);
     } finally {
       setCheckingQZ(false);
     }
