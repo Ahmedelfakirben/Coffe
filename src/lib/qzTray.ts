@@ -142,23 +142,31 @@ class QZTrayService {
     }
   }
 
-  async printHTML(printerName: string, htmlContent: string): Promise<boolean> {
+  async printHTML(printerName: string, htmlContent: string, allowFallback = false): Promise<boolean> {
     const connected = await this.connect();
     if (!connected) {
-      toast.error('QZ Tray no está conectado. Abriendo ventana de impresión del navegador...');
-      this.fallbackBrowserPrint(htmlContent);
+      if (allowFallback) {
+        toast.error('QZ Tray no está conectado. Abriendo ventana de impresión del navegador...');
+        this.fallbackBrowserPrint(htmlContent);
+      } else {
+        toast.error('QZ Tray no está conectado. Revisa que el programa esté abierto.');
+      }
       return false;
     }
 
     try {
       const resolvedPrinter = await this.resolvePrinter(printerName);
       if (!resolvedPrinter) {
-        toast.error(`No se encontró la impresora "${printerName}". Imprimiendo por navegador...`);
-        this.fallbackBrowserPrint(htmlContent);
+        if (allowFallback) {
+          toast.error(`No se encontró la impresora "${printerName}". Abriendo impresión del navegador...`);
+          this.fallbackBrowserPrint(htmlContent);
+        } else {
+          toast.error(`No se encontró la impresora "${printerName}" en QZ Tray.`);
+        }
         return false;
       }
 
-      console.log(`🖨️ Imprimiendo ticket en "${resolvedPrinter}" (solicitado: "${printerName}")...`);
+      console.log(`🖨️ Imprimiendo silenciosamente en "${resolvedPrinter}" (solicitado: "${printerName}")...`);
 
       const config = qz.configs.create(resolvedPrinter, {
         margins: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -173,12 +181,16 @@ class QZTrayService {
       }];
 
       await qz.print(config, data);
-      toast.success(`Ticket enviado a ${resolvedPrinter}`, { icon: '🖨️' });
+      toast.success(`Comanda enviada a ${resolvedPrinter}`, { icon: '🖨️' });
       return true;
     } catch (err: any) {
       console.error(`Error imprimiendo en ${printerName}:`, err);
-      toast.error(`Error al imprimir en: ${printerName || 'impresora'}. Mostrando ticket en pantalla...`);
-      this.fallbackBrowserPrint(htmlContent);
+      if (allowFallback) {
+        toast.error(`Error al imprimir en: ${printerName || 'impresora'}. Mostrando ticket en pantalla...`);
+        this.fallbackBrowserPrint(htmlContent);
+      } else {
+        toast.error(`Error de impresión en ${printerName}: ${err?.message || err}`);
+      }
       return false;
     }
   }
