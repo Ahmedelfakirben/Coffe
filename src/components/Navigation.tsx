@@ -763,41 +763,47 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
             {profile?.role === 'waiter' ? (
               <>
                 <div className="flex items-center justify-center gap-1.5 flex-1 mx-2 overflow-x-auto scrollbar-hide py-0.5">
-                  <button
-                    onClick={() => onViewChange('floor')}
-                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
-                      currentView === 'floor'
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>{t('nav.floor')}</span>
-                  </button>
+                  {userPermissions['floor'] && (
+                    <button
+                      onClick={() => onViewChange('floor')}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
+                        currentView === 'floor'
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{t('nav.floor')}</span>
+                    </button>
+                  )}
 
-                  <button
-                    onClick={() => onViewChange('pos')}
-                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
-                      currentView === 'pos'
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>{t('nav.pos')}</span>
-                  </button>
+                  {userPermissions['pos'] && (
+                    <button
+                      onClick={() => onViewChange('pos')}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
+                        currentView === 'pos'
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5" />
+                      <span>{t('nav.pos')}</span>
+                    </button>
+                  )}
 
-                  <button
-                    onClick={() => onViewChange('orders')}
-                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
-                      currentView === 'orders'
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <ClipboardList className="w-3.5 h-3.5" />
-                    <span>{t('nav.orders')}</span>
-                  </button>
+                  {userPermissions['orders'] && (
+                    <button
+                      onClick={() => onViewChange('orders')}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex-shrink-0 ${
+                        currentView === 'orders'
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <ClipboardList className="w-3.5 h-3.5" />
+                      <span>{t('nav.orders')}</span>
+                    </button>
+                  )}
                 </div>
 
                 <button

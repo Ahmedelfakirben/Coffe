@@ -142,6 +142,16 @@ function AppContent() {
     }
   }, [profile, userPermissions, currentView]);
 
+  // Si la vista actual deja de tener permiso, redirigir a una permitida
+  useEffect(() => {
+    if (profile && Object.keys(userPermissions).length > 0 && !userPermissions[currentView]) {
+      const fallback = userPermissions['floor'] ? 'floor' :
+                       userPermissions['pos'] ? 'pos' :
+                       Object.keys(userPermissions).find(k => userPermissions[k]) || 'floor';
+      setCurrentView(fallback);
+    }
+  }, [userPermissions, currentView, profile]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
