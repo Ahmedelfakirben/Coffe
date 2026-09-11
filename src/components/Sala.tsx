@@ -6,7 +6,7 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { toast } from 'react-hot-toast';
 import {
   CreditCard, Banknote, Smartphone, Plus, X,
-  Users, Clock, ShoppingBag, RefreshCw, Menu,
+  Users, Clock, ShoppingBag, RefreshCw,
 } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -164,6 +164,16 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         return acc;
       }, {});
       setActiveOrders(grouped);
+
+      // Auto-reset ghost occupied tables (tables marked occupied but with no active orders)
+      try {
+        const { data: occupiedTables } = await supabase
+          .from('tables').select('id').eq('status', 'occupied');
+        const ghostTableIds = (occupiedTables || []).filter(t => !grouped[t.id]).map(t => t.id);
+        if (ghostTableIds.length > 0) {
+          await supabase.from('tables').update({ status: 'available' }).in('id', ghostTableIds);
+        }
+      } catch { /* silente ghost cleanup */ }
     } catch { /* silente */ }
   };
 
@@ -286,10 +296,19 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => { fetchTables(); fetchActiveOrders(); }}
-            className="p-2 text-amber-600 hover:text-amber-300 hover:bg-amber-900/30 rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800/40 text-amber-200 rounded-xl text-xs font-bold transition-all active:scale-95"
             title="Actualizar"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{t('Actualizar')}</span>
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-800/40 text-blue-200 rounded-xl text-xs font-bold transition-all active:scale-95"
+            title="Recargar app"
+          >
+            <RefreshCw className="w-3.5 h-3.5 rotate-45" />
+            <span className="hidden sm:inline">↺ App</span>
           </button>
           <button
             onClick={() => { setTableId(null); setServiceType('takeaway'); toast(t('Para llevar')); onGoToPOS?.(); }}
@@ -456,8 +475,14 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           MODAL: Pedidos / Cobro
       ══════════════════════════════════════════════════════════════════════ */}
       {showOrdersModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[60] sala-fade-in">
-          <div className="bg-[#120a03] border border-amber-900/40 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg sm:mx-4 max-h-[90vh] flex flex-col sala-slide-in-up">
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[60] sala-fade-in"
+          onClick={() => { setShowOrdersModal(false); setShowPaymentSelector(null); setOrderItemsMap({}); setExpandedOrder(null); }}
+        >
+          <div
+            className="bg-[#120a03] border border-amber-900/40 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg sm:mx-4 max-h-[90vh] flex flex-col sala-slide-in-up"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex-shrink-0 p-6 pb-0">
               {/* Handle */}
               <div className="w-10 h-1 bg-amber-800/50 rounded-full mx-auto mb-4 sm:hidden" />
@@ -550,14 +575,12 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                               >
                                 ✏️ {t('common.edit')}
                               </button>
-                              {profile?.role !== 'waiter' && (
-                                <button
-                                  onClick={() => setShowPaymentSelector(order.id)}
-                                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors"
-                                >
-                                  💳 {t('Cobrar') || 'Encaisser'}
-                                </button>
-                              )}
+                              <button
+                                onClick={() => setShowPaymentSelector(order.id)}
+                                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors"
+                              >
+                                💳 {t('Cobrar') || 'Encaisser'}
+                              </button>
                             </div>
                           </div>
                         )}

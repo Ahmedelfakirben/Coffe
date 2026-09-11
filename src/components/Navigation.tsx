@@ -1,4 +1,4 @@
-import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server, Database, Grid3x3 } from 'lucide-react';
+import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server, Database, Grid3x3, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useState, useRef, useEffect } from 'react';
@@ -686,7 +686,15 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-6" ref={el => dropdownRefs.current['user-profile'] = el}>
+            <div className="flex items-center gap-3" ref={el => dropdownRefs.current['user-profile'] = el}>
+              {/* Reload button - visible in PWA/installed apps */}
+              <button
+                onClick={() => window.location.reload()}
+                className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
+                title="Recargar aplicación"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
               {profile && (
                 <div className="relative">
                   <button
@@ -780,6 +788,13 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                   title={t('Salir')}
                 >
                   <LogOut className="w-4 h-4 text-red-500" />
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex-shrink-0"
+                  title="Recargar app"
+                >
+                  <RefreshCw className="w-4 h-4" />
                 </button>
               </>
             ) : (
