@@ -202,7 +202,13 @@ export function CompanySettings() {
         toast.error('QZ Tray respondió pero devolvió lista vacía de impresoras. Revisa el certificado o permisos en QZ Tray.');
       }
     } catch (err: any) {
-      toast.error(`No se pudo conectar a QZ Tray: ${err?.message || err}`);
+      console.error('Error testeando QZ Tray:', err);
+      const errMsg = err?.message || String(err);
+      if (errMsg.includes('Unable to establish connection') || errMsg.includes('Failed to fetch')) {
+        toast.error('El navegador bloqueó la conexión WSS segura con QZ Tray. Abre https://localhost:8181 en otra pestaña y pulsa "Continuar / Avanzado".', { duration: 8000 });
+      } else {
+        toast.error(`Error conectando a QZ Tray: ${errMsg}`);
+      }
     } finally {
       setCheckingQZ(false);
     }
