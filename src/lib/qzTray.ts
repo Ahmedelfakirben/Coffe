@@ -1,7 +1,5 @@
 import qz from 'qz-tray';
 import { toast } from 'react-hot-toast';
-import forge from 'node-forge';
-import { QZ_CERTIFICATE, QZ_PRIVATE_KEY } from './qz_cert';
 
 export interface PrintData {
   printerName: string;
@@ -18,26 +16,14 @@ class QZTrayService {
 
     this.connecting = true;
     try {
-      // 1. Configurar Certificado Digital (HousePublique)
+      // Modo anónimo: sin certificado ni firma.
+      // El certificado firmado con clave propia es detectado por QZ Tray como "Untrusted website"
+      // lo que deshabilita el botón Allow+Remember. El modo anónimo permite guardar la decisión.
       qz.security.setCertificatePromise((resolve: any) => {
-        resolve(QZ_CERTIFICATE);
+        resolve();
       });
-
-      // 2. Configurar Firma Digital con Clave Privada (SHA256withRSA)
-      qz.security.setSignatureAlgorithm('SHA256');
-      qz.security.setSignaturePromise((toSign: string) => {
-        return (resolve: any, reject: any) => {
-          try {
-            const privateKey = forge.pki.privateKeyFromPem(QZ_PRIVATE_KEY);
-            const md = forge.md.sha256.create();
-            md.update(toSign, 'utf8');
-            const signature = privateKey.sign(md);
-            resolve(forge.util.encode64(signature));
-          } catch (err) {
-            console.error('Error firmando petición QZ:', err);
-            reject(err);
-          }
-        };
+      qz.security.setSignaturePromise((_toSign: string) => {
+        return (resolve: any) => resolve();
       });
 
       if (!qz.websocket.isActive()) {

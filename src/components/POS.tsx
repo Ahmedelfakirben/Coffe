@@ -481,7 +481,10 @@ export function POS() {
 
       cartItems.forEach(cartItem => {
         // Si no tiene zona configurada, lo dejamos vacío para que use la impresora por defecto
+        // Si no tiene zona configurada, lo dejamos vacío para que use la impresora por defecto
         const rawZone = categories.find(c => c.id === cartItem.product.category_id)?.preparation_zone;
+        // 'none' = sin impresora, se omite este artículo del routing
+        if (rawZone === 'none') return;
         const zone = (rawZone && rawZone.trim() !== '') ? rawZone.trim() : '';
         if (!zones.has(zone)) zones.set(zone, []);
         zones.get(zone)!.push(cartItem);

@@ -219,6 +219,7 @@ export function CategoryManager() {
                   onChange={(e) => setPreparationZone(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white text-sm"
                 >
+                  <option value="none">🚫 Sin impresora (no imprimir)</option>
                   <option value="">-- Usar Impresora Predeterminada del Sistema --</option>
                   {availablePrinters.map((p) => (
                     <option key={p} value={p}>

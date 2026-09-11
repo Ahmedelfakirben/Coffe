@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { qzService } from '../lib/qzTray';
 
 // Add a function to refresh company info that can be called from outside
 export const refreshCompanyInfo = async () => {
@@ -175,148 +176,57 @@ export function TicketPrinter({
     };
   }, [forceRefresh, autoPrint]);
 
-  const printTicket = () => {
+  const printTicket = async () => {
     const printContent = ticketRef.current?.innerHTML || '';
     console.log('🖨️ TICKET: printTicket called, content length:', printContent.length);
-    console.log('🖨️ TICKET: Company info at print time:', companyInfo);
 
     if (!printContent || printContent.length < 100) {
       console.error('❌ TICKET: Content too short or empty, skipping print');
       return;
     }
 
-    const printWindow = window.open('', '', 'height=800,width=400');
+    // Build full HTML for the ticket
+    const fullHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${t('ticket.title')}</title>
+  <style>
+    @page { size: 80mm auto; margin: 0; }
+    html, body { margin: 0; padding: 0; background: white; }
+    body { font-family: 'Courier New', monospace; padding: 4px; font-size: 12px; line-height: 1.2; }
+    .ticket { width: 76mm; max-width: 76mm; margin: 0 auto; padding: 2px 2px 6px 2px; background: white; }
+    .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 4px; }
+    .header h1 { margin: 0; font-size: 16px; font-weight: bold; }
+    .header p { margin: 1px 0; font-size: 10px; }
+    .ticket-info { margin-bottom: 6px; font-size: 11px; }
+    .ticket-info div { margin-bottom: 1px; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 11px; }
+    .items-table th, .items-table td { padding: 2px 1px; text-align: left; border-bottom: 1px dotted #ccc; }
+    .items-table th { font-weight: bold; border-bottom: 1px solid #000; }
+    .total-section { border-top: 1px dashed #000; padding-top: 4px; margin-top: 4px; font-weight: bold; font-size: 12px; }
+    .footer { text-align: center; margin-top: 6px; padding-top: 4px; border-top: 1px dashed #000; font-size: 9px; color: #444; }
+    .thanks { margin: 4px 0; font-weight: bold; font-size: 10px; text-align: center; }
+  </style>
+</head>
+<body>${printContent}</body>
+</html>`;
 
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>${t('ticket.title')}</title>
-            <style>
-              @page {
-                size: auto;
-                margin: 0mm;
-              }
-              html, body {
-                margin: 0;
-                padding: 0;
-                background: white;
-              }
-              body {
-                font-family: 'Courier New', monospace;
-                padding: 4px;
-                font-size: 12px;
-                line-height: 1.2;
-              }
-              .ticket {
-                width: 76mm;
-                max-width: 76mm;
-                margin: 0 auto;
-                padding: 2px 2px 6px 2px;
-                background: white;
-              }
-              .header {
-                text-align: center;
-                border-bottom: 1px dashed #000;
-                padding-bottom: 4px;
-                margin-bottom: 4px;
-              }
-              .header h1 {
-                margin: 0;
-                font-size: 16px;
-                font-weight: bold;
-              }
-              .header p {
-                margin: 1px 0;
-                font-size: 10px;
-              }
-              .ticket-info {
-                margin-bottom: 6px;
-                font-size: 11px;
-              }
-              .ticket-info div {
-                margin-bottom: 1px;
-              }
-              .items-table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 6px;
-                font-size: 11px;
-              }
-              .items-table th,
-              .items-table td {
-                padding: 2px 1px;
-                text-align: left;
-                border-bottom: 1px dotted #ccc;
-              }
-              .items-table th {
-                font-weight: bold;
-                border-bottom: 1px solid #000;
-              }
-              .total-section {
-                border-top: 1px dashed #000;
-                padding-top: 4px;
-                margin-top: 4px;
-                font-weight: bold;
-                font-size: 12px;
-              }
-              .footer {
-                text-align: center;
-                margin-top: 6px;
-                padding-top: 4px;
-                border-top: 1px dashed #000;
-                font-size: 9px;
-                color: #444;
-              }
-              .thanks {
-                margin: 4px 0;
-                font-weight: bold;
-                font-size: 10px;
-                text-align: center;
-              }
-              @media print {
-                html, body {
-                  background: white !important;
-                  margin: 0 !important;
-                  padding: 0 !important;
-                }
-                .ticket {
-                  width: 100% !important;
-                  max-width: 76mm !important;
-                  margin: 0 !important;
-                  padding: 2px !important;
-                }
-                .no-print {
-                  display: none !important;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            ${printContent}
-          </body>
-        </html>
-      `);
-
-      printWindow.document.close();
-      printWindow.focus();
-      
-      // Auto-close only after print dialog is closed (printed or cancelled)
-      printWindow.onafterprint = () => {
-        printWindow.close();
-      };
-
-      printWindow.print();
-      // printWindow.close(); // REMOVED: Caused window to close immediately if print() is non-blocking
-
-      // Disparar evento de impresión completada
-      console.log('✅ TICKET: Print initiated, dispatching event');
-      window.dispatchEvent(new CustomEvent('ticketPrinted'));
-    } else {
-      console.error('❌ TICKET: Failed to open print window');
-      // Disparar evento incluso si falla
-      window.dispatchEvent(new CustomEvent('ticketPrinted'));
+    // Try silent print via QZ Tray first (no browser dialog)
+    try {
+      const printed = await qzService.printHTML('', fullHtml, true);
+      if (printed) {
+        console.log('✅ TICKET: Printed silently via QZ Tray');
+        window.dispatchEvent(new CustomEvent('ticketPrinted'));
+        return;
+      }
+    } catch (err) {
+      console.warn('⚠️ TICKET: QZ Tray not available, skipping ticket print:', err);
     }
+
+    // QZ Tray not available — skip print silently (no browser dialog)
+    console.log('ℹ️ TICKET: QZ Tray unavailable, ticket print skipped');
+    window.dispatchEvent(new CustomEvent('ticketPrinted'));
   };
 
   useEffect(() => {
