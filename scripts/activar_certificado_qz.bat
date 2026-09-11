@@ -13,7 +13,7 @@ echo  Instalando certificado de HousePublique en QZ Tray
 echo =====================================================
 echo.
 
-set "SOURCE_CERT=%~dp0override_combined.crt"
+set "SOURCE_CERT=%~dp0hp_only.crt"
 set "DEST_CERT=C:\Program Files\QZ Tray\override.crt"
 
 if exist "%SOURCE_CERT%" (
