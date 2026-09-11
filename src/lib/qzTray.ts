@@ -16,6 +16,18 @@ class QZTrayService {
 
     this.connecting = true;
     try {
+      // Configurar manejadores de seguridad básicos para QZ Tray
+      try {
+        qz.security.setCertificatePromise((resolve: any) => {
+          resolve(); // Conexión anónima / sin certificado comercial
+        });
+        qz.security.setSignaturePromise(() => (resolve: any) => {
+          resolve();
+        });
+      } catch (secErr) {
+        console.warn('Configurando seguridad QZ:', secErr);
+      }
+
       if (!qz.websocket.isActive()) {
         const host = customHost || localStorage.getItem('qz_server_ip') || undefined;
         const connectOptions: any = { retries: 2, delay: 1 };
