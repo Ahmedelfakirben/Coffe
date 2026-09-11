@@ -17,7 +17,7 @@ export function CategoryManager() {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<Category[]>([]);
   const [newCategory, setNewCategory] = useState('');
-  const [preparationZone, setPreparationZone] = useState('');
+  const [preparationZone, setPreparationZone] = useState('none');
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,7 +78,7 @@ export function CategoryManager() {
           .from('categories')
           .update({ 
             name: newCategory,
-            preparation_zone: preparationZone || null
+            preparation_zone: preparationZone === 'none' ? 'none' : (preparationZone || null)
           })
           .eq('id', editingCategory.id)
           .select();
@@ -96,7 +96,7 @@ export function CategoryManager() {
           .from('categories')
           .insert({ 
             name: newCategory,
-            preparation_zone: preparationZone || null
+            preparation_zone: preparationZone === 'none' ? 'none' : (preparationZone || null)
           })
           .select();
 
@@ -125,7 +125,7 @@ export function CategoryManager() {
     console.log('Editing category:', category);
     setEditingCategory(category);
     setNewCategory(category.name);
-    setPreparationZone(category.preparation_zone || '');
+    setPreparationZone(category.preparation_zone || 'none');
   };
 
   const handleDelete = async (id: string) => {
