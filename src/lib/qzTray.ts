@@ -11,7 +11,7 @@ class QZTrayService {
   private connecting = false;
 
   async connect(customHost?: string): Promise<boolean> {
-    if (this.isConnected) return true;
+    if (this.isConnected && qz.websocket.isActive()) return true;
     if (this.connecting) return false;
 
     this.connecting = true;
@@ -29,36 +29,59 @@ class QZTrayService {
       }
 
       if (!qz.websocket.isActive()) {
-        const host = customHost || localStorage.getItem('qz_server_ip') || undefined;
-        const connectOptions: any = { retries: 2, delay: 1 };
-        if (host && host.trim() !== '') {
-          connectOptions.host = host.trim();
+        const hostInput = customHost || localStorage.getItem('qz_server_ip') || '';
+        const cleanHost = hostInput.trim();
+
+        // En HTTPS (Coolify), QZ Tray requiere WSS seguro en puerto 8181
+        // Lista de hosts a probar: si es local, probar 'localhost' y 'localhost.qz.io'
+        let hostsToTry: string[] = ['localhost', 'localhost.qz.io'];
+        if (cleanHost && cleanHost !== 'localhost') {
+          hostsToTry = [cleanHost];
         }
+
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+        const connectOptions: any = {
+          host: hostsToTry,
+          retries: 2,
+          delay: 1,
+          usingSecure: isHttps // Forzar conexión segura WSS si estamos en HTTPS (Coolify)
+        };
+
+        console.log(`🔌 Conectando a QZ Tray (HTTPS=${isHttps}, hosts=${JSON.stringify(hostsToTry)})...`);
         await qz.websocket.connect(connectOptions);
       }
       this.isConnected = true;
       console.log('✅ QZ Tray conectado exitosamente');
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Error conectando a QZ Tray:', err);
-      return false;
+      this.isConnected = false;
+      throw err;
     } finally {
       this.connecting = false;
     }
   }
 
   async disconnect(): Promise<void> {
-    if (this.isConnected) {
-      await qz.websocket.disconnect();
+    try {
+      if (qz.websocket.isActive()) {
+        await qz.websocket.disconnect();
+      }
+    } catch (e) {
+      console.warn('Error desconectando websocket:', e);
+    } finally {
       this.isConnected = false;
     }
   }
 
   async getPrinters(customHost?: string): Promise<string[]> {
-    const connected = await this.connect(customHost);
-    if (!connected) {
-      toast.error('No se pudo conectar con QZ Tray. Asegúrate de que esté abierto en la barra de tareas.');
-      return [];
+    try {
+      const connected = await this.connect(customHost);
+      if (!connected) return [];
+    } catch (connErr: any) {
+      console.error('Fallo en connect:', connErr);
+      throw connErr;
     }
 
     try {
