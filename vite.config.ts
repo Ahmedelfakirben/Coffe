@@ -35,6 +35,9 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Activar inmediatamente al instalar, sin esperar a cerrar pestañas
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {

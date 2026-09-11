@@ -303,9 +303,18 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
             <span className="hidden sm:inline">{t('Actualizar')}</span>
           </button>
           <button
-            onClick={() => window.location.reload()}
+            onClick={async () => {
+              try {
+                if ('serviceWorker' in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(regs.map(r => r.update()));
+                  const waiting = regs[0]?.waiting;
+                  if (waiting) { waiting.postMessage({ type: 'SKIP_WAITING' }); await new Promise(r => setTimeout(r, 300)); }
+                }
+              } finally { window.location.reload(); }
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-800/40 text-blue-200 rounded-xl text-xs font-bold transition-all active:scale-95"
-            title="Recargar app"
+            title="Recargar app (última versión)"
           >
             <RefreshCw className="w-3.5 h-3.5 rotate-45" />
             <span className="hidden sm:inline">↺ App</span>

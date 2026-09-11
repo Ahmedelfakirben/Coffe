@@ -33,6 +33,24 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   const [closingLoading, setClosingLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userPermissions, setUserPermissions] = useState<{ [key: string]: boolean }>({});
+
+  // Fuerza actualización del Service Worker antes de recargar (PWA)
+  const forceReload = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(r => r.update()));
+        // Esperar a que el SW tome control antes de recargar
+        const reg = registrations[0];
+        if (reg?.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          await new Promise(res => setTimeout(res, 300));
+        }
+      }
+    } catch { /* silente */ } finally {
+      window.location.reload();
+    }
+  };
   const [cashBreakdown, setCashBreakdown] = useState({
     openingAmount: 0,
     totalSales: 0,
@@ -689,7 +707,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
             <div className="flex items-center gap-3" ref={el => dropdownRefs.current['user-profile'] = el}>
               {/* Reload button - visible in PWA/installed apps */}
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => forceReload()}
                 className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
                 title="Recargar aplicación"
               >
@@ -790,7 +808,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                   <LogOut className="w-4 h-4 text-red-500" />
                 </button>
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={() => forceReload()}
                   className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex-shrink-0"
                   title="Recargar app"
                 >
