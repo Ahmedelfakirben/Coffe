@@ -11,13 +11,13 @@ import {
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
 
-type TableStatus = 'available' | 'occupied' | 'reserved' | 'dirty';
+type TableStatus = 'available' | 'occupied';
 
 interface Table {
   id: string;
   name: string;
   seats: number;
-  status: TableStatus;
+  status: string;
   pos_x: number;
   pos_y: number;
   width: number;
@@ -83,16 +83,6 @@ const STATUS_STYLE: Record<TableStatus, { card: string; badge: string; labelKey:
     card:  'bg-gradient-to-br from-amber-500 to-orange-500 border-amber-400/50 shadow-amber-500/30',
     badge: 'bg-amber-700/50 text-amber-100',
     labelKey: 'Ocupada',
-  },
-  reserved: {
-    card:  'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-400/50 shadow-blue-500/30',
-    badge: 'bg-blue-700/50 text-blue-100',
-    labelKey: 'Reservada',
-  },
-  dirty: {
-    card:  'bg-gradient-to-br from-rose-500 to-rose-600 border-rose-400/50 shadow-rose-500/30',
-    badge: 'bg-rose-700/50 text-rose-100',
-    labelKey: 'Sucia',
   },
 };
 
@@ -282,10 +272,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
             {(Object.entries(STATUS_STYLE) as [TableStatus, typeof STATUS_STYLE[TableStatus]][]).map(([key, s]) => (
               <div key={key} className="flex items-center gap-1">
                 <span className={`w-2.5 h-2.5 rounded-full bg-gradient-to-br ${
-                  key === 'available' ? 'from-emerald-400 to-emerald-600' :
-                  key === 'occupied'  ? 'from-amber-400 to-orange-500' :
-                  key === 'reserved'  ? 'from-blue-400 to-blue-600' :
-                                        'from-rose-400 to-rose-600'
+                  key === 'available' ? 'from-emerald-400 to-emerald-600' : 'from-amber-400 to-orange-500'
                 }`} />
                 <span className="text-xs text-amber-200/50">{t(s.labelKey)}</span>
               </div>
@@ -294,14 +281,6 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={() => { fetchTables(); fetchActiveOrders(); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800/40 text-amber-200 rounded-xl text-xs font-bold transition-all active:scale-95"
-            title="Actualizar"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{t('Actualizar')}</span>
-          </button>
           <button
             onClick={async () => {
               try {
@@ -313,11 +292,11 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                 }
               } finally { window.location.reload(); }
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-800/40 text-blue-200 rounded-xl text-xs font-bold transition-all active:scale-95"
-            title="Recargar app (última versión)"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800/40 text-amber-200 rounded-xl text-xs font-bold transition-all active:scale-95"
+            title={t('Actualizar')}
           >
-            <RefreshCw className="w-3.5 h-3.5 rotate-45" />
-            <span className="hidden sm:inline">↺ App</span>
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{t('Actualizar')}</span>
           </button>
           <button
             onClick={() => { setTableId(null); setServiceType('takeaway'); toast(t('Para llevar')); onGoToPOS?.(); }}
@@ -351,7 +330,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 max-w-6xl mx-auto">
             {tables.map(table => {
               const hasOrders      = (activeOrders[table.id] || []).length > 0;
-              const computedStatus: TableStatus = hasOrders ? 'occupied' : table.status;
+              const computedStatus: TableStatus = hasOrders || table.status === 'occupied' ? 'occupied' : 'available';
               const style          = STATUS_STYLE[computedStatus] ?? STATUS_STYLE.available;
               const totalAmount    = hasOrders
                 ? activeOrders[table.id].reduce((s, o) => s + (typeof o.total === 'string' ? parseFloat(o.total) : o.total), 0)
