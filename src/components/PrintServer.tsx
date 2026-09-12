@@ -40,20 +40,19 @@ export function PrintServer() {
         .select(`
           *,
           order_items (
+            id,
             quantity,
             unit_price,
             product_id,
             size_id,
-            products (
+            notes,
+            products!product_id (
               name,
               category_id
             ),
-            product_sizes (
+            product_sizes!size_id (
               size_name
             )
-          ),
-          employee_profiles (
-            full_name
           )
         `)
         .eq('id', orderId)
@@ -63,6 +62,22 @@ export function PrintServer() {
         console.error('Error fetching order details for Print Server:', error);
         return null;
       }
+
+      if (data && data.employee_id) {
+        try {
+          const { data: emp } = await supabase
+            .from('employee_profiles')
+            .select('full_name')
+            .eq('id', data.employee_id)
+            .maybeSingle();
+          if (emp) {
+            data.employee_profiles = emp;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       return data;
     };
 
