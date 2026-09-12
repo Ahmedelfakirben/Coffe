@@ -1,4 +1,4 @@
-import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server, Database, Grid3x3, RefreshCw } from 'lucide-react';
+import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server, Database, Grid3x3, RefreshCw, Printer } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useState, useRef, useEffect } from 'react';
@@ -33,6 +33,15 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   const [closingLoading, setClosingLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userPermissions, setUserPermissions] = useState<{ [key: string]: boolean }>({});
+  const [printServerActive, setPrintServerActive] = useState(() => localStorage.getItem('print_server_active') === 'true');
+
+  const handleTogglePrintServer = () => {
+    const newState = !printServerActive;
+    setPrintServerActive(newState);
+    localStorage.setItem('print_server_active', newState ? 'true' : 'false');
+    // Forzar recarga para que el PrintServer empiece/deje de escuchar
+    window.location.reload();
+  };
 
   // Fuerza actualización del Service Worker antes de recargar (PWA)
   const forceReload = async () => {
@@ -167,6 +176,18 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
         // Crear un mapa de permisos por page_id
         const permissionsMap: { [key: string]: boolean } = {};
+
+        // El rol super_admin tiene acceso completo a todos los módulos por defecto
+        if (profile.role === 'super_admin') {
+          const allPages = [
+            'floor', 'pos', 'orders', 'products', 'categories', 'users',
+            'suppliers', 'expenses', 'time-tracking', 'analytics', 'cash',
+            'role-management', 'company-settings', 'app-settings', 'tables',
+            'server', 'backup', 'economat'
+          ];
+          allPages.forEach(p => { permissionsMap[p] = true; });
+        }
+
         data?.forEach(perm => {
           permissionsMap[perm.page_id] = perm.can_access;
         });
@@ -252,9 +273,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
   };
 
   const renderGroup = (group: NavGroup, isMobile: boolean = false) => {
-    // Filtrar items basándose en permisos de la base de datos
+    // Filtrar items basándose en permisos de la base de datos (super_admin siempre tiene acceso)
     const visibleItems = group.items.filter(item =>
-      userPermissions[item.id] === true
+      profile?.role === 'super_admin' || userPermissions[item.id] === true
     );
 
     if (visibleItems.length === 0) return null;
@@ -350,9 +371,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       toast.success(t('Caja abierta exitosamente'));
       setShowOpenCashModal(false);
       setOpeningAmount('');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al abrir caja:', err);
-      toast.error(`${t('No se pudo abrir la caja:')} ${err.message || err}`);
+      toast.error(`${t('No se pudo abrir la caja:')} ${err instanceof Error ? err.message : (err as { message?: string })?.message || String(err)}`);
     } finally {
       setOpeningLoading(false);
     }
@@ -484,8 +505,8 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
       // Calcular el resultado del día: primera apertura - monto actual + todas las aperturas intermedias
       const firstOpening = sessions[0].opening_amount;
-      const totalOpenings = sessions.reduce((sum, session) => sum + session.opening_amount, 0);
-      const dailyResult = amount - firstOpening; // Resultado = cierre final - primera apertura
+      // const totalOpenings = sessions.reduce((sum, session) => sum + session.opening_amount, 0);
+      // const dailyResult = amount - firstOpening; // Resultado = cierre final - primera apertura
 
       // Cerrar todas las sesiones abiertas
       const sessionIds = sessions.map(s => s.id);
@@ -650,9 +671,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       toast.success(t('Cierre de caja registrado e impreso.'));
       setShowCloseCashModal(false);
       await signOut();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error en cierre de caja:', err);
-      toast.error(`${t('No se pudo cerrar la caja:')} ${err.message || err}`);
+      toast.error(`${t('No se pudo cerrar la caja:')} ${err instanceof Error ? err.message : (err as { message?: string })?.message || String(err)}`);
     } finally {
       setClosingLoading(false);
     }
@@ -730,8 +751,27 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                     <div className="absolute right-0 top-full mt-2 w-64 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 z-50 animate-fadeIn p-2 flex flex-col gap-2">
                       <div className="p-2 border-b border-gray-100 mb-1">
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('Estado')}</p>
-                        <div className="mt-2">
+                        <div className="mt-2 space-y-2">
                           <OnlineStatusToggle />
+                          
+                          {(profile?.role === 'cashier' || profile?.role === 'admin' || profile?.role === 'super_admin') && (
+                            <button
+                              onClick={handleTogglePrintServer}
+                              className={`flex items-center justify-between w-full p-2 rounded-lg text-sm font-medium transition-colors ${
+                                printServerActive
+                                  ? 'bg-blue-50 text-blue-700'
+                                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Printer className={`w-4 h-4 ${printServerActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                                <span>{t('Servidor de Impresión')}</span>
+                              </div>
+                              <div className={`w-8 h-4 rounded-full relative transition-colors ${printServerActive ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${printServerActive ? 'left-4.5 right-0.5' : 'left-0.5'}`} style={{ transform: printServerActive ? 'translateX(14px)' : 'translateX(0)' }} />
+                              </div>
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -869,7 +909,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               <div className="flex-1 overflow-y-auto p-4">
                 {navGroups.map(group => {
                   const visibleItems = group.items.filter(item =>
-                    userPermissions[item.id] === true
+                    profile?.role === 'super_admin' || userPermissions[item.id] === true
                   );
 
                   if (visibleItems.length === 0) return null;
@@ -923,8 +963,26 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                     <p className="text-xs text-gray-500 capitalize">{profile?.role}</p>
                   </div>
                 </div>
-                <div className="mb-3">
+                <div className="mb-3 space-y-2">
                   <OnlineStatusToggle />
+                  {(profile?.role === 'cashier' || profile?.role === 'admin' || profile?.role === 'super_admin') && (
+                    <button
+                      onClick={handleTogglePrintServer}
+                      className={`flex items-center justify-between w-full p-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        printServerActive
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Printer className={`w-4 h-4 ${printServerActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                        <span>{t('Servidor de Impresión')}</span>
+                      </div>
+                      <div className={`w-8 h-4 rounded-full relative transition-colors ${printServerActive ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${printServerActive ? 'left-4.5 right-0.5' : 'left-0.5'}`} style={{ transform: printServerActive ? 'translateX(14px)' : 'translateX(0)' }} />
+                      </div>
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={() => {

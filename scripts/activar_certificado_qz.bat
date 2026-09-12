@@ -1,10 +1,11 @@
 @echo off
 chcp 65001 >nul
-:: Solicitar permisos de administrador si no los tiene
+:: Verificar permisos de administrador
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo Solicitando permisos de Administrador para actualizar QZ Tray...
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    echo [ERROR] No tienes permisos de Administrador.
+    echo Por favor, haz clic derecho en este archivo y selecciona "Ejecutar como Administrador".
+    pause
     exit /b
 )
 

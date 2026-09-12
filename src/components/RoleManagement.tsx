@@ -51,6 +51,12 @@ const SECTIONS = {
   ],
   'Sistema': [
     { id: 'role-management', label: 'Gestión de Roles' },
+    { id: 'company-settings', label: 'Información Empresa' },
+    { id: 'app-settings', label: 'Configuración App' },
+    { id: 'tables', label: 'Mesas' },
+    { id: 'server', label: 'Servidor' },
+    { id: 'backup', label: 'Copias de Seguridad' },
+    { id: 'economat', label: 'Economato' },
   ],
 };
 

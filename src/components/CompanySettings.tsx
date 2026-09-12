@@ -49,18 +49,15 @@ export function CompanySettings() {
       const { data, error } = await supabase
         .from('company_settings')
         .select('*')
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No data found, create default settings
-          console.log('⚠️ COMPANY SETTINGS: No company settings found, creating defaults...');
-          await createDefaultSettings();
-        } else {
-          console.error('❌ COMPANY SETTINGS: Error fetching settings:', error);
-          throw error;
-        }
-      } else if (data) {
+        console.error('❌ COMPANY SETTINGS: Error fetching settings:', error);
+        throw error;
+      }
+
+      if (data) {
         console.log('✅ COMPANY SETTINGS: Settings loaded successfully:', data);
         if (data.qz_server_ip !== undefined) {
           localStorage.setItem('qz_server_ip', data.qz_server_ip || '');
@@ -68,7 +65,8 @@ export function CompanySettings() {
         setSettings(data);
         setOriginalSettings(data);
       } else {
-        console.log('⚠️ COMPANY SETTINGS: No data returned from query');
+        console.log('⚠️ COMPANY SETTINGS: No company settings found, creating defaults...');
+        await createDefaultSettings();
       }
     } catch (error) {
       console.error('💥 COMPANY SETTINGS: Error fetching company settings:', error);
@@ -79,24 +77,35 @@ export function CompanySettings() {
   };
 
   const createDefaultSettings = async () => {
+    const defaultData = {
+      company_name: 'El Fakir',
+      address: 'Calle Principal #123, Ciudad',
+      phone: '+34 000 000 000'
+    };
+
     try {
       console.log('🏗️ COMPANY SETTINGS: Creating default settings...');
-      const defaultData = {
-        company_name: 'El Fakir',
-        address: 'Calle Principal #123, Ciudad',
-        phone: '+34 000 000 000'
-      };
       console.log('📋 COMPANY SETTINGS: Default data to insert:', defaultData);
 
       const { data, error } = await supabase
         .from('company_settings')
         .insert(defaultData)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) {
-        console.error('❌ COMPANY SETTINGS: Error creating default settings:', error);
-        throw error;
+        console.error('❌ COMPANY SETTINGS: Error creating default settings in DB:', error);
+        // Fallback local para que el usuario pueda ver y editar el formulario
+        const localSettings: CompanySettings = {
+          id: '',
+          company_name: defaultData.company_name,
+          address: defaultData.address,
+          phone: defaultData.phone,
+          qz_server_ip: localStorage.getItem('qz_server_ip') || '',
+        };
+        setSettings(localSettings);
+        setOriginalSettings(localSettings);
+        return;
       }
 
       if (data) {
@@ -104,12 +113,18 @@ export function CompanySettings() {
         setSettings(data);
         setOriginalSettings(data);
         toast.success(t('Configuración por defecto creada'));
-      } else {
-        console.log('⚠️ COMPANY SETTINGS: No data returned after creating default settings');
       }
     } catch (error) {
       console.error('💥 COMPANY SETTINGS: Error creating default settings:', error);
-      toast.error(t('Error al crear configuración por defecto'));
+      const localSettings: CompanySettings = {
+        id: '',
+        company_name: defaultData.company_name,
+        address: defaultData.address,
+        phone: defaultData.phone,
+        qz_server_ip: localStorage.getItem('qz_server_ip') || '',
+      };
+      setSettings(localSettings);
+      setOriginalSettings(localSettings);
     }
   };
 
@@ -201,9 +216,9 @@ export function CompanySettings() {
       } else {
         toast.error('QZ Tray respondió pero devolvió lista vacía de impresoras. Revisa el certificado o permisos en QZ Tray.');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error testeando QZ Tray:', err);
-      const errMsg = err?.message || String(err);
+      const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes('Unable to establish connection') || errMsg.includes('Failed to fetch')) {
         toast.error('El navegador bloqueó la conexión WSS segura con QZ Tray. Abre https://localhost:8181 en otra pestaña y pulsa "Continuar / Avanzado".', { duration: 8000 });
       } else {
@@ -243,7 +258,7 @@ export function CompanySettings() {
 
     setSaving(true);
     try {
-      const settingsData: any = {
+      const settingsData: Record<string, string | null> = {
         company_name: settings.company_name.trim(),
         address: settings.address ? settings.address.trim() : null,
         phone: settings.phone ? settings.phone.trim() : null,
@@ -325,9 +340,9 @@ export function CompanySettings() {
 
         toast.success(t('Configuración guardada correctamente'));
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving company settings:', error);
-      toast.error(`${t('Error al guardar la configuración:')} ${error.message || error}`);
+      toast.error(`${t('Error al guardar la configuración:')} ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSaving(false);
     }
@@ -342,17 +357,17 @@ export function CompanySettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[400px] py-16">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">{t('Cargando configuración...')}</p>
+          <div className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">{t('Cargando configuración...')}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
+    <div className="max-w-4xl mx-auto pb-16 space-y-6">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">

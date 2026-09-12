@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { qzService } from '../lib/qzTray';
+import { markOrderPrintedLocally } from '../lib/printerService';
 
 // Add a function to refresh company info that can be called from outside
 export const refreshCompanyInfo = async () => {
@@ -177,6 +178,10 @@ export function TicketPrinter({
   }, [forceRefresh, autoPrint]);
 
   const printTicket = async () => {
+    if (orderNumber) {
+      markOrderPrintedLocally(orderNumber, 'invoice');
+    }
+
     const printContent = ticketRef.current?.innerHTML || '';
     console.log('🖨️ TICKET: printTicket called, content length:', printContent.length);
 

@@ -25,6 +25,7 @@ import { ServerManager } from './components/ServerManager';
 import { BackupManager } from './components/BackupManager';
 import { TableManager } from './components/TableManager';
 import { EconomatDashboard } from './components/economat/EconomatDashboard';
+import { PrintServer } from './components/PrintServer';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -52,6 +53,18 @@ function AppContent() {
 
         // Crear un mapa de permisos por page_id
         const permissionsMap: { [key: string]: boolean } = {};
+
+        // El rol super_admin tiene acceso completo a todos los módulos por defecto
+        if (profile.role === 'super_admin') {
+          const allPages = [
+            'floor', 'pos', 'orders', 'products', 'categories', 'users',
+            'suppliers', 'expenses', 'time-tracking', 'analytics', 'cash',
+            'role-management', 'company-settings', 'app-settings', 'tables',
+            'server', 'backup', 'economat'
+          ];
+          allPages.forEach(p => { permissionsMap[p] = true; });
+        }
+
         data?.forEach(perm => {
           permissionsMap[perm.page_id] = perm.can_access;
         });
@@ -144,13 +157,15 @@ function AppContent() {
 
   // Si la vista actual deja de tener permiso, redirigir a una permitida
   useEffect(() => {
-    if (profile && Object.keys(userPermissions).length > 0 && !userPermissions[currentView]) {
+    if (profile && profile.role !== 'super_admin' && Object.keys(userPermissions).length > 0 && !userPermissions[currentView]) {
       const fallback = userPermissions['floor'] ? 'floor' :
                        userPermissions['pos'] ? 'pos' :
                        Object.keys(userPermissions).find(k => userPermissions[k]) || 'floor';
       setCurrentView(fallback);
     }
   }, [userPermissions, currentView, profile]);
+
+  const hasPermission = (pageId: string) => profile?.role === 'super_admin' || !!userPermissions[pageId];
 
   if (loading) {
     return (
@@ -168,27 +183,28 @@ function AppContent() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      <PrintServer />
       <Navigation currentView={currentView} onViewChange={setCurrentView} />
-      <div className={`flex-1 ${currentView === 'floor' ? 'overflow-hidden' : 'overflow-auto p-6'}`}>
-        {currentView === 'floor' && userPermissions['floor'] && <Sala onGoToPOS={() => setCurrentView('pos')} />}
-        {currentView === 'pos' && userPermissions['pos'] && <POS />}
-        {currentView === 'orders' && userPermissions['orders'] && <OrdersDashboard />}
-        {currentView === 'products' && userPermissions['products'] && <ProductsManager />}
-        {currentView === 'categories' && userPermissions['categories'] && <CategoryManager />}
-        {currentView === 'users' && userPermissions['users'] && <UserManager />}
-        {currentView === 'suppliers' && userPermissions['suppliers'] && <SupplierManager />}
-        {currentView === 'expenses' && userPermissions['expenses'] && <ExpenseManager />}
-        {currentView === 'time-tracking' && userPermissions['time-tracking'] && <EmployeeTimeTracking />}
-        {currentView === 'analytics' && userPermissions['analytics'] && <Analytics />}
-        {currentView === 'cash' && userPermissions['cash'] && <CashRegisterDashboard />}
-        {currentView === 'role-management' && userPermissions['role-management'] && <RoleManagement />}
-        {currentView === 'company-settings' && userPermissions['company-settings'] && <CompanySettings />}
-        {currentView === 'app-settings' && userPermissions['app-settings'] && <AppSettings />}
-        {currentView === 'tables' && userPermissions['tables'] && <TableManager />}
-        {currentView === 'server' && userPermissions['server'] && <ServerManager />}
-        {currentView === 'backup' && userPermissions['backup'] && <BackupManager />}
-        {currentView === 'economat' && userPermissions['economat'] && <EconomatDashboard />}
+      <div className={`flex-1 min-h-0 ${currentView === 'floor' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-6'}`}>
+        {currentView === 'floor' && hasPermission('floor') && <Sala onGoToPOS={() => setCurrentView('pos')} />}
+        {currentView === 'pos' && hasPermission('pos') && <POS />}
+        {currentView === 'orders' && hasPermission('orders') && <OrdersDashboard />}
+        {currentView === 'products' && hasPermission('products') && <ProductsManager />}
+        {currentView === 'categories' && hasPermission('categories') && <CategoryManager />}
+        {currentView === 'users' && hasPermission('users') && <UserManager />}
+        {currentView === 'suppliers' && hasPermission('suppliers') && <SupplierManager />}
+        {currentView === 'expenses' && hasPermission('expenses') && <ExpenseManager />}
+        {currentView === 'time-tracking' && hasPermission('time-tracking') && <EmployeeTimeTracking />}
+        {currentView === 'analytics' && hasPermission('analytics') && <Analytics />}
+        {currentView === 'cash' && hasPermission('cash') && <CashRegisterDashboard />}
+        {currentView === 'role-management' && hasPermission('role-management') && <RoleManagement />}
+        {currentView === 'company-settings' && hasPermission('company-settings') && <CompanySettings />}
+        {currentView === 'app-settings' && hasPermission('app-settings') && <AppSettings />}
+        {currentView === 'tables' && hasPermission('tables') && <TableManager />}
+        {currentView === 'server' && hasPermission('server') && <ServerManager />}
+        {currentView === 'backup' && hasPermission('backup') && <BackupManager />}
+        {currentView === 'economat' && hasPermission('economat') && <EconomatDashboard />}
       </div>
 
       <Toaster

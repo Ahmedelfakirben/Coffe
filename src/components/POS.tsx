@@ -8,7 +8,7 @@ import { Category, Product, ProductSize } from '../types/supabase';
 import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { toast } from 'react-hot-toast';
-import { qzService } from '../lib/qzTray';
+import { printKitchenRouting, printMainTicket, markOrderPrintedLocally } from '../lib/printerService';
 
 // Removed pagination - show all products per category
 
@@ -474,92 +474,20 @@ export function POS() {
     }
   };
 
-  const executeKitchenRouting = async (orderNum: string, cartItems: typeof cart) => {
-    try {
-      const tableName = tableId ? (tables.find(t => t.id === tableId)?.name || '') : '';
-      const zones = new Map<string, typeof cart>();
-
-      cartItems.forEach(cartItem => {
-        // Si no tiene zona configurada, lo dejamos vacío para que use la impresora por defecto
-        // Si no tiene zona configurada, lo dejamos vacío para que use la impresora por defecto
-        const rawZone = categories.find(c => c.id === cartItem.product.category_id)?.preparation_zone;
-        // 'none' = sin impresora, se omite este artículo del routing
-        if (rawZone === 'none') return;
-        const zone = (rawZone && rawZone.trim() !== '') ? rawZone.trim() : '';
-        if (!zones.has(zone)) zones.set(zone, []);
-        zones.get(zone)!.push(cartItem);
-      });
-
-      for (const [zone, items] of zones.entries()) {
-        const zoneTitle = zone ? zone.toUpperCase() : 'COMANDA COCINA';
-        const html = `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <title>Comanda ${zoneTitle}</title>
-              <style>
-                 @page { margin: 0; }
-                 body {
-                   font-family: 'Courier New', Courier, monospace, sans-serif;
-                   width: 76mm;
-                   max-width: 76mm;
-                   margin: 0 auto;
-                   padding: 8px 4px;
-                   color: #000;
-                   background: #fff;
-                   font-size: 13px;
-                   line-height: 1.25;
-                 }
-                 .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }
-                 .header h1 { font-size: 20px; font-weight: 900; margin: 2px 0; text-transform: uppercase; }
-                 .header .meta { font-size: 13px; font-weight: bold; margin: 2px 0; }
-                 .badge { display: inline-block; font-size: 16px; font-weight: 900; border: 2px solid #000; padding: 2px 8px; margin-top: 4px; }
-                 .items { margin: 8px 0; }
-                 .item-row { display: flex; align-items: flex-start; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dotted #888; }
-                 .qty { font-size: 18px; font-weight: 900; min-width: 32px; }
-                 .name { font-size: 15px; font-weight: 700; flex: 1; word-break: break-word; }
-                 .notes { font-size: 12px; font-style: italic; margin-top: 2px; }
-                 .footer { text-align: center; border-top: 2px dashed #000; padding-top: 6px; margin-top: 8px; font-size: 11px; }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <h1>${zoneTitle}</h1>
-                <div class="badge">#${orderNum}</div>
-                <div class="meta" style="margin-top: 4px;">
-                  ${serviceType === 'dine_in' ? '🍽️ MESA: ' + (tableName || 'Sin mesa') : '🥡 PARA LLEVAR'}
-                </div>
-                <div class="meta" style="font-size: 11px; font-weight: normal; color: #333;">
-                  ${new Date().toLocaleDateString()} - ${new Date().toLocaleTimeString()}
-                </div>
-              </div>
-
-              <div class="items">
-                ${items.map(i => `
-                  <div class="item-row">
-                    <div class="qty">${i.quantity}x</div>
-                    <div class="name">
-                      ${i.product.name}
-                      ${i.size ? `<span style="font-weight: normal;"> (${i.size.size_name})</span>` : ''}
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-
-              <div class="footer">
-                TOTAL ARTÍCULOS: ${items.reduce((sum, item) => sum + item.quantity, 0)}
-              </div>
-            </body>
-          </html>
-        `;
-
-        console.log(`🖨️ KITCHEN ROUTING: Enviando ticket a zona/impresora "${zone || 'Default'}"...`);
-        await qzService.printHTML(zone, html);
-      }
-    } catch (err) {
-      console.error('Error procesando Kitchen Routing:', err);
+  const executeKitchenRouting = async (orderNum: string, cartItems: typeof cart, orderId?: string) => {
+    console.log('🖨️ POS local: Imprimiendo comandas de cocina para orden:', orderNum);
+    if (orderId) {
+      markOrderPrintedLocally(orderId, 'kitchen');
     }
+
+    await printKitchenRouting({
+      orderNum,
+      cartItems,
+      categories,
+      tables,
+      tableId,
+      serviceType
+    });
   };
 
   const handleSendToPreparation = async () => {
@@ -568,7 +496,7 @@ export function POS() {
     try {
       // 1. Ejecutar impresión de cocina por categoría (QZ Tray)
       const orderNum = pendingOrderData.orderNumber;
-      await executeKitchenRouting(orderNum, cart);
+      await executeKitchenRouting(orderNum, cart, activeOrderId || undefined);
 
       // 2. Si hay mesa, asegurar que el estado quede como 'occupied' en Sala
       if (tableId) {
@@ -629,8 +557,12 @@ export function POS() {
           selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital'
       };
 
+      if (activeOrderId) {
+        markOrderPrintedLocally(activeOrderId, 'invoice');
+      }
+
       // Imprimir comandas por zona (Kitchen Routing) si no se enviaron antes
-      await executeKitchenRouting(updatedTicketData.orderNumber, cart);
+      await executeKitchenRouting(updatedTicketData.orderNumber, cart, activeOrderId);
 
       // Imprimir ticket de cliente (TicketPrinter estándar)
       console.log('Setting ticket for auto-print:', updatedTicketData);
