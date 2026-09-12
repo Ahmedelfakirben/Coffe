@@ -3,7 +3,7 @@ import { Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { qzService } from '../lib/qzTray';
+import { qzService, isMobileDevice } from '../lib/qzTray';
 import { markOrderPrintedLocally } from '../lib/printerService';
 
 // Add a function to refresh company info that can be called from outside
@@ -178,6 +178,12 @@ export function TicketPrinter({
   }, [forceRefresh, autoPrint]);
 
   const printTicket = async () => {
+    if (isMobileDevice()) {
+      console.log('📱 Dispositivo móvil: Impresión de ticket en papel delegada al PC de caja.');
+      window.dispatchEvent(new CustomEvent('ticketPrinted'));
+      return;
+    }
+
     if (orderNumber) {
       markOrderPrintedLocally(orderNumber, 'invoice');
     }

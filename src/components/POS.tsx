@@ -6,8 +6,9 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { Category, Product, ProductSize } from '../types/supabase';
 import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { TicketPrinter } from './TicketPrinter';
 import { toast } from 'react-hot-toast';
+import { TicketPrinter } from './TicketPrinter';
+import { qzService, isMobileDevice } from '../lib/qzTray';
 import { printKitchenRouting, printMainTicket, markOrderPrintedLocally } from '../lib/printerService';
 
 // Removed pagination - show all products per category
@@ -475,6 +476,11 @@ export function POS() {
   };
 
   const executeKitchenRouting = async (orderNum: string, cartItems: typeof cart, orderId?: string) => {
+    if (isMobileDevice()) {
+      console.log('📱 Dispositivo móvil: Pedido enviado a preparación. La impresión física se realiza en el PC de caja.');
+      return;
+    }
+
     console.log('🖨️ POS local: Imprimiendo comandas de cocina para orden:', orderNum);
     if (orderId) {
       markOrderPrintedLocally(orderId, 'kitchen');
@@ -564,9 +570,11 @@ export function POS() {
       // Imprimir comandas por zona (Kitchen Routing) si no se enviaron antes
       await executeKitchenRouting(updatedTicketData.orderNumber, cart, activeOrderId);
 
-      // Imprimir ticket de cliente (TicketPrinter estándar)
-      console.log('Setting ticket for auto-print:', updatedTicketData);
-      setTicket(updatedTicketData);
+      // Imprimir ticket de cliente (TicketPrinter estándar solo en PC/Caja)
+      if (!isMobileDevice()) {
+        console.log('Setting ticket for auto-print:', updatedTicketData);
+        setTicket(updatedTicketData);
+      }
       setShowPaymentModal(false);
       setPendingOrderData(null);
 

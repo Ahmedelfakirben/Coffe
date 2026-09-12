@@ -8,11 +8,19 @@ export interface PrintData {
   data: any[]; // Formato ESC/POS o HTML compatible con QZ
 }
 
+export const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+};
+
 class QZTrayService {
   private isConnected = false;
   private connecting = false;
 
   async connect(customHost?: string): Promise<boolean> {
+    if (isMobileDevice() && !customHost) {
+      return false;
+    }
     if (this.isConnected && qz.websocket.isActive()) return true;
     if (this.connecting) return false;
 
@@ -155,6 +163,11 @@ class QZTrayService {
   }
 
   async printHTML(printerName: string, htmlContent: string, allowFallback = false): Promise<boolean> {
+    if (isMobileDevice()) {
+      console.log('📱 Dispositivo móvil: Impresión local omitida (se procesa en el PC central)');
+      return false;
+    }
+
     const connected = await this.connect();
     if (!connected) {
       if (allowFallback) {
@@ -208,6 +221,11 @@ class QZTrayService {
   }
 
   fallbackBrowserPrint(htmlContent: string) {
+    if (isMobileDevice()) {
+      console.log('📱 Dispositivo móvil: Diálogo nativo del sistema bloqueado');
+      return;
+    }
+
     try {
       const win = window.open('', '', 'width=450,height=600');
       if (win) {
