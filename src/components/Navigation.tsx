@@ -1,6 +1,7 @@
 import { Coffee, ShoppingCart, Package, BarChart3, ClipboardList, LogOut, Users, Tag, DollarSign, Truck, ChevronDown, Calculator, Menu, X, Clock, Shield, Building2, Settings, Server, Database, Grid3x3, RefreshCw, Printer } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -26,6 +27,7 @@ interface NavGroup {
 export function Navigation({ currentView, onViewChange }: NavigationProps) {
   const { user, profile, signOut } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [showCloseCashModal, setShowCloseCashModal] = useState(false);
@@ -456,6 +458,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         expectedClosing,
         sessionIds
       });
+      setClosingAmount(expectedClosing.toFixed(2));
     } catch (err) {
       console.error('Error fetching cash breakdown:', err);
       toast.error(t('Error al cargar información de caja'));
@@ -468,6 +471,12 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     if (isNaN(amount) || amount < 0) {
       toast.error(t('Ingrese un monto de cierre válido (>= 0)'));
       return;
+    }
+    if (amount === 0 && cashBreakdown.expectedClosing > 0) {
+      const confirmZero = window.confirm(
+        `¿Está seguro de ingresar 0.00 DH como cierre? Hay un saldo esperado de ${formatCurrency(cashBreakdown.expectedClosing)}`
+      );
+      if (!confirmZero) return;
     }
     setClosingLoading(true);
     try {
@@ -677,13 +686,6 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     } finally {
       setClosingLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
   };
 
   const handleLogoutClick = async () => {
@@ -1054,9 +1056,20 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
             {/* Input Section */}
             <div className="px-6 py-5">
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                {t('Monto Real en Caja')}
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-semibold text-gray-900">
+                  {t('Monto Real en Caja')}
+                </label>
+                {cashBreakdown.expectedClosing > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setClosingAmount(cashBreakdown.expectedClosing.toFixed(2))}
+                    className="text-xs text-amber-600 hover:text-amber-800 font-medium underline"
+                  >
+                    {t('Usar cierre esperado')} ({formatCurrency(cashBreakdown.expectedClosing)})
+                  </button>
+                )}
+              </div>
               <input
                 type="number"
                 step="0.01"

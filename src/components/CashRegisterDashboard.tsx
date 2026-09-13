@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { Calendar, DollarSign, Filter, RefreshCw, Printer, Users, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, UserCheck } from 'lucide-react';
+import { Calendar, DollarSign, Filter, RefreshCw, Printer, Users, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, UserCheck, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface CashSession {
@@ -61,7 +61,7 @@ interface WaiterReport {
 
 export function CashRegisterDashboard() {
   const { user, profile } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const { formatCurrency: formatCurrencyFromContext } = useCurrency();
   const [sessions, setSessions] = useState<CashSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +69,31 @@ export function CashRegisterDashboard() {
   const [waiterReports, setWaiterReports] = useState<WaiterReport[]>([]);
   const [loadingWaiters, setLoadingWaiters] = useState(false);
   const [expandedWaiterId, setExpandedWaiterId] = useState<string | null>(null);
+
+  // Estados de filtro de fecha para Ventas por Camarero
+  const [waiterDate, setWaiterDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [waiterFilterMode, setWaiterFilterMode] = useState<'day' | 'range'>('day');
+  const [waiterStartDate, setWaiterStartDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [waiterEndDate, setWaiterEndDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [waiterSearchTerm, setWaiterSearchTerm] = useState('');
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -81,6 +106,8 @@ export function CashRegisterDashboard() {
 
   const [totals, setTotals] = useState({
     totalOpening: 0,
+    totalSales: 0,
+    totalWithdrawals: 0,
     totalClosing: 0,
     balance: 0,
   });
@@ -108,7 +135,7 @@ export function CashRegisterDashboard() {
     if (activeTab === 'waiters') {
       fetchWaiterReports();
     }
-  }, [filters, profile, activeTab]);
+  }, [filters, profile, activeTab, waiterDate, waiterStartDate, waiterEndDate, waiterFilterMode]);
 
   useEffect(() => {
     fetchEmployees();
@@ -124,6 +151,42 @@ export function CashRegisterDashboard() {
     checkAutoClose();
     const interval = setInterval(checkAutoClose, 60000); // Check every minute
     return () => clearInterval(interval);
+  }, []);
+
+  // Suscripción en tiempo real a órdenes, sesiones y retiros para reflejar cambios en directo
+  useEffect(() => {
+    const channel = supabase
+      .channel('cash-dashboard-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          fetchSessions();
+          fetchCurrentCashStatus();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cash_register_sessions' },
+        () => {
+          fetchSessions();
+          fetchCurrentCashStatus();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cash_withdrawals' },
+        () => {
+          fetchWithdrawals();
+          fetchSessions();
+          fetchCurrentCashStatus();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const checkAutoClose = async () => {
@@ -185,20 +248,24 @@ export function CashRegisterDashboard() {
         .neq('employee_profiles.role', 'super_admin') // Ocultar sesiones de super_admin
         .order('opened_at', { ascending: false });
 
-      // Para cajeros: solo sus sesiones y solo del día actual
+      // Para cajeros: solo sus sesiones y solo del día actual (hora local)
       if (profile?.role === 'cashier') {
-        const today = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const today = `${year}-${month}-${day}`;
         query = query
           .eq('employee_id', user.id)
-          .gte('opened_at', today)
-          .lte('opened_at', today + 'T23:59:59');
+          .gte('opened_at', `${today}T00:00:00`)
+          .lte('opened_at', `${today}T23:59:59.999Z`);
       } else {
         // Para administradores: aplicar filtros
         if (filters.startDate) {
-          query = query.gte('opened_at', filters.startDate);
+          query = query.gte('opened_at', `${filters.startDate}T00:00:00`);
         }
         if (filters.endDate) {
-          query = query.lte('opened_at', filters.endDate);
+          query = query.lte('opened_at', `${filters.endDate}T23:59:59.999Z`);
         }
         if (filters.status !== 'all') {
           query = query.eq('status', filters.status);
@@ -213,14 +280,14 @@ export function CashRegisterDashboard() {
 
       setSessions(data || []);
 
-      // Calcular totales
+      // Calcular totales preliminares (se sincronizan con ventas y retiros en groupSessionsByDay)
       const totalOpening = (data || []).reduce((sum, s) => sum + (s.opening_amount || 0), 0);
       const totalClosing = (data || []).reduce((sum, s) => sum + (s.closing_amount || 0), 0);
-      setTotals({
+      setTotals(prev => ({
+        ...prev,
         totalOpening,
         totalClosing,
-        balance: totalClosing - totalOpening,
-      });
+      }));
     } catch (err) {
       console.error('Error fetching cash sessions:', err);
       toast.error(t('Error al cargar sesiones de caja'));
@@ -308,7 +375,7 @@ export function CashRegisterDashboard() {
 
   const fetchCurrentCashStatus = async () => {
     try {
-      // Get the most recent session for the current user (or all for admin)
+      // Obtener la sesión más reciente del usuario (o de cualquiera para admin)
       let query = supabase
         .from('cash_register_sessions')
         .select('*')
@@ -324,8 +391,36 @@ export function CashRegisterDashboard() {
 
       if (data && data.length > 0) {
         const latestSession = data[0];
+        const sessionStart = latestSession.opened_at;
+        const sessionEnd = latestSession.closed_at || new Date().toISOString();
+
+        // Ventas completadas durante esta sesión
+        const { data: sessionOrders } = await supabase
+          .from('orders')
+          .select('total')
+          .eq('status', 'completed')
+          .gte('created_at', sessionStart)
+          .lte('created_at', sessionEnd);
+
+        const liveSales = (sessionOrders || []).reduce((sum, o) => sum + (o.total || 0), 0);
+
+        // Retiros durante esta sesión
+        const { data: sessionWithdrawals } = await supabase
+          .from('cash_withdrawals')
+          .select('amount')
+          .eq('session_id', latestSession.id);
+
+        const liveWithdrawals = (sessionWithdrawals || []).reduce((sum, w) => sum + (w.amount || 0), 0);
+
+        // Dinero en directo en caja:
+        let currentAmount = (latestSession.opening_amount || 0) + liveSales - liveWithdrawals;
+        // Si está cerrada con un monto de cierre explícito > 0, usar closing_amount
+        if (latestSession.status === 'closed' && latestSession.closing_amount !== null && latestSession.closing_amount !== undefined && latestSession.closing_amount > 0) {
+          currentAmount = latestSession.closing_amount;
+        }
+
         setCurrentCashStatus({
-          currentAmount: latestSession.closing_amount || latestSession.opening_amount,
+          currentAmount,
           lastSessionStatus: latestSession.status,
           lastSessionTime: latestSession.status === 'open' ? latestSession.opened_at : (latestSession.closed_at || latestSession.opened_at),
         });
@@ -348,7 +443,7 @@ export function CashRegisterDashboard() {
   };
 
   const groupSessionsByDay = async () => {
-    const grouped = sessions.reduce((acc: any, session) => {
+    const grouped = sessions.reduce((acc: Record<string, any>, session) => {
       const date = new Date(session.opened_at).toDateString();
       const employeeKey = `${date}-${session.employee_id}`;
 
@@ -366,12 +461,16 @@ export function CashRegisterDashboard() {
           difference: 0,
           firstOpen: session.opened_at,
           lastClose: session.closed_at,
+          hasOpenSession: false,
         };
       }
       acc[employeeKey].sessions.push(session);
-      acc[employeeKey].totalOpening += session.opening_amount;
-      if (session.closing_amount) {
-        acc[employeeKey].totalClosing += session.closing_amount;
+      acc[employeeKey].totalOpening += (session.opening_amount || 0);
+      if (session.status === 'open' || !session.closed_at) {
+        acc[employeeKey].hasOpenSession = true;
+      }
+      if (session.closing_amount !== null && session.closing_amount !== undefined) {
+        acc[employeeKey].totalClosing += Number(session.closing_amount);
       }
       if (new Date(session.opened_at) < new Date(acc[employeeKey].firstOpen)) {
         acc[employeeKey].firstOpen = session.opened_at;
@@ -380,7 +479,7 @@ export function CashRegisterDashboard() {
         acc[employeeKey].lastClose = session.closed_at;
       }
       return acc;
-    }, {});
+    }, {} as Record<string, any>);
 
     // Calcular ventas y retiros para cada día
     for (const employeeKey of Object.keys(grouped)) {
@@ -398,7 +497,7 @@ export function CashRegisterDashboard() {
         .gte('created_at', startOfDay.toISOString())
         .lte('created_at', endOfDay.toISOString());
 
-      dayData.totalSales = (orders || []).reduce((sum, order) => sum + order.total, 0);
+      dayData.totalSales = (orders || []).reduce((sum, order) => sum + (order.total || 0), 0);
 
       // Obtener retiros del día
       const sessionIds = dayData.sessions.map((s: CashSession) => s.id);
@@ -407,13 +506,19 @@ export function CashRegisterDashboard() {
         .select('amount')
         .in('session_id', sessionIds);
 
-      dayData.totalWithdrawals = (dayWithdrawals || []).reduce((sum, w) => sum + w.amount, 0);
+      dayData.totalWithdrawals = (dayWithdrawals || []).reduce((sum, w) => sum + (w.amount || 0), 0);
 
       // Calcular cierre esperado y diferencia
       // Cierre esperado = Apertura + Ventas - Retiros
       dayData.expectedClosing = dayData.totalOpening + dayData.totalSales - dayData.totalWithdrawals;
-      // Diferencia = Cierre Real - Cierre Esperado
-      dayData.difference = dayData.totalClosing - dayData.expectedClosing;
+      
+      // Si hay una sesión abierta en curso, la diferencia se marca como en curso (0)
+      if (dayData.hasOpenSession) {
+        dayData.difference = 0;
+      } else {
+        // Diferencia = Cierre Real - Cierre Esperado
+        dayData.difference = dayData.totalClosing - dayData.expectedClosing;
+      }
     }
 
     const dailyArray = Object.values(grouped).sort((a: any, b: any) => {
@@ -423,6 +528,21 @@ export function CashRegisterDashboard() {
       return (a.employee_profiles?.full_name || '').localeCompare(b.employee_profiles?.full_name || '');
     });
     setDailySessions(dailyArray);
+
+    // Actualizar totales globales en directo para las tarjetas superiores
+    const totalOpening = dailyArray.reduce((sum: number, d: any) => sum + (d.totalOpening || 0), 0);
+    const totalSales = dailyArray.reduce((sum: number, d: any) => sum + (d.totalSales || 0), 0);
+    const totalWithdrawals = dailyArray.reduce((sum: number, d: any) => sum + (d.totalWithdrawals || 0), 0);
+    const totalClosing = dailyArray.reduce((sum: number, d: any) => sum + (d.totalClosing || 0), 0);
+    const balance = totalOpening + totalSales - totalWithdrawals;
+
+    setTotals({
+      totalOpening,
+      totalSales,
+      totalWithdrawals,
+      totalClosing,
+      balance,
+    });
   };
 
   const printDailyReport = async (day: any) => {
@@ -867,6 +987,63 @@ export function CashRegisterDashboard() {
     }
   };
 
+  const shiftWaiterDate = (days: number) => {
+    const d = new Date(waiterDate + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    setWaiterDate(`${year}-${month}-${day}`);
+    setWaiterFilterMode('day');
+  };
+
+  const getTodayStr = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getYesterdayStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const setWaiterDateToToday = () => {
+    setWaiterDate(getTodayStr());
+    setWaiterFilterMode('day');
+  };
+
+  const setWaiterDateToYesterday = () => {
+    setWaiterDate(getYesterdayStr());
+    setWaiterFilterMode('day');
+  };
+
+  const isWaiterDateToday = waiterFilterMode === 'day' && waiterDate === getTodayStr();
+  const isWaiterDateYesterday = waiterFilterMode === 'day' && waiterDate === getYesterdayStr();
+
+  const getFormattedWaiterFilterLabel = () => {
+    const locale = currentLanguage === 'fr' ? 'fr-FR' : 'es-ES';
+    if (waiterFilterMode === 'day') {
+      const d = new Date(waiterDate + 'T12:00:00');
+      return d.toLocaleDateString(locale, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } else {
+      const d1 = new Date(waiterStartDate + 'T12:00:00').toLocaleDateString(locale);
+      const d2 = new Date(waiterEndDate + 'T12:00:00').toLocaleDateString(locale);
+      return `${d1} - ${d2}`;
+    }
+  };
+
   const fetchWaiterReports = async () => {
     setLoadingWaiters(true);
     try {
@@ -878,19 +1055,15 @@ export function CashRegisterDashboard() {
 
       if (empErr) throw empErr;
 
-      const now = new Date();
-      let workdayStart = new Date(now);
-      if (workdayStart.getHours() < 2) {
-        workdayStart.setDate(workdayStart.getDate() - 1);
-      }
-      workdayStart.setHours(2, 0, 0, 0);
+      let startDateIso: string;
+      let endDateIso: string;
 
-      const startDateIso = filters.startDate ? new Date(filters.startDate).toISOString() : workdayStart.toISOString();
-      let endDateIso = new Date().toISOString();
-      if (filters.endDate) {
-        const ed = new Date(filters.endDate);
-        ed.setDate(ed.getDate() + 1);
-        endDateIso = ed.toISOString();
+      if (waiterFilterMode === 'day') {
+        startDateIso = `${waiterDate}T00:00:00`;
+        endDateIso = `${waiterDate}T23:59:59.999Z`;
+      } else {
+        startDateIso = `${waiterStartDate}T00:00:00`;
+        endDateIso = `${waiterEndDate}T23:59:59.999Z`;
       }
 
       const { data: ordersData, error: ordersErr } = await supabase
@@ -998,8 +1171,11 @@ export function CashRegisterDashboard() {
         <div style="margin-bottom: 5px;">
           <strong>Rôle:</strong> ${report.role}
         </div>
+        <div style="margin-bottom: 5px;">
+          <strong>Période:</strong> ${getFormattedWaiterFilterLabel()}
+        </div>
         <div style="margin-bottom: 10px;">
-          <strong>Date:</strong> ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          <strong>Date d'Émission:</strong> ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </div>
 
         <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
@@ -1110,47 +1286,85 @@ export function CashRegisterDashboard() {
       {activeTab === 'sessions' ? (
         <>
           {/* Totales */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-medium text-gray-700">{t('Total Aperturas')}</span>
+                <div className="p-2 bg-green-50 rounded-lg text-green-600">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">{t('Total Aperturas')}</span>
               </div>
               <p className="text-2xl font-bold text-green-600">{formatCurrency(totals.totalOpening)}</p>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
+
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-5 h-5 text-blue-600" />
-                <span className="text-sm font-medium text-gray-700">{t('Total Cierres')}</span>
+                <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">{t('Total Ventas')}</span>
               </div>
-              <p className="text-2xl font-bold text-blue-600">{formatCurrency(totals.totalClosing)}</p>
+              <p className="text-2xl font-bold text-blue-600">{formatCurrency(totals.totalSales)}</p>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
+
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-5 h-5 text-amber-600" />
-                <span className="text-sm font-medium text-gray-700">{t('Balance')}</span>
+                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">{t('Total Cierres')}</span>
+              </div>
+              <p className="text-2xl font-bold text-indigo-600">{formatCurrency(totals.totalClosing)}</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">{t('Balance')}</span>
               </div>
               <p className={`text-2xl font-bold ${totals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(totals.balance)}
               </p>
+              {totals.totalWithdrawals > 0 && (
+                <p className="text-xs text-orange-600 mt-1">
+                  - {formatCurrency(totals.totalWithdrawals)} {t('Retiros')}
+                </p>
+              )}
             </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-5 h-5 text-purple-600" />
-                <span className="text-sm font-medium text-gray-700">{t('Estado Actual')}</span>
+
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">{t('Estado Actual')}</span>
+                </div>
+                {currentCashStatus.lastSessionStatus === 'open' && (
+                  <span className="flex h-2.5 w-2.5 relative" title="En Directo">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                  </span>
+                )}
               </div>
               <p className="text-2xl font-bold text-purple-600">{formatCurrency(currentCashStatus.currentAmount)}</p>
-              <p className="text-xs text-gray-500">
-                {currentCashStatus.lastSessionStatus === 'open' ? t('Caja Abierta') : t('Caja Cerrada')}
+              <div className="flex items-center gap-1.5 mt-1 text-xs">
+                <span className={`px-1.5 py-0.5 rounded font-medium ${
+                  currentCashStatus.lastSessionStatus === 'open' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {currentCashStatus.lastSessionStatus === 'open' ? t('Caja Abierta') : t('Caja Cerrada')}
+                </span>
                 {currentCashStatus.lastSessionTime && (
-                  <span className="block">
+                  <span className="text-gray-500 truncate">
                     {new Date(currentCashStatus.lastSessionTime).toLocaleString('es-ES', {
                       hour: '2-digit',
                       minute: '2-digit'
                     })}
                   </span>
                 )}
-              </p>
+              </div>
             </div>
           </div>
 
@@ -1313,14 +1527,26 @@ export function CashRegisterDashboard() {
                           {formatCurrency(day.expectedClosing || 0)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-purple-600">
-                          {formatCurrency(day.totalClosing || 0)}
+                          {day.hasOpenSession ? (
+                            <span className="text-amber-600 font-normal italic">
+                              {day.totalClosing > 0 ? `${formatCurrency(day.totalClosing)} (${t('En curso')})` : t('En curso')}
+                            </span>
+                          ) : (
+                            formatCurrency(day.totalClosing || 0)
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                          <span className={`px-2 py-1 rounded ${Math.abs(day.difference) < 0.01 ? 'bg-green-100 text-green-700' :
-                            day.difference > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                            {formatCurrency(day.difference || 0)}
-                          </span>
+                          {day.hasOpenSession ? (
+                            <span className="px-2 py-1 rounded bg-amber-100 text-amber-700 text-xs">
+                              {t('En curso')}
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-1 rounded ${Math.abs(day.difference) < 0.01 ? 'bg-green-100 text-green-700' :
+                              day.difference > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                              }`}>
+                              {formatCurrency(day.difference || 0)}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex gap-2">
@@ -1376,6 +1602,156 @@ export function CashRegisterDashboard() {
             </button>
           </div>
 
+          {/* Filtro de Calendario Día/Mes/Año para Camareros */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              {/* Controles de Navegación por Fecha */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Botón día anterior */}
+                <button
+                  onClick={() => shiftWaiterDate(-1)}
+                  className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-semibold transition-colors"
+                  title={t('Día anterior')}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('Anterior')}</span>
+                </button>
+
+                {/* Input de Fecha (Calendario nativo por día, mes y año) */}
+                {waiterFilterMode === 'day' ? (
+                  <div className="flex items-center gap-2 bg-amber-50 border-2 border-amber-300 rounded-xl px-3 py-2 shadow-inner">
+                    <Calendar className="w-5 h-5 text-amber-600" />
+                    <input
+                      type="date"
+                      value={waiterDate}
+                      onChange={(e) => {
+                        if (e.target.value) setWaiterDate(e.target.value);
+                      }}
+                      className="bg-transparent text-gray-900 font-bold text-sm focus:outline-none cursor-pointer"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <span className="text-xs font-semibold text-gray-500">{t('De')}:</span>
+                      <input
+                        type="date"
+                        value={waiterStartDate}
+                        onChange={(e) => setWaiterStartDate(e.target.value)}
+                        className="bg-transparent text-gray-900 font-bold text-sm focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <span className="text-xs font-semibold text-gray-500">{t('A')}:</span>
+                      <input
+                        type="date"
+                        value={waiterEndDate}
+                        onChange={(e) => setWaiterEndDate(e.target.value)}
+                        className="bg-transparent text-gray-900 font-bold text-sm focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Botón día siguiente */}
+                <button
+                  onClick={() => shiftWaiterDate(1)}
+                  disabled={isWaiterDateToday}
+                  className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={t('Día siguiente')}
+                >
+                  <span className="hidden sm:inline">{t('Siguiente')}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                {/* Atajos rápidos: Hoy / Ayer */}
+                <div className="flex items-center gap-1 ml-1">
+                  <button
+                    onClick={setWaiterDateToToday}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+                      isWaiterDateToday
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {t('Hoy')}
+                  </button>
+                  <button
+                    onClick={setWaiterDateToYesterday}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+                      isWaiterDateYesterday
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {t('Ayer')}
+                  </button>
+                </div>
+              </div>
+
+              {/* Selector de modo: Día único o Rango + Buscador */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder={t('Buscar camarero...')}
+                    value={waiterSearchTerm}
+                    onChange={(e) => setWaiterSearchTerm(e.target.value)}
+                    className="pl-9 pr-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none w-40 sm:w-48"
+                  />
+                </div>
+
+                <div className="bg-gray-100 p-1 rounded-xl flex text-xs font-bold">
+                  <button
+                    onClick={() => setWaiterFilterMode('day')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      waiterFilterMode === 'day' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    {t('Por Día')}
+                  </button>
+                  <button
+                    onClick={() => setWaiterFilterMode('range')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      waiterFilterMode === 'range' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    {t('Rango de Fechas')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Banner de Resumen del Día/Rango Seleccionado */}
+            <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {t('Mostrando ventas de')}:
+                </span>
+                <span className="font-extrabold text-amber-900 text-sm bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 capitalize">
+                  {getFormattedWaiterFilterLabel()}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500 text-xs">{t('Total Pedidos')}: </span>
+                  <span className="font-bold text-gray-900">
+                    {waiterReports.reduce((acc, r) => acc + r.totalOrders, 0)} ({waiterReports.reduce((acc, r) => acc + r.completedOrders, 0)} {t('cobrados')})
+                  </span>
+                </div>
+                <div className="h-4 w-px bg-gray-300"></div>
+                <div>
+                  <span className="text-gray-500 text-xs">{t('Ventas Totales Camareros')}: </span>
+                  <span className="font-extrabold text-amber-600 text-base">
+                    {formatCurrency(waiterReports.reduce((acc, r) => acc + r.totalSales, 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {loadingWaiters ? (
             <div className="p-12 text-center bg-white rounded-xl shadow-sm border">
               <div className="w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -1388,7 +1764,9 @@ export function CashRegisterDashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
-              {waiterReports.map(report => {
+              {waiterReports
+                .filter(r => !waiterSearchTerm || r.employeeName.toLowerCase().includes(waiterSearchTerm.toLowerCase()) || r.role.toLowerCase().includes(waiterSearchTerm.toLowerCase()))
+                .map(report => {
                 const isExpanded = expandedWaiterId === report.employeeId;
                 return (
                   <div key={report.employeeId} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">

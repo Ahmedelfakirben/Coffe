@@ -220,7 +220,7 @@ export function InventoryItems() {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">{t('Costo Unitario')}</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">€</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">DH</span>
                   <input
                     type="number"
                     step="0.01"
