@@ -45,20 +45,11 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     window.location.reload();
   };
 
-  // Fuerza actualización del Service Worker antes de recargar (PWA)
+  // Fuerza actualización del Service Worker y cookies antes de recargar (PWA)
   const forceReload = async () => {
-    try {
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map(r => r.update()));
-        // Esperar a que el SW tome control antes de recargar
-        const reg = registrations[0];
-        if (reg?.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          await new Promise(res => setTimeout(res, 300));
-        }
-      }
-    } catch { /* silente */ } finally {
+    if (typeof (window as any).purgeCacheAndReload === 'function') {
+      await (window as any).purgeCacheAndReload();
+    } else {
       window.location.reload();
     }
   };
@@ -800,6 +791,13 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow">
                 <Coffee className="w-4 h-4 text-white" />
               </div>
+              <button
+                onClick={forceReload}
+                className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 transition-colors border border-amber-200"
+                title={t('Actualizar App / Limpiar Caché')}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {profile?.role === 'waiter' ? (
