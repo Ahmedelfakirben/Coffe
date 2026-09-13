@@ -189,7 +189,7 @@ function AppContent() {
       <div className={`flex-1 min-h-0 ${currentView === 'floor' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-6'}`}>
         {currentView === 'floor' && hasPermission('floor') && <Sala onGoToPOS={() => setCurrentView('pos')} />}
         {currentView === 'pos' && hasPermission('pos') && <POS />}
-        {currentView === 'orders' && hasPermission('orders') && <OrdersDashboard />}
+        {currentView === 'orders' && hasPermission('orders') && <OrdersDashboard onGoToPOS={() => setCurrentView('pos')} />}
         {currentView === 'products' && hasPermission('products') && <ProductsManager />}
         {currentView === 'categories' && hasPermission('categories') && <CategoryManager />}
         {currentView === 'users' && hasPermission('users') && <UserManager />}

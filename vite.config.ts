@@ -35,6 +35,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Limpiar automáticamente cachés antiguas de versiones previas
+        cleanupOutdatedCaches: true,
         // Activar inmediatamente al instalar, sin esperar a cerrar pestañas
         skipWaiting: true,
         clientsClaim: true,

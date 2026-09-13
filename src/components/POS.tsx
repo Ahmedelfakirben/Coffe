@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
@@ -74,9 +74,10 @@ export function POS() {
     paymentMethod: string;
     cashierName: string;
   } | null>(null);
-  const [existingItems, setExistingItems] = useState<Array<{ name: string; size?: string; quantity: number; price: number; subtotal: number }>>([]);
+  const [existingItems, setExistingItems] = useState<Array<{ id: string; name: string; size?: string; quantity: number; price: number; subtotal: number }>>([]);
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
   const [existingOrderNumber, setExistingOrderNumber] = useState<number | null>(null);
+  const [showMobileActiveModal, setShowMobileActiveModal] = useState(false);
   const [canConfirmOrder, setCanConfirmOrder] = useState(true);
   const [canValidateOrder, setCanValidateOrder] = useState(true);
   const [ticket, setTicket] = useState<{
@@ -182,45 +183,148 @@ export function POS() {
   }, [ticket]);
 
   // Cargar contenido de pedido activo si existe
-  useEffect(() => {
-    const loadActiveOrderContent = async () => {
-      if (!activeOrderId) {
-        setExistingItems([]);
-        setExistingOrderTotal(0);
-        setExistingOrderNumber(null);
-        return;
+  const loadActiveOrderContent = useCallback(async () => {
+    if (!activeOrderId) {
+      setExistingItems([]);
+      setExistingOrderTotal(0);
+      setExistingOrderNumber(null);
+      return;
+    }
+    try {
+      const { data: order, error: orderErr } = await supabase
+        .from('orders')
+        .select('id, total, order_number, table_id, service_type')
+        .eq('id', activeOrderId)
+        .single();
+      if (orderErr) throw orderErr;
+      const currentTotal = typeof order.total === 'string' ? parseFloat(order.total) : (order.total || 0);
+      setExistingOrderTotal(currentTotal);
+      setExistingOrderNumber(order.order_number || null);
+      if (order.table_id && !tableId) {
+        setTableId(order.table_id);
       }
-      try {
-        const { data: order, error: orderErr } = await supabase
-          .from('orders')
-          .select('id, total, order_number')
-          .eq('id', activeOrderId)
-          .single();
-        if (orderErr) throw orderErr;
-        const currentTotal = typeof order.total === 'string' ? parseFloat(order.total) : (order.total || 0);
-        setExistingOrderTotal(currentTotal);
-        setExistingOrderNumber(order.order_number || null);
+      if (order.service_type) {
+        setServiceType(order.service_type as any);
+      }
 
-        const { data: items, error: itemsErr } = await supabase
-          .from('order_items')
-          .select('quantity, unit_price, subtotal, size_id, product_id, products(name), product_sizes(size_name)')
-          .eq('order_id', activeOrderId);
-        if (itemsErr) throw itemsErr;
-        const mapped = (items || []).map((it: any) => ({
-          name: it.products?.name || 'Producto',
-          size: it.product_sizes?.size_name || undefined,
-          quantity: it.quantity,
-          price: typeof it.unit_price === 'string' ? parseFloat(it.unit_price) : (it.unit_price || 0),
-          subtotal: typeof it.subtotal === 'string' ? parseFloat(it.subtotal) : (it.subtotal || 0),
-        }));
-        setExistingItems(mapped);
-      } catch (err) {
-        console.error('Error cargando contenido de pedido activo:', err);
-        toast.error('No se pudo cargar el contenido del pedido activo');
-      }
-    };
+      const { data: items, error: itemsErr } = await supabase
+        .from('order_items')
+        .select('id, quantity, unit_price, subtotal, size_id, product_id, products(name), product_sizes(size_name)')
+        .eq('order_id', activeOrderId);
+      if (itemsErr) throw itemsErr;
+      const mapped = (items || []).map((it: any) => ({
+        id: it.id,
+        name: it.products?.name || 'Producto',
+        size: it.product_sizes?.size_name || undefined,
+        quantity: it.quantity,
+        price: typeof it.unit_price === 'string' ? parseFloat(it.unit_price) : (it.unit_price || 0),
+        subtotal: typeof it.subtotal === 'string' ? parseFloat(it.subtotal) : (it.subtotal || 0),
+      }));
+      setExistingItems(mapped);
+    } catch (err) {
+      console.error('Error cargando contenido de pedido activo:', err);
+      toast.error('No se pudo cargar el contenido del pedido activo');
+    }
+  }, [activeOrderId, tableId, setTableId, setServiceType]);
+
+  useEffect(() => {
     loadActiveOrderContent();
-  }, [activeOrderId]);
+  }, [loadActiveOrderContent]);
+
+  // Quitar un producto existente del pedido activo
+  const handleDeleteExistingItem = async (itemId: string) => {
+    if (!activeOrderId) return;
+    try {
+      const { error: delError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('id', itemId);
+      if (delError) throw delError;
+
+      const updatedItems = existingItems.filter(it => it.id !== itemId);
+      const newTotal = updatedItems.reduce((sum, it) => sum + it.subtotal, 0);
+
+      const { error: updateErr } = await supabase
+        .from('orders')
+        .update({ total: newTotal })
+        .eq('id', activeOrderId);
+      if (updateErr) throw updateErr;
+
+      setExistingItems(updatedItems);
+      setExistingOrderTotal(newTotal);
+      toast.success(t('Producto eliminado del pedido'));
+    } catch (err) {
+      console.error('Error al eliminar producto del pedido:', err);
+      toast.error(t('Error al eliminar producto'));
+    }
+  };
+
+  // Modificar cantidad (+ / -) de un producto existente del pedido activo
+  const handleUpdateExistingItemQuantity = async (itemId: string, delta: number) => {
+    if (!activeOrderId) return;
+    const item = existingItems.find(it => it.id === itemId);
+    if (!item) return;
+
+    const newQuantity = item.quantity + delta;
+    if (newQuantity <= 0) {
+      await handleDeleteExistingItem(itemId);
+      return;
+    }
+
+    try {
+      const newSubtotal = newQuantity * item.price;
+      const { error: updateItemErr } = await supabase
+        .from('order_items')
+        .update({
+          quantity: newQuantity,
+          subtotal: newSubtotal
+        })
+        .eq('id', itemId);
+      if (updateItemErr) throw updateItemErr;
+
+      const updatedItems = existingItems.map(it =>
+        it.id === itemId ? { ...it, quantity: newQuantity, subtotal: newSubtotal } : it
+      );
+      const newTotal = updatedItems.reduce((sum, it) => sum + it.subtotal, 0);
+
+      const { error: updateOrderErr } = await supabase
+        .from('orders')
+        .update({ total: newTotal })
+        .eq('id', activeOrderId);
+      if (updateOrderErr) throw updateOrderErr;
+
+      setExistingItems(updatedItems);
+      setExistingOrderTotal(newTotal);
+    } catch (err) {
+      console.error('Error al actualizar cantidad:', err);
+      toast.error(t('Error al actualizar cantidad'));
+    }
+  };
+
+  // Cancelar completamente el pedido activo
+  const handleCancelActiveOrder = async () => {
+    if (!activeOrderId) return;
+    if (!window.confirm(t('¿Seguro que deseas cancelar este pedido?'))) return;
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', activeOrderId);
+      if (error) throw error;
+
+      if (tableId) {
+        await updateTableStatus(tableId, 'available');
+      }
+      setActiveOrderId(null);
+      setTableId(null);
+      setServiceType('takeaway');
+      clearCart();
+      toast.success(t('Pedido cancelado'));
+    } catch (err) {
+      console.error('Error al cancelar pedido:', err);
+      toast.error(t('Error al cancelar pedido'));
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -459,10 +563,8 @@ export function POS() {
 
         // Refrescar contenido del pedido activo tras añadir
         setExistingOrderTotal(newTotal);
-        setExistingItems(prev => [
-          ...prev,
-          ...ticketItems.map(it => ({ ...it, subtotal: it.price * it.quantity }))
-        ]);
+        await loadActiveOrderContent();
+        clearCart();
       }
 
       toast.success(activeOrderId ? '¡Productos añadidos al pedido!' : '¡Orden creada exitosamente!');
@@ -626,6 +728,38 @@ export function POS() {
   // Vista móvil
   const renderMobileView = () => (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-gray-50">
+      {/* Banner de Pedido Activo en móvil */}
+      {activeOrderId && (
+        <div className="bg-amber-600 text-white px-3 py-2 flex justify-between items-center text-xs shadow-sm">
+          <div>
+            <span className="font-black">
+              #{existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-6)}
+            </span>
+            <span className="ml-2 font-medium opacity-95">Total: <b>{formatCurrency(existingOrderTotal)}</b> ({existingItems.length} items)</span>
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setShowMobileActiveModal(true)}
+              className="bg-white text-amber-900 font-bold px-2 py-1 rounded shadow-xs text-xs"
+            >
+              Editar Pedido
+            </button>
+            <button
+              onClick={() => {
+                setActiveOrderId(null);
+                setTableId(null);
+                setServiceType('takeaway');
+                clearCart();
+              }}
+              className="bg-amber-700/80 hover:bg-amber-800 text-white px-2 py-1 rounded text-xs"
+              title="Cerrar edición"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filtros de categoría móvil */}
       {/* Sección de Categorías Móvil */}
       <div className="bg-white border-b border-gray-200 px-2 py-3">
@@ -869,6 +1003,101 @@ export function POS() {
         {renderMobileView()}
       </div>
 
+      {/* Modal de Pedido Activo en Móvil */}
+      {showMobileActiveModal && activeOrderId && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:hidden">
+          <div className="bg-white w-full max-h-[85vh] rounded-t-3xl p-4 flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-200">
+            <div className="flex justify-between items-center pb-3 border-b">
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">
+                  Pedido #{existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-8)}
+                </h3>
+                <p className="text-xs text-amber-700 font-bold">
+                  Total: {formatCurrency(existingOrderTotal)} ({existingItems.length} productos)
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMobileActiveModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
+              {existingItems.length === 0 ? (
+                <p className="text-center text-gray-500 text-sm py-6">Sin productos en este pedido.</p>
+              ) : (
+                existingItems.map((it) => (
+                  <div key={it.id} className="bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-sm">{it.name}{it.size ? ` (${it.size})` : ''}</h4>
+                        <p className="text-xs text-gray-500">c/u {formatCurrency(it.price)}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteExistingItem(it.id)}
+                        className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"
+                        title="Eliminar producto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-amber-200/60">
+                      <div className="flex items-center gap-2 bg-white rounded-lg p-1 border border-amber-200">
+                        <button
+                          onClick={() => handleUpdateExistingItemQuantity(it.id, -1)}
+                          className="w-7 h-7 rounded bg-amber-100 flex items-center justify-center text-amber-800 font-bold"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-6 text-center font-bold text-sm text-gray-900">{it.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateExistingItemQuantity(it.id, 1)}
+                          className="w-7 h-7 rounded bg-amber-100 flex items-center justify-center text-amber-800 font-bold"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <span className="font-black text-amber-800 text-sm">
+                        {formatCurrency(it.subtotal)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-3 border-t space-y-2">
+              <button
+                onClick={() => {
+                  setShowMobileActiveModal(false);
+                  const ticketData = {
+                    orderDate: new Date(),
+                    orderNumber: existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-8),
+                    items: existingItems,
+                    total: existingOrderTotal,
+                    paymentMethod: 'Pendiente',
+                    cashierName: user ? ((user.user_metadata as any)?.full_name || user.email || 'Usuario') : 'Usuario',
+                  };
+                  setPendingOrderData(ticketData);
+                  setShowValidationModal(true);
+                }}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl shadow-md text-sm"
+              >
+                Validar y Cobrar
+              </button>
+              <button
+                onClick={() => setShowMobileActiveModal(false)}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-sm"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Ticket Auto-Print */}
       {ticket && (
         <div className="hidden">
@@ -1017,17 +1246,22 @@ export function POS() {
           </div>
 
           {activeOrderId && (
-            <div className="px-3 pt-3 pb-2 border-b bg-white">
-              <div className="flex items-start justify-between">
+            <div className="px-3 pt-3 pb-3 border-b-2 border-amber-200 bg-amber-50/40">
+              <div className="flex items-start justify-between gap-2 mb-2.5">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Pedido activo #{activeOrderId}</h3>
-                  <p className="text-xs text-gray-600">Total actual: <span className="font-semibold">{formatCurrency(existingOrderTotal)}</span></p>
-                  <p className="text-xs text-amber-600 font-medium">Pendiente de validación</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <h3 className="text-sm font-bold text-gray-900">
+                      Pedido #{existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-8)}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Total actual: <span className="font-bold text-amber-700">{formatCurrency(existingOrderTotal)}</span>
+                  </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
                   <button
                     onClick={() => {
-                      // Show validation modal for pending order
                       const ticketData = {
                         orderDate: new Date(),
                         orderNumber: existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-8),
@@ -1039,7 +1273,7 @@ export function POS() {
                       setPendingOrderData(ticketData);
                       setShowValidationModal(true);
                     }}
-                    className="px-3 py-2 rounded-lg border-2 text-xs bg-amber-600 text-white transition-colors hover:bg-amber-700"
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-600 text-white transition-colors hover:bg-amber-700 shadow-xs"
                   >
                     Validar
                   </button>
@@ -1048,27 +1282,73 @@ export function POS() {
                       setActiveOrderId(null);
                       setTableId(null);
                       setServiceType('takeaway');
-                      toast.success('Pedido finalizado');
+                      clearCart();
+                      toast.success(t('Edición cerrada'));
                     }}
-                    className="px-3 py-2 rounded-lg border-2 text-xs bg-white transition-colors hover:bg-gray-50 border-amber-600 text-amber-700"
+                    className="px-2.5 py-1.5 rounded-lg border text-xs font-semibold bg-white hover:bg-gray-50 border-gray-300 text-gray-700 transition-colors shadow-xs"
+                    title={t('Cerrar edición de este pedido')}
                   >
-                    Finalizar
+                    {t('Cerrar')}
+                  </button>
+                  <button
+                    onClick={handleCancelActiveOrder}
+                    className="p-1.5 rounded-lg border text-xs bg-white hover:bg-red-50 border-red-200 text-red-600 transition-colors shadow-xs"
+                    title={t('Cancelar todo el pedido')}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-              <div className="mt-2 space-y-2 max-h-32 overflow-auto">
+
+              {/* Lista de productos actuales editables */}
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5 scrollbar-thin">
                 {existingItems.length === 0 ? (
-                  <p className="text-xs text-gray-500">Sin productos registrados en el pedido.</p>
+                  <div className="bg-white rounded-xl p-3 text-center border border-amber-200/60">
+                    <p className="text-xs text-gray-500 font-medium">{t('Sin productos en este pedido.')}</p>
+                    <p className="text-[11px] text-amber-600 mt-1">{t('Añade nuevos productos desde el menú a la izquierda.')}</p>
+                  </div>
                 ) : (
-                  existingItems.map((it, idx) => (
-                    <div key={idx} className="bg-gray-50 rounded-lg p-2">
-                      <div className="flex justify-between items-start">
-                        <div className="text-xs text-gray-900 font-medium">
-                          {it.quantity}x {it.name}{it.size ? ` (${it.size})` : ''}
+                  existingItems.map((it) => (
+                    <div key={it.id} className="bg-white border border-amber-200/70 rounded-xl p-2.5 shadow-xs hover:border-amber-300 transition-all">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-900 font-bold leading-tight truncate">
+                            {it.name}{it.size ? ` (${it.size})` : ''}
+                          </div>
+                          <div className="text-[11px] text-gray-500 font-medium mt-0.5">
+                            c/u {formatCurrency(it.price)}
+                          </div>
                         </div>
-                        <div className="text-xs font-semibold text-amber-700">{formatCurrency(it.subtotal)}</div>
+                        <button
+                          onClick={() => handleDeleteExistingItem(it.id)}
+                          className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-lg transition-colors flex-shrink-0"
+                          title={t('Eliminar producto')}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div className="text-[11px] text-gray-600">c/u {formatCurrency(it.price)}</div>
+                      <div className="flex justify-between items-center mt-2 pt-1 border-t border-gray-100">
+                        <div className="flex items-center gap-1 bg-amber-50/60 rounded-lg p-0.5 border border-amber-200">
+                          <button
+                            onClick={() => handleUpdateExistingItemQuantity(it.id, -1)}
+                            className="w-5 h-5 rounded bg-white flex items-center justify-center hover:bg-amber-100 text-amber-800 transition-colors font-bold shadow-2xs"
+                            title="Disminuir"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-6 text-center font-bold text-xs text-amber-950">{it.quantity}</span>
+                          <button
+                            onClick={() => handleUpdateExistingItemQuantity(it.id, 1)}
+                            className="w-5 h-5 rounded bg-white flex items-center justify-center hover:bg-amber-100 text-amber-800 transition-colors font-bold shadow-2xs"
+                            title="Aumentar"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className="text-xs font-black text-amber-800 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                          {formatCurrency(it.subtotal)}
+                        </span>
+                      </div>
                     </div>
                   ))
                 )}

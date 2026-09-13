@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2, Edit2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCart } from '../contexts/CartContext';
 
 interface Order {
   id: string;
@@ -16,6 +17,7 @@ interface Order {
   employee_id: string;
   order_number?: number;
   table_id?: string | null;
+  table_name?: string | null;
   service_type?: string;
   employee_profiles?: {
     full_name: string;
@@ -64,10 +66,28 @@ interface CashEvent {
   note?: string | null;
 }
 
-export function OrdersDashboard() {
+interface OrdersDashboardProps {
+  onGoToPOS?: () => void;
+}
+
+export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
   const { profile, user } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
+  const { setActiveOrderId, setTableId, setServiceType } = useCart();
+
+  const handleEditOrder = (order: OrderWithItems) => {
+    setActiveOrderId(order.id);
+    if (order.table_id) {
+      setTableId(order.table_id);
+    }
+    if (order.service_type) {
+      setServiceType(order.service_type as any);
+    }
+    if (onGoToPOS) {
+      onGoToPOS();
+    }
+  };
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('preparing');
@@ -327,29 +347,33 @@ export function OrdersDashboard() {
       }
 
       if (data && data.length > 0) {
-        // Obtener IDs únicos de empleados
+        // Obtener IDs únicos de empleados y mesas
         const uniqueEmployeeIds = [...new Set(data.map(order => order.employee_id).filter(Boolean))];
+        const uniqueTableIds = [...new Set(data.map(order => order.table_id).filter(Boolean))];
 
-        // Hacer una sola query para todos los empleados
-        const { data: employeesData } = await supabase
-          .from('employee_profiles')
-          .select('id, full_name, role')
-          .neq('role', 'super_admin') // Ocultar super_admin
-          .in('id', uniqueEmployeeIds);
+        // Hacer queries para empleados y mesas
+        const [employeesResult, tablesResult] = await Promise.all([
+          uniqueEmployeeIds.length > 0
+            ? supabase.from('employee_profiles').select('id, full_name, role').neq('role', 'super_admin').in('id', uniqueEmployeeIds)
+            : Promise.resolve({ data: [] }),
+          uniqueTableIds.length > 0
+            ? supabase.from('tables').select('id, name').in('id', uniqueTableIds)
+            : Promise.resolve({ data: [] })
+        ]);
 
-        // Crear un mapa de empleados para búsqueda rápida O(1)
-        const employeesMap = new Map(
-          (employeesData || []).map(emp => [emp.id, emp])
-        );
+        // Crear mapas para búsqueda rápida O(1)
+        const employeesMap = new Map((employeesResult.data || []).map(emp => [emp.id, emp]));
+        const tablesMap = new Map((tablesResult.data || []).map(tb => [tb.id, tb.name]));
 
-        // Mapear los datos de empleados a las órdenes
-        const ordersWithEmployees = data.map(order => ({
+        // Mapear los datos de empleados y mesas a las órdenes
+        const ordersWithData = data.map(order => ({
           ...order,
-          employee_profiles: order.employee_id ? employeesMap.get(order.employee_id) : null
+          employee_profiles: order.employee_id ? employeesMap.get(order.employee_id) : null,
+          table_name: order.table_id ? tablesMap.get(order.table_id) : null
         }));
 
-        console.log('Órdenes con empleados:', ordersWithEmployees);
-        setOrders(ordersWithEmployees as OrderWithItems[]);
+        console.log('Órdenes con empleados y mesas:', ordersWithData);
+        setOrders(ordersWithData as OrderWithItems[]);
       } else {
         setOrders([]);
       }
@@ -866,11 +890,24 @@ export function OrdersDashboard() {
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${badgeGradientClass} text-white shadow-lg mb-2`}>
-                        {getStatusIcon(order.status)}
-                        <span className="font-bold text-sm">
-                          {statusLabels[order.status as keyof typeof statusLabels]}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${badgeGradientClass} text-white shadow-lg`}>
+                          {getStatusIcon(order.status)}
+                          <span className="font-bold text-sm">
+                            {statusLabels[order.status as keyof typeof statusLabels]}
+                          </span>
+                        </div>
+
+                        {/* Indicador de Mesa / Para llevar */}
+                        {order.service_type === 'dine_in' || order.table_id ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs shadow-xs">
+                            🪑 {t('En sala')} {order.table_name ? `• ${order.table_name}` : ''}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-900 border border-blue-200 font-bold text-xs shadow-xs">
+                            🛍️ {t('Para llevar')}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm font-bold bg-gradient-to-r from-amber-700 to-orange-700 bg-clip-text text-transparent">
                         #{order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8)}
@@ -907,20 +944,30 @@ export function OrdersDashboard() {
                       {t('Empleado:')} <span className="text-amber-700 font-bold">{order.employee_profiles?.full_name || profile?.full_name || (user?.email ?? 'N/A')}</span>
                     </p>
 
-                    {order.status === 'preparing' && profile?.role !== 'waiter' && (
+                    {order.status === 'preparing' && (
                       <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditOrder(order)}
+                          className="px-3.5 py-3 text-sm font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-1.5"
+                          title={t('common.edit') || 'Modifier'}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          <span>{t('common.edit') || 'Modifier'}</span>
+                        </button>
                         <button
                           onClick={() => updateOrderStatus(order.id, 'completed')}
                           className="flex-1 px-4 py-3 text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                         >
                           {t('Completar')}
                         </button>
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                          className="px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                        >
-                          {t('Cancelar')}
-                        </button>
+                        {profile?.role !== 'waiter' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                            className="px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          >
+                            {t('Cancelar')}
+                          </button>
+                        )}
                       </div>
                     )}
 
