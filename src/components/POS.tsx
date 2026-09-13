@@ -5,7 +5,7 @@ import { useCart } from '../contexts/CartContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { Category, Product, ProductSize } from '../types/supabase';
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle, ChevronLeft, ChevronRight, Coffee } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
 import { isMobileDevice } from '../lib/qzTray';
@@ -827,9 +827,8 @@ export function POS() {
         </div>
       )}
 
-      {/* Filtros de categoría móvil */}
-      {/* Sección de Categorías Móvil */}
-      <div className="bg-white border-b border-gray-200 px-2 py-3">
+      {/* Sección de Categorías y Selector de Columnas Móvil */}
+      <div className="bg-white border-b border-gray-200 px-2 py-2.5 shadow-xs">
         <div className="flex items-center gap-1">
           <button
             onClick={() => scrollCategoryLeft(mobileCategoryScrollRef)}
@@ -842,12 +841,12 @@ export function POS() {
           <div
             ref={mobileCategoryScrollRef}
             onWheel={handleCategoryWheel}
-            className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin flex-1 select-none touch-pan-x"
+            className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin flex-1 select-none touch-pan-x"
           >
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${selectedCategory === 'all'
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md scale-102'
+              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${selectedCategory === 'all'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
                 : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
                 }`}
             >
@@ -857,8 +856,8 @@ export function POS() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${selectedCategory === cat.id
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md scale-102'
+                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${selectedCategory === cat.id
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
                   : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
                   }`}
               >
@@ -877,47 +876,86 @@ export function POS() {
         </div>
       </div>
 
-      {/* Lista de productos móvil */}
-      <div className="flex-1 overflow-y-auto p-3">
-        <div className="space-y-2">
+      {/* Lista de productos móvil - Grid Cuadrada 2 por fila */}
+      <div className="flex-1 overflow-y-auto p-2 bg-gray-50">
+        <div className="grid grid-cols-2 gap-2.5">
           {products.map(product => {
             const productSizesList = productSizes(product.id);
-            return (
-              <div key={product.id} className="bg-white rounded-lg p-3 shadow-sm border">
-                <div className="flex gap-3">
-                  {product.image_url && (
-                    <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 text-sm">{product.name}</h3>
-                    <p className="text-xs text-gray-500 truncate">{product.description}</p>
-                    <p className="text-lg font-bold text-amber-600 mt-1">{formatCurrency(product.base_price)}</p>
-                  </div>
-                </div>
+            const totalInCart = cart
+              .filter(item => item.product.id === product.id)
+              .reduce((sum, item) => sum + item.quantity, 0);
 
-                {productSizesList.length > 0 ? (
-                  <div className="mt-2 space-y-1">
-                    {productSizesList.map(size => (
-                      <button
-                        key={size.id}
-                        onClick={() => addItem(product, size)}
-                        className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 py-2 px-3 rounded-lg text-sm font-medium flex justify-between items-center"
-                      >
-                        <span>{size.size_name}</span>
-                        <span className="font-bold">+{formatCurrency(size.price_modifier)}</span>
-                      </button>
-                    ))}
+            return (
+              <div
+                key={product.id}
+                onClick={() => {
+                  if (productSizesList.length === 0) {
+                    addItem(product);
+                  }
+                }}
+                className={`bg-white rounded-2xl p-2.5 shadow-xs border-2 transition-all flex flex-col justify-between relative overflow-hidden select-none active:scale-95 cursor-pointer ${
+                  totalInCart > 0 ? 'border-amber-500 bg-amber-50/30' : 'border-gray-200 hover:border-amber-400'
+                }`}
+              >
+                {/* Badge de cantidad agregada al carrito o icono + */}
+                {totalInCart > 0 ? (
+                  <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[11px] font-black px-2 py-0.5 rounded-full shadow-md animate-in zoom-in duration-150">
+                    x{totalInCart}
                   </div>
                 ) : (
-                  <button
-                    onClick={() => addItem(product)}
-                    className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg font-semibold mt-2 text-sm"
-                  >
-                    {t('Agregar')}
-                  </button>
+                  productSizesList.length === 0 && (
+                    <div className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                      <Plus className="w-3 h-3" />
+                    </div>
+                  )
                 )}
+
+                {/* Encabezado: Imagen o Icono + Nombre */}
+                <div className="flex flex-col items-center">
+                  {product.image_url && product.image_url.length > 0 ? (
+                    <div className="relative w-full h-16 sm:h-20 bg-gray-100 rounded-xl overflow-hidden mb-1.5">
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-10 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl flex items-center justify-center mb-1.5">
+                      <Coffee className="w-5 h-5 text-amber-500/70" />
+                    </div>
+                  )}
+
+                  <h3 className="font-extrabold text-gray-900 text-xs sm:text-sm leading-snug line-clamp-2 text-center min-h-[2rem] flex items-center justify-center">
+                    {product.name}
+                  </h3>
+                </div>
+
+                {/* Pie: Precio y Tamaños si existen */}
+                <div className="mt-1.5 pt-1 border-t border-gray-100 text-center">
+                  <p className="font-black text-amber-600 text-xs sm:text-sm">
+                    {formatCurrency(product.base_price)}
+                  </p>
+
+                  {productSizesList.length > 0 && (
+                    <div className="space-y-1 mt-1.5">
+                      {productSizesList.map(size => (
+                        <button
+                          key={size.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addItem(product, size);
+                          }}
+                          className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 py-1 px-1 rounded-lg text-[10px] font-bold border border-amber-200 flex justify-between items-center active:scale-95 transition-transform"
+                        >
+                          <span className="truncate">{size.size_name}</span>
+                          <span className="font-black text-amber-700 ml-0.5">+{formatCurrency(size.price_modifier)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
