@@ -1247,18 +1247,18 @@ export function CashRegisterDashboard() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div className="p-3 sm:p-6 bg-gray-50 min-h-screen">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">{t('Gestión de Caja')}</h1>
-          <p className="text-gray-600">{t('Historial de aperturas, cierres y resumen por camarero')}</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{t('Gestión de Caja')}</h1>
+          <p className="text-xs sm:text-sm text-gray-600">{t('Historial de aperturas, cierres y resumen por camarero')}</p>
         </div>
 
         {/* Selector de Pestañas */}
-        <div className="flex gap-2 bg-gray-200 p-1.5 rounded-2xl shadow-inner">
+        <div className="flex w-full sm:w-auto gap-1.5 bg-gray-200 p-1 rounded-2xl shadow-inner">
           <button
             onClick={() => setActiveTab('sessions')}
-            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${
+            className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 text-center ${
               activeTab === 'sessions'
                 ? 'bg-white text-amber-700 shadow-md scale-102'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
@@ -1271,7 +1271,7 @@ export function CashRegisterDashboard() {
               setActiveTab('waiters');
               fetchWaiterReports();
             }}
-            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${
+            className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 text-center ${
               activeTab === 'waiters'
                 ? 'bg-white text-amber-700 shadow-md scale-102'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'

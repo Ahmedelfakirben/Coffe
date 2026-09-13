@@ -303,7 +303,7 @@ export function EmployeeTimeTracking() {
       XLSX.utils.book_append_sheet(wb, wsSummary, t('reports.summary_sheet'));
 
       // Hoja 2: Desglose Diario
-      const dailyData = [
+      const dailyData: (string | number)[][] = [
         [t('reports.company_info')],
         [''],
         ...(companySettings ? [
@@ -412,16 +412,16 @@ export function EmployeeTimeTracking() {
   };
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
+    <div className="p-3 sm:p-6 bg-gray-50 min-h-screen">
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Tiempo de Empleados')}</h2>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('Gestión de Tiempo de Empleados')}</h2>
           {selectedEmployee && dayStats.length > 0 && (
             <button
               onClick={exportToExcel}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-md"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-md text-xs sm:text-sm font-bold active:scale-95"
             >
-              <FileSpreadsheet className="w-5 h-5" />
+              <FileSpreadsheet className="w-4 h-4" />
               <span>{t('analytics.export_excel')}</span>
             </button>
           )}
@@ -509,7 +509,7 @@ export function EmployeeTimeTracking() {
                   <DollarSign className="w-8 h-8 opacity-80" />
                   <span className="text-xs font-medium opacity-90">{t('Ventas')}</span>
                 </div>
-                <p className="text-3xl font-bold mb-1">${monthStats.total_sales.toFixed(0)}</p>
+                <p className="text-3xl font-bold mb-1">{formatCurrency(monthStats.total_sales)}</p>
                 <p className="text-sm opacity-90">{t('time_tracking.generated')}</p>
               </div>
             </div>

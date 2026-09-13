@@ -1140,7 +1140,8 @@ export function Analytics() {
       const [ordersData, sessionsData, expensesData, employeesData, productsData] = await Promise.all([
         supabase.from('orders').select(`
           id, total, status, created_at, employee_id,
-          employee_profiles!inner(full_name, role)
+          employee_profiles!inner(full_name, role),
+          order_items(quantity, products(name))
         `).neq('employee_profiles.role', 'super_admin').order('created_at', { ascending: false }),
         supabase.from('cash_register_sessions').select(`
           id, opening_amount, closing_amount, opened_at, closed_at, status, employee_id,
@@ -1199,8 +1200,8 @@ export function Analytics() {
           [t('reports.status')]: order.status,
           [t('reports.total')]: order.total,
           [t('reports.employee')]: (order.employee_profiles as any)?.full_name || 'N/A',
-          [t('reports.items')]: order.order_items?.map(item =>
-            `${item.quantity}x ${(item.products as any)?.name || t('reports.product')}`
+          [t('reports.items')]: (order.order_items as any[])?.map((item: any) =>
+            `${item.quantity}x ${(Array.isArray(item.products) ? item.products[0]?.name : item.products?.name) || t('reports.product')}`
           ).join('; ') || ''
         }));
         const wsOrders = XLSX.utils.json_to_sheet(ordersFormatted);
@@ -1428,28 +1429,25 @@ export function Analytics() {
   };
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 via-white to-gray-100 min-h-screen">
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-4xl font-black bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">{t('Analíticas y Reportes')}</h2>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl shadow-md">
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg"></div>
-            <span className="font-bold text-green-700">{onlineUsers} {t('usuarios conectados')}</span>
+    <div className="p-3 sm:p-6 bg-gradient-to-br from-gray-50 via-white to-gray-100 min-h-screen">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <h2 className="text-2xl sm:text-4xl font-black bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">{t('Analíticas y Reportes')}</h2>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
+          <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl shadow-xs text-xs sm:text-sm">
+            <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-sm"></div>
+            <span className="font-bold text-green-700">{onlineUsers} {t('conectados')}</span>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-200 rounded-xl shadow-md">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full shadow-lg"></div>
-            <span className="font-bold text-yellow-700">{occupiedTables} {t('mesas ocupadas')}</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl shadow-xs text-xs sm:text-sm">
+            <div className="w-2.5 h-2.5 bg-yellow-500 rounded-full shadow-sm"></div>
+            <span className="font-bold text-yellow-700">{occupiedTables} {t('mesas')}</span>
           </div>
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl transition-all duration-200 font-bold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl transition-all duration-200 font-bold shadow-md text-xs sm:text-sm active:scale-95 ml-auto sm:ml-0"
           >
-            <FileSpreadsheet className="w-5 h-5" />
+            <FileSpreadsheet className="w-4 h-4" />
             <span>{t('Exportar Excel')}</span>
           </button>
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-xl flex items-center justify-center">
-            <Bell className="w-5 h-5 text-purple-600" />
-          </div>
         </div>
       </div>
 

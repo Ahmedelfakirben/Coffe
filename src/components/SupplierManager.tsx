@@ -3,10 +3,12 @@ import { Plus, Edit, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { Supplier } from '../types/expenses';
 
 export function SupplierManager() {
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -109,22 +111,22 @@ export function SupplierManager() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Proveedores')}</h2>
+    <div className="p-3 sm:p-6 bg-gray-50 min-h-screen">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('Gestión de Proveedores')}</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+          className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 shadow-sm active:scale-95"
         >
-          <Plus className="w-5 h-5" />
-          {t('Nuevo Proveedor')}
+          <Plus className="w-4 h-4" />
+          <span>{t('Nuevo Proveedor')}</span>
         </button>
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b">
               <h3 className="text-lg font-bold text-gray-900">
                 {editingSupplier ? t('Editar Proveedor') : t('Nuevo Proveedor')}
               </h3>
@@ -232,66 +234,69 @@ export function SupplierManager() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {t('Nombre')}
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {t('Contacto')}
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {t('Email/Teléfono')}
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {t('Dirección')}
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {t('economat.supplier_status')}
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {t('Acciones')}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {suppliers.map((supplier) => (
-              <tr key={supplier.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{supplier.name}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{supplier.contact_person || '-'}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900">{supplier.email || '-'}</div>
-                  <div className="text-sm text-gray-500">{supplier.phone || '-'}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900">{supplier.address || '-'}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className={`text-sm font-bold ${supplier.balance > 0 ? 'text-red-600' : supplier.balance < 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                    {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Math.abs(supplier.balance || 0))}
-                    {supplier.balance > 0 ? ` (${t('economat.debit')})` : supplier.balance < 0 ? ` (${t('economat.credit')})` : ''}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => handleEdit(supplier)}
-                    className="text-amber-600 hover:text-amber-900 mr-4"
-                  >
-                    <Edit className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(supplier.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </td>
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t('Nombre')}
+                </th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t('Contacto')}
+                </th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t('Email/Teléfono')}
+                </th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t('Dirección')}
+                </th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t('economat.supplier_status')}
+                </th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {t('Acciones')}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {suppliers.map((supplier) => (
+                <tr key={supplier.id} className="hover:bg-gray-50">
+                  <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                    <div className="text-sm font-bold text-gray-900">{supplier.name}</div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{supplier.contact_person || '-'}</div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-3.5">
+                    <div className="text-sm text-gray-900">{supplier.email || '-'}</div>
+                    <div className="text-sm text-gray-500">{supplier.phone || '-'}</div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-3.5">
+                    <div className="text-sm text-gray-900">{supplier.address || '-'}</div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                    <div className={`text-sm font-bold ${supplier.balance > 0 ? 'text-red-600' : supplier.balance < 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                      {formatCurrency(Math.abs(supplier.balance || 0))}
+                      {supplier.balance > 0 ? ` (${t('economat.debit')})` : supplier.balance < 0 ? ` (${t('economat.credit')})` : ''}
+                    </div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-3.5 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                      onClick={() => handleEdit(supplier)}
+                      className="text-amber-600 hover:text-amber-900 p-1.5 rounded-lg hover:bg-amber-50 mr-2 transition-colors"
+                      title={t('Editar')}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(supplier.id)}
+                      className="text-red-600 hover:text-red-900 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      title={t('Eliminar')}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
               </tr>
             ))}
             {suppliers.length === 0 && (
@@ -305,5 +310,6 @@ export function SupplierManager() {
         </table>
       </div>
     </div>
-  );
+  </div>
+);
 }

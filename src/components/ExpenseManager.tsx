@@ -163,23 +163,23 @@ export function ExpenseManager() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">{t('Gestión de Gastos')}</h2>
-        <div className="flex gap-4">
+    <div className="p-3 sm:p-6 bg-gray-50 min-h-screen">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('Gestión de Gastos')}</h2>
+        <div className="flex flex-wrap gap-2 sm:gap-4 w-full sm:w-auto">
           <button
             onClick={downloadReport}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+            className="flex-1 sm:flex-initial bg-gray-600 hover:bg-gray-700 text-white px-3 py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 active:scale-95 shadow-sm"
           >
-            <Download className="w-5 h-5" />
-            {t('Descargar Reporte')}
+            <Download className="w-4 h-4" />
+            <span>{t('Descargar Reporte')}</span>
           </button>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+            className="flex-1 sm:flex-initial bg-amber-600 hover:bg-amber-700 text-white px-3 py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 active:scale-95 shadow-sm"
           >
-            <Plus className="w-5 h-5" />
-            {t('Nuevo Gasto')}
+            <Plus className="w-4 h-4" />
+            <span>{t('Nuevo Gasto')}</span>
           </button>
         </div>
       </div>
