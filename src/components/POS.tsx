@@ -78,6 +78,7 @@ export function POS() {
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
   const [existingOrderNumber, setExistingOrderNumber] = useState<number | null>(null);
   const [showMobileActiveModal, setShowMobileActiveModal] = useState(false);
+  const [showMobileCartModal, setShowMobileCartModal] = useState(false);
   const [canConfirmOrder, setCanConfirmOrder] = useState(true);
   const [canValidateOrder, setCanValidateOrder] = useState(true);
   const [ticket, setTicket] = useState<{
@@ -234,6 +235,10 @@ export function POS() {
   // Quitar un producto existente del pedido activo
   const handleDeleteExistingItem = async (itemId: string) => {
     if (!activeOrderId) return;
+    if (profile?.role === 'waiter') {
+      toast.error(t('Los camareros no pueden eliminar productos de un pedido existente'));
+      return;
+    }
     try {
       const { error: delError } = await supabase
         .from('order_items')
@@ -262,6 +267,10 @@ export function POS() {
   // Modificar cantidad (+ / -) de un producto existente del pedido activo
   const handleUpdateExistingItemQuantity = async (itemId: string, delta: number) => {
     if (!activeOrderId) return;
+    if (delta < 0 && profile?.role === 'waiter') {
+      toast.error(t('Los camareros no pueden reducir la cantidad de productos de un pedido existente'));
+      return;
+    }
     const item = existingItems.find(it => it.id === itemId);
     if (!item) return;
 
@@ -304,6 +313,10 @@ export function POS() {
   // Cancelar completamente el pedido activo
   const handleCancelActiveOrder = async () => {
     if (!activeOrderId) return;
+    if (profile?.role === 'waiter') {
+      toast.error(t('Los camareros no pueden cancelar o eliminar un pedido existente'));
+      return;
+    }
     if (!window.confirm(t('¿Seguro que deseas cancelar este pedido?'))) return;
     try {
       const { error } = await supabase
@@ -971,79 +984,10 @@ export function POS() {
         {/* Ver carrito */}
         {cart.length > 0 && (
           <button
-            onClick={() => {
-              // Create cart details modal using React approach instead of innerHTML
-              const modal = document.createElement('div');
-              modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-end';
-              modal.onclick = () => modal.remove();
-
-              const modalContent = document.createElement('div');
-              modalContent.className = 'bg-white w-full max-h-[70vh] rounded-t-2xl p-4 overflow-y-auto';
-              modalContent.onclick = (e) => e.stopPropagation();
-
-              // Header
-              const header = document.createElement('h3');
-              header.className = 'text-lg font-bold mb-4';
-              header.textContent = `Carrito (${cart.length} items)`;
-
-              // Cart items
-              cart.forEach((item) => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'flex justify-between items-center py-2 border-b';
-
-                const itemInfo = document.createElement('div');
-                itemInfo.className = 'flex-1';
-
-                const itemName = document.createElement('p');
-                itemName.className = 'font-medium text-sm';
-                itemName.textContent = `${item.quantity}x ${item.product.name}${item.size ? ` (${item.size.size_name})` : ''}`;
-
-                const itemPrice = document.createElement('p');
-                itemPrice.className = 'text-xs text-gray-500';
-                itemPrice.textContent = `${formatCurrency(item.product.base_price + (item.size?.price_modifier || 0))} c/u`;
-
-                const itemTotal = document.createElement('p');
-                itemTotal.className = 'font-bold text-amber-600';
-                itemTotal.textContent = formatCurrency((item.product.base_price + (item.size?.price_modifier || 0)) * item.quantity);
-
-                itemInfo.appendChild(itemName);
-                itemInfo.appendChild(itemPrice);
-                itemDiv.appendChild(itemInfo);
-                itemDiv.appendChild(itemTotal);
-
-                modalContent.appendChild(itemDiv);
-              });
-
-              // Total section
-              const totalDiv = document.createElement('div');
-              totalDiv.className = 'mt-4 pt-4 border-t flex justify-between';
-
-              const totalLabel = document.createElement('span');
-              totalLabel.className = 'font-bold';
-              totalLabel.textContent = 'Total:';
-
-              const totalAmount = document.createElement('span');
-              totalAmount.className = 'font-bold text-amber-600 text-xl';
-              totalAmount.textContent = formatCurrency(total);
-
-              totalDiv.appendChild(totalLabel);
-              totalDiv.appendChild(totalAmount);
-
-              // Close button
-              const closeButton = document.createElement('button');
-              closeButton.className = 'w-full mt-4 bg-gray-200 py-2 rounded-lg';
-              closeButton.textContent = 'Cerrar';
-              closeButton.onclick = () => modal.remove();
-
-              modalContent.appendChild(header);
-              modalContent.appendChild(totalDiv);
-              modalContent.appendChild(closeButton);
-              modal.appendChild(modalContent);
-              document.body.appendChild(modal);
-            }}
+            onClick={() => setShowMobileCartModal(true)}
             className="w-full bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium"
           >
-            Ver Carrito Detallado
+            Ver Carrito Detallado ({cart.length})
           </button>
         )}
       </div>
@@ -1089,22 +1033,26 @@ export function POS() {
                         <h4 className="font-bold text-gray-900 text-sm">{it.name}{it.size ? ` (${it.size})` : ''}</h4>
                         <p className="text-xs text-gray-500">c/u {formatCurrency(it.price)}</p>
                       </div>
-                      <button
-                        onClick={() => handleDeleteExistingItem(it.id)}
-                        className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"
-                        title="Eliminar producto"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {profile?.role !== 'waiter' && (
+                        <button
+                          onClick={() => handleDeleteExistingItem(it.id)}
+                          className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"
+                          title="Eliminar producto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                     <div className="flex justify-between items-center mt-2 pt-2 border-t border-amber-200/60">
                       <div className="flex items-center gap-2 bg-white rounded-lg p-1 border border-amber-200">
-                        <button
-                          onClick={() => handleUpdateExistingItemQuantity(it.id, -1)}
-                          className="w-7 h-7 rounded bg-amber-100 flex items-center justify-center text-amber-800 font-bold"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
+                        {profile?.role !== 'waiter' && (
+                          <button
+                            onClick={() => handleUpdateExistingItemQuantity(it.id, -1)}
+                            className="w-7 h-7 rounded bg-amber-100 flex items-center justify-center text-amber-800 font-bold"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <span className="w-6 text-center font-bold text-sm text-gray-900">{it.quantity}</span>
                         <button
                           onClick={() => handleUpdateExistingItemQuantity(it.id, 1)}
@@ -1146,6 +1094,90 @@ export function POS() {
                 className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-sm"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Carrito Borrador en Móvil */}
+      {showMobileCartModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:hidden">
+          <div className="bg-white w-full max-h-[85vh] rounded-t-3xl p-4 flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-200">
+            <div className="flex justify-between items-center pb-3 border-b">
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">
+                  {t('Carrito')} ({cart.length} items)
+                </h3>
+                <p className="text-xs text-amber-600 font-bold">
+                  {t('Total:')} {formatCurrency(total)}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMobileCartModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
+              {cart.length === 0 ? (
+                <p className="text-center text-gray-500 text-sm py-6">{t('El carrito está vacío')}</p>
+              ) : (
+                cart.slice().reverse().map((item, index) => {
+                  const actualIdx = cart.length - 1 - index;
+                  const itemUnitPrice = item.product.base_price + (item.size?.price_modifier || 0);
+                  const itemSubtotal = itemUnitPrice * item.quantity;
+                  return (
+                    <div key={actualIdx} className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-bold text-gray-900 text-sm">
+                            {item.quantity}x {item.product.name}{item.size ? ` (${item.size.size_name})` : ''}
+                          </h4>
+                          <p className="text-xs text-gray-500">c/u {formatCurrency(itemUnitPrice)}</p>
+                        </div>
+                        <button
+                          onClick={() => removeItem(actualIdx)}
+                          className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"
+                          title={t('Eliminar producto')}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
+                        <div className="flex items-center gap-2 bg-amber-50/60 rounded-lg p-1 border border-amber-200">
+                          <button
+                            onClick={() => updateQuantity(actualIdx, -1)}
+                            className="w-7 h-7 rounded bg-white border border-amber-300 flex items-center justify-center text-amber-800 font-bold"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-6 text-center font-bold text-sm text-amber-950">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(actualIdx, 1)}
+                            className="w-7 h-7 rounded bg-white border border-amber-300 flex items-center justify-center text-amber-800 font-bold"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <span className="font-black text-amber-700 text-sm">
+                          {formatCurrency(itemSubtotal)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="pt-3 border-t">
+              <button
+                onClick={() => setShowMobileCartModal(false)}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl shadow-md text-sm"
+              >
+                {t('Listo')} ({formatCurrency(total)})
               </button>
             </div>
           </div>
@@ -1344,13 +1376,15 @@ export function POS() {
                   >
                     {t('Cerrar')}
                   </button>
-                  <button
-                    onClick={handleCancelActiveOrder}
-                    className="p-1.5 rounded-lg border text-xs bg-white hover:bg-red-50 border-red-200 text-red-600 transition-colors shadow-xs"
-                    title={t('Cancelar todo el pedido')}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {profile?.role !== 'waiter' && (
+                    <button
+                      onClick={handleCancelActiveOrder}
+                      className="p-1.5 rounded-lg border text-xs bg-white hover:bg-red-50 border-red-200 text-red-600 transition-colors shadow-xs"
+                      title={t('Cancelar todo el pedido')}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1373,23 +1407,27 @@ export function POS() {
                             c/u {formatCurrency(it.price)}
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteExistingItem(it.id)}
-                          className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-lg transition-colors flex-shrink-0"
-                          title={t('Eliminar producto')}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {profile?.role !== 'waiter' && (
+                          <button
+                            onClick={() => handleDeleteExistingItem(it.id)}
+                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-lg transition-colors flex-shrink-0"
+                            title={t('Eliminar producto')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                       <div className="flex justify-between items-center mt-2 pt-1 border-t border-gray-100">
                         <div className="flex items-center gap-1 bg-amber-50/60 rounded-lg p-0.5 border border-amber-200">
-                          <button
-                            onClick={() => handleUpdateExistingItemQuantity(it.id, -1)}
-                            className="w-5 h-5 rounded bg-white flex items-center justify-center hover:bg-amber-100 text-amber-800 transition-colors font-bold shadow-2xs"
-                            title="Disminuir"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
+                          {profile?.role !== 'waiter' && (
+                            <button
+                              onClick={() => handleUpdateExistingItemQuantity(it.id, -1)}
+                              className="w-5 h-5 rounded bg-white flex items-center justify-center hover:bg-amber-100 text-amber-800 transition-colors font-bold shadow-2xs"
+                              title="Disminuir"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                          )}
                           <span className="w-6 text-center font-bold text-xs text-amber-950">{it.quantity}</span>
                           <button
                             onClick={() => handleUpdateExistingItemQuantity(it.id, 1)}

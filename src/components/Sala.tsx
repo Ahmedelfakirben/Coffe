@@ -586,7 +586,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                                 onClick={() => { setActiveOrderId(order.id); setShowOrdersModal(false); onGoToPOS?.(); }}
                                 className="flex-1 py-2.5 bg-amber-900/40 hover:bg-amber-900/60 border border-amber-800/30 text-amber-200 rounded-xl text-xs font-bold transition-colors"
                               >
-                                ✏️ {t('common.edit')}
+                                {profile?.role === 'waiter' ? `➕ ${t('Añadir más productos')}` : `✏️ ${t('common.edit')}`}
                               </button>
                               <button
                                 onClick={() => setShowPaymentSelector(order.id)}
