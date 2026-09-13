@@ -567,7 +567,6 @@ export function CashRegisterDashboard() {
             products (name)
           )
         `)
-        .eq('employee_id', day.employee_id)
         .gte('created_at', startOfDay.toISOString())
         .lte('created_at', endOfDay.toISOString())
         .eq('status', 'completed');
@@ -575,7 +574,8 @@ export function CashRegisterDashboard() {
       if (error) throw error;
 
       // Calculate order totals
-      const orderTotal = (orders || []).reduce((sum, order) => sum + order.total, 0);
+      const fetchedTotal = (orders || []).reduce((sum, order) => sum + (order.total || 0), 0);
+      const orderTotal = fetchedTotal > 0 ? fetchedTotal : (day.totalSales || 0);
       const orderCount = orders?.length || 0;
 
       // Create professional invoice-style print content in French
@@ -593,7 +593,7 @@ export function CashRegisterDashboard() {
               <span>Date du Rapport</span>
             </div>
             <div class="info-item">
-              <strong>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : 'Vous'}</strong>
+              <strong>${profile?.role === 'admin' || profile?.role === 'super_admin' ? (day.employee_profiles?.full_name || profile?.full_name || 'Caissier') : (profile?.full_name || 'Vous')}</strong>
               <span>Employé</span>
             </div>
             <div class="info-item">
@@ -876,7 +876,6 @@ export function CashRegisterDashboard() {
             products (name)
           )
         `)
-        .eq('employee_id', session.employee_id)
         .gte('created_at', session.opened_at)
         .lte('created_at', session.closed_at || new Date().toISOString())
         .eq('status', 'completed');
@@ -884,7 +883,7 @@ export function CashRegisterDashboard() {
       if (error) throw error;
 
       // Calculate order totals
-      const orderTotal = (orders || []).reduce((sum, order) => sum + order.total, 0);
+      const orderTotal = (orders || []).reduce((sum, order) => sum + (order.total || 0), 0);
       const orderCount = orders?.length || 0;
 
       // Create print content in French
@@ -894,7 +893,7 @@ export function CashRegisterDashboard() {
           <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
 
           <div style="margin-bottom: 10px;">
-            <strong>Employé:</strong> ${profile?.role === 'admin' || profile?.role === 'super_admin' ? session.employee_profiles?.full_name || 'N/A' : 'Vous'}
+            <strong>Employé:</strong> ${profile?.role === 'admin' || profile?.role === 'super_admin' ? (session.employee_profiles?.full_name || profile?.full_name || 'Caissier') : (profile?.full_name || 'Vous')}
           </div>
 
           <div style="margin-bottom: 10px;">
