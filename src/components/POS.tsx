@@ -38,6 +38,49 @@ export function POS() {
       ref.current.scrollBy({ left: 200, behavior: 'smooth' });
     }
   };
+
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+
+  const scrollToCategoryPill = (catId: string) => {
+    if (!mobileCategoryScrollRef.current) return;
+    const btn = mobileCategoryScrollRef.current.querySelector(`[data-cat-id="${catId}"]`);
+    if (btn) {
+      btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  };
+
+  const handleMobileTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+  };
+
+  const handleMobileTouchEnd = (e: React.TouchEvent) => {
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+
+    // Activar cambio de categoría si el gesto horizontal > 50px y es más horizontal que vertical
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      const allCatIds = ['all', ...categories.map(c => c.id)];
+      const currentIndex = allCatIds.indexOf(selectedCategory);
+
+      if (deltaX < 0) {
+        // Deslizar a la izquierda -> Siguiente categoría
+        if (currentIndex < allCatIds.length - 1) {
+          const nextCat = allCatIds[currentIndex + 1];
+          setSelectedCategory(nextCat);
+          scrollToCategoryPill(nextCat);
+        }
+      } else {
+        // Deslizar a la derecha -> Categoría anterior
+        if (currentIndex > 0) {
+          const prevCat = allCatIds[currentIndex - 1];
+          setSelectedCategory(prevCat);
+          scrollToCategoryPill(prevCat);
+        }
+      }
+    }
+  };
   const {
     items: cart,
     total,
@@ -844,7 +887,11 @@ export function POS() {
             className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin flex-1 select-none touch-pan-x"
           >
             <button
-              onClick={() => setSelectedCategory('all')}
+              data-cat-id="all"
+              onClick={() => {
+                setSelectedCategory('all');
+                scrollToCategoryPill('all');
+              }}
               className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${selectedCategory === 'all'
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
                 : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
@@ -855,7 +902,11 @@ export function POS() {
             {categories.map(cat => (
               <button
                 key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
+                data-cat-id={cat.id}
+                onClick={() => {
+                  setSelectedCategory(cat.id);
+                  scrollToCategoryPill(cat.id);
+                }}
                 className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${selectedCategory === cat.id
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
                   : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'
@@ -876,8 +927,12 @@ export function POS() {
         </div>
       </div>
 
-      {/* Lista de productos móvil - Grid Cuadrada 2 por fila */}
-      <div className="flex-1 overflow-y-auto p-2 bg-gray-50">
+      {/* Lista de productos móvil - Grid Cuadrada 2 por fila (Con soporte para deslizar izquierda/derecha) */}
+      <div
+        onTouchStart={handleMobileTouchStart}
+        onTouchEnd={handleMobileTouchEnd}
+        className="flex-1 overflow-y-auto p-2 bg-gray-50 touch-pan-y"
+      >
         <div className="grid grid-cols-2 gap-2.5">
           {products.map(product => {
             const productSizesList = productSizes(product.id);

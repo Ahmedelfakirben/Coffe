@@ -3,7 +3,7 @@ import App from './App.tsx';
 import './index.css';
 
 // Control de versión para forzar actualización, purga de caché, Service Workers y cookies en clientes PWA y Android
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 
 export const clearAllCookies = () => {
   try {
