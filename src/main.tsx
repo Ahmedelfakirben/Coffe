@@ -3,7 +3,7 @@ import App from './App.tsx';
 import './index.css';
 
 // Control de versión para forzar actualización, purga de caché, Service Workers y cookies en clientes
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.7';
 
 const clearAllCookies = () => {
   try {
@@ -31,21 +31,28 @@ try {
     // 1. Borrar Cookies del navegador
     clearAllCookies();
 
-    // 2. Limpiar Cachés de la PWA
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        names.forEach((name) => caches.delete(name));
-      });
-    }
-
-    // 3. Desregistrar Service Workers antiguos
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        registrations.forEach((reg) => reg.unregister());
-      });
-    }
-
+    // 2. Guardar nueva versión primero
     localStorage.setItem('app_version', APP_VERSION);
+
+    // 3. Limpiar Cachés de la PWA y Service Workers, luego recargar forzadamente la ventana
+    const purgeAndReload = async () => {
+      try {
+        if ('caches' in window) {
+          const names = await caches.keys();
+          await Promise.all(names.map(name => caches.delete(name)));
+        }
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(reg => reg.unregister()));
+        }
+      } catch (err) {
+        console.warn('Error purgando cachés PWA:', err);
+      } finally {
+        window.location.reload();
+      }
+    };
+
+    purgeAndReload();
   } else if (!currentStored) {
     localStorage.setItem('app_version', APP_VERSION);
   }
