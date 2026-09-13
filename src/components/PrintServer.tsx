@@ -122,6 +122,26 @@ export function PrintServer() {
           tableId: orderData.table_id,
           serviceType: orderData.service_type || 'takeaway'
         });
+
+        // Si la orden no fue emitida desde este PC de caja, imprimir ticket de pedido para la caja central
+        if (!isOrderPrintedLocally(orderId, 'invoice') && !(orderData.order_number && isOrderPrintedLocally(String(orderData.order_number), 'invoice'))) {
+          const companyInfo = await loadCompanyInfo();
+          console.log(`🖨️ PrintServer: Imprimiendo ticket de pedido para caja ${orderNum}`);
+          const orderTicketData = {
+            orderNumber: orderNum,
+            orderDate: new Date(orderData.created_at),
+            items: orderData.order_items,
+            total: orderData.total,
+            paymentMethod: 'Pendiente',
+            cashierName: orderData.employee_profiles?.full_name || 'Camarero'
+          };
+          await printMainTicket({
+            ticketData: orderTicketData,
+            companyInfo,
+            formatCurrency,
+            t
+          });
+        }
       } catch (err) {
         console.error('❌ PrintServer: Error procesando comanda de cocina:', err);
       }
@@ -134,11 +154,17 @@ export function PrintServer() {
       }
 
       if (processedCompletedOrders.current.has(orderId)) return;
-      processedCompletedOrders.current.add(orderId);
 
       try {
         const orderData = await fetchOrderDetails(orderId);
         if (!orderData) return;
+
+        if (orderData.order_number && isOrderPrintedLocally(String(orderData.order_number), 'invoice')) {
+          console.log('ℹ️ PrintServer: Factura (#num) ya impresa localmente en este TPV. Omitiendo duplicado.');
+          return;
+        }
+
+        processedCompletedOrders.current.add(orderId);
 
         const companyInfo = await loadCompanyInfo();
 
@@ -159,7 +185,7 @@ export function PrintServer() {
           cashierName: orderData.employee_profiles?.full_name || 'Cajero'
         };
 
-        console.log(`🖨️ PrintServer: Imprimiendo ticket de cliente para orden ${orderNum}`);
+        console.log(`🖨️ PrintServer: Imprimiendo ticket de pago final para orden ${orderNum}`);
         await printMainTicket({
           ticketData,
           companyInfo,

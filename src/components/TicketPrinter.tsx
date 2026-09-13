@@ -63,10 +63,16 @@ export function TicketPrinter({
     phone: '+34 000 000 000',
   });
   const [dataLoaded, setDataLoaded] = useState(false);
+  const hasAutoPrintedRef = useRef<string | null>(null);
+  const isPrintingRef = useRef<boolean>(false);
+
+  const isOrderOnly = paymentMethod === 'Pendiente' || paymentMethod === 'En attente';
+  const ticketTitle = isOrderOnly
+    ? (t('ticket.order_title') || 'COMMANDE / TICKET DE PEDIDO')
+    : (t('ticket.title') || 'Ticket de Venta');
 
   // Cargar información de la empresa
   useEffect(() => {
-    // Resetear estado cuando cambie el ticket
     setDataLoaded(false);
 
     const fetchCompanyInfo = async () => {
@@ -79,80 +85,21 @@ export function TicketPrinter({
 
         if (error) {
           console.error('❌ TICKET: Error fetching company info:', error);
-          setDataLoaded(true);
-
-          // Si autoPrint está activo, imprimir con datos por defecto
-          if (autoPrint) {
-            console.log('🖨️ TICKET: Scheduling auto-print with default data after error');
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                setTimeout(() => {
-                  console.log('🖨️ TICKET: Executing scheduled auto-print (after fetch error)');
-                  printTicket();
-                }, 300);
-              });
-            });
-          }
           return;
         }
 
         if (data) {
           console.log('✅ TICKET: Company settings loaded successfully:', data);
-          // Use data from database, fallback to defaults only if empty
           setCompanyInfo({
             company_name: data.company_name?.trim() || 'El Fakir',
             address: data.address?.trim() || 'Calle Principal #123, Ciudad',
             phone: data.phone?.trim() || '+34 000 000 000'
           });
-          console.log('📍 TICKET: Setting dataLoaded = true');
-          setDataLoaded(true);
-
-          // Si autoPrint está activo, imprimir después de que React actualice el DOM
-          if (autoPrint) {
-            console.log('🖨️ TICKET: Scheduling auto-print with company data', new Date().toISOString());
-            // Usar doble requestAnimationFrame + setTimeout para asegurar que React renderice
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                setTimeout(() => {
-                  console.log('🖨️ TICKET: Executing scheduled auto-print', new Date().toISOString());
-                  printTicket();
-                }, 300);
-              });
-            });
-          }
-        } else {
-          console.log('⚠️ TICKET: No company data found');
-          setDataLoaded(true);
-
-          // Si autoPrint está activo, imprimir con datos por defecto
-          if (autoPrint) {
-            console.log('🖨️ TICKET: Scheduling auto-print with default data');
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                setTimeout(() => {
-                  console.log('🖨️ TICKET: Executing scheduled auto-print (default)');
-                  printTicket();
-                }, 300);
-              });
-            });
-          }
         }
       } catch (err) {
         console.error('💥 TICKET: Error loading company info:', err);
+      } finally {
         setDataLoaded(true);
-
-        // Si autoPrint está activo, imprimir incluso si falla
-        if (autoPrint) {
-          console.log('🖨️ TICKET: Scheduling auto-print despite error');
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              setTimeout(() => {
-                console.log('🖨️ TICKET: Executing scheduled auto-print (after error)');
-                printTicket();
-              }, 300);
-            });
-          });
-        }
       }
     };
 
@@ -175,7 +122,7 @@ export function TicketPrinter({
     return () => {
       window.removeEventListener('companySettingsUpdated', handleCompanySettingsUpdate);
     };
-  }, [forceRefresh, autoPrint]);
+  }, [forceRefresh]);
 
   const printTicket = async () => {
     if (isMobileDevice()) {
@@ -184,24 +131,32 @@ export function TicketPrinter({
       return;
     }
 
-    if (orderNumber) {
-      markOrderPrintedLocally(orderNumber, 'invoice');
-    }
-
-    const printContent = ticketRef.current?.innerHTML || '';
-    console.log('🖨️ TICKET: printTicket called, content length:', printContent.length);
-
-    if (!printContent || printContent.length < 100) {
-      console.error('❌ TICKET: Content too short or empty, skipping print');
+    if (isPrintingRef.current) {
+      console.warn('⚠️ TICKET: Impresión ya en ejecución, bloqueando duplicado.');
       return;
     }
+    isPrintingRef.current = true;
 
-    // Build full HTML for the ticket
-    const fullHtml = `<!DOCTYPE html>
+    try {
+      if (orderNumber) {
+        markOrderPrintedLocally(orderNumber, 'invoice');
+      }
+
+      const printContent = ticketRef.current?.innerHTML || '';
+      console.log('🖨️ TICKET: printTicket called, content length:', printContent.length);
+
+      if (!printContent || printContent.length < 100) {
+        console.error('❌ TICKET: Content too short or empty, skipping print');
+        window.dispatchEvent(new CustomEvent('ticketPrinted'));
+        return;
+      }
+
+      // Build full HTML for the ticket
+      const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${t('ticket.title')}</title>
+  <title>${ticketTitle}</title>
   <style>
     @page { size: 80mm auto; margin: 0; }
     html, body { margin: 0; padding: 0; background: white; }
@@ -223,33 +178,47 @@ export function TicketPrinter({
 <body>${printContent}</body>
 </html>`;
 
-    // Try silent print via QZ Tray first (no browser dialog)
-    try {
-      const printed = await qzService.printHTML('', fullHtml, true);
-      if (printed) {
-        console.log('✅ TICKET: Printed silently via QZ Tray');
-        window.dispatchEvent(new CustomEvent('ticketPrinted'));
-        return;
+      // Try silent print via QZ Tray first (no browser dialog)
+      try {
+        const printed = await qzService.printHTML('', fullHtml, true);
+        if (printed) {
+          console.log('✅ TICKET: Printed silently via QZ Tray');
+          window.dispatchEvent(new CustomEvent('ticketPrinted'));
+          return;
+        }
+      } catch (err) {
+        console.warn('⚠️ TICKET: QZ Tray not available, skipping ticket print:', err);
       }
-    } catch (err) {
-      console.warn('⚠️ TICKET: QZ Tray not available, skipping ticket print:', err);
-    }
 
-    // QZ Tray not available — skip print silently (no browser dialog)
-    console.log('ℹ️ TICKET: QZ Tray unavailable, ticket print skipped');
-    window.dispatchEvent(new CustomEvent('ticketPrinted'));
+      // QZ Tray not available — skip print silently (no browser dialog)
+      console.log('ℹ️ TICKET: QZ Tray unavailable, ticket print skipped');
+      window.dispatchEvent(new CustomEvent('ticketPrinted'));
+    } finally {
+      setTimeout(() => {
+        isPrintingRef.current = false;
+      }, 1500);
+    }
   };
 
+  // Único disparador de autoPrint controlado y protegido contra duplicados
   useEffect(() => {
-    console.log('🔍 TICKET: autoPrint useEffect triggered - autoPrint:', autoPrint, 'dataLoaded:', dataLoaded);
-    if (autoPrint && dataLoaded) {
-      console.log('🖨️ TICKET: Auto-printing with company data:', companyInfo);
-      // Small delay to ensure DOM is updated with company info
-      setTimeout(() => printTicket(), 100);
-    } else {
-      console.log('⏳ TICKET: Not printing yet - autoPrint:', autoPrint, 'dataLoaded:', dataLoaded);
+    if (!autoPrint || !dataLoaded) return;
+
+    const ticketKey = `${orderNumber}_${total}_${paymentMethod}`;
+    if (hasAutoPrintedRef.current === ticketKey) {
+      console.log('⚠️ TICKET: Omitiendo autoPrint repetido para la misma orden:', ticketKey);
+      return;
     }
-  }, [autoPrint, dataLoaded]);
+
+    console.log('🖨️ TICKET: Ejecutando autoPrint único para:', ticketKey);
+    hasAutoPrintedRef.current = ticketKey;
+
+    const timer = setTimeout(() => {
+      printTicket();
+    }, 120);
+
+    return () => clearTimeout(timer);
+  }, [autoPrint, dataLoaded, orderNumber, total, paymentMethod]);
 
   return (
     <div>
@@ -260,13 +229,13 @@ export function TicketPrinter({
             <h1>☕ {companyInfo.company_name}</h1>
             {companyInfo.address && <p>{companyInfo.address}</p>}
             {companyInfo.phone && <p>Tel: {companyInfo.phone}</p>}
-            <p>{t('ticket.title')}</p>
+            <p style={{ fontWeight: 'bold', fontSize: '13px', textTransform: 'uppercase' }}>{ticketTitle}</p>
             <p>═══════</p>
           </div>
 
           {/* Ticket Info */}
           <div className="ticket-info">
-            <div><strong>{t('ticket.number')}</strong> #{orderNumber}</div>
+            <div><strong>{t('ticket.number')}</strong> {orderNumber.startsWith('#') ? orderNumber : `#${orderNumber}`}</div>
             <div><strong>{t('Fecha')}:</strong> {orderDate.toLocaleDateString('es-ES')}</div>
             <div><strong>{t('ticket.time')}</strong> {orderDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
             <div><strong>{t('ticket.cashier')}</strong> {cashierName}</div>

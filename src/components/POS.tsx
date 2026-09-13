@@ -605,16 +605,25 @@ export function POS() {
     if (!pendingOrderData) return;
 
     try {
-      // 1. Ejecutar impresión de cocina por categoría (QZ Tray)
+      // 1. Ejecutar impresión de cocina por categoría (QZ Tray unificado)
       const orderNum = pendingOrderData.orderNumber;
       await executeKitchenRouting(orderNum, cart, activeOrderId || undefined);
 
-      // 2. Si hay mesa, asegurar que el estado quede como 'occupied' en Sala
+      // 2. Imprimir ticket de pedido para control en caja (solo en PC central de caja)
+      if (!isMobileDevice()) {
+        console.log('🖨️ POS: Imprimiendo ticket de pedido para caja:', pendingOrderData);
+        setTicket({
+          ...pendingOrderData,
+          paymentMethod: 'Pendiente'
+        });
+      }
+
+      // 3. Si hay mesa, asegurar que el estado quede como 'occupied' en Sala
       if (tableId) {
         await updateTableStatus(tableId, 'occupied');
       }
 
-      // 3. Resetear estados tras enviar a preparación
+      // 4. Resetear estados tras enviar a preparación
       setShowValidationModal(false);
       setPendingOrderData(null);
 
@@ -670,6 +679,9 @@ export function POS() {
 
       if (activeOrderId) {
         markOrderPrintedLocally(activeOrderId, 'invoice');
+      }
+      if (updatedTicketData.orderNumber) {
+        markOrderPrintedLocally(updatedTicketData.orderNumber, 'invoice');
       }
 
       // Imprimir comandas por zona (Kitchen Routing) si no se enviaron antes

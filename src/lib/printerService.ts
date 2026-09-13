@@ -14,10 +14,36 @@ export const printKitchenRouting = async (params: KitchenPrintParams) => {
   
   try {
     const tableName = tableId ? (tables.find(t => t.id === tableId)?.name || '') : '';
-    const zones = new Map<string, any[]>();
 
-    cartItems.forEach(cartItem => {
-      // Support both cart item format and db order_items format (which might return an array for products)
+    // 1. Resolver previamente la impresora física para cada zona asignada en categorías
+    const zoneToPrinterCache = new Map<string, string>();
+
+    const resolveZonePrinter = async (rawZone?: string | null): Promise<string> => {
+      const cleanZone = (rawZone && rawZone.trim() !== '') ? rawZone.trim() : '';
+      const normalizedKey = cleanZone.toLowerCase();
+      
+      if (zoneToPrinterCache.has(normalizedKey)) {
+        return zoneToPrinterCache.get(normalizedKey)!;
+      }
+
+      let resolved: string | null = null;
+      try {
+        resolved = await qzService.resolvePrinter(cleanZone);
+      } catch (e) {
+        console.warn('Error resolviendo impresora para zona:', cleanZone, e);
+      }
+
+      // Si no se pudo resolver con QZ Tray, usar la zona en mayúsculas o 'DEFAULT'
+      const finalPrinter = resolved || (cleanZone ? cleanZone.toUpperCase() : 'DEFAULT');
+      zoneToPrinterCache.set(normalizedKey, finalPrinter);
+      return finalPrinter;
+    };
+
+    // 2. Agrupar artículos por la impresora física de destino resuelta
+    const printersMap = new Map<string, { displayTitle: string; items: any[] }>();
+
+    for (const cartItem of cartItems) {
+      // Support both cart item format and db order_items format
       const rawProduct = cartItem.product || cartItem.products;
       const product = Array.isArray(rawProduct) ? rawProduct[0] : rawProduct;
       
@@ -25,15 +51,30 @@ export const printKitchenRouting = async (params: KitchenPrintParams) => {
       const rawZone = categories.find(c => c.id === categoryId)?.preparation_zone;
       
       // 'none' = sin impresora, se omite este artículo del routing
-      if (rawZone === 'none') return;
-      
-      const zone = (rawZone && rawZone.trim() !== '') ? rawZone.trim() : '';
-      if (!zones.has(zone)) zones.set(zone, []);
-      zones.get(zone)!.push(cartItem);
-    });
+      if (rawZone === 'none') continue;
 
-    for (const [zone, items] of zones.entries()) {
-      const zoneTitle = zone ? zone.toUpperCase() : 'COMANDA COCINA';
+      const cleanZone = (rawZone && rawZone.trim() !== '') ? rawZone.trim() : '';
+      const targetPrinter = await resolveZonePrinter(cleanZone);
+
+      if (!printersMap.has(targetPrinter)) {
+        const displayTitle = (cleanZone && cleanZone.toUpperCase()) || (targetPrinter !== 'DEFAULT' ? targetPrinter.toUpperCase() : 'COMANDA COCINA');
+        printersMap.set(targetPrinter, {
+          displayTitle,
+          items: []
+        });
+      }
+
+      printersMap.get(targetPrinter)!.items.push(cartItem);
+    }
+
+    // 3. Imprimir UN solo ticket conjunto por cada impresora física distinta
+    for (const [targetPrinter, group] of printersMap.entries()) {
+      const items = group.items;
+      if (items.length === 0) continue;
+
+      const zoneTitle = group.displayTitle || 'COMANDA COCINA';
+      const cleanOrderNum = orderNum.startsWith('#') ? orderNum : `#${orderNum}`;
+
       const html = `
         <!DOCTYPE html>
         <html>
@@ -68,7 +109,7 @@ export const printKitchenRouting = async (params: KitchenPrintParams) => {
           <body>
             <div class="header">
               <h1>${zoneTitle}</h1>
-              <div class="badge">#${orderNum}</div>
+              <div class="badge">${cleanOrderNum}</div>
               <div class="meta" style="margin-top: 4px;">
                 ${serviceType === 'dine_in' ? '🍽️ MESA: ' + (tableName || 'Sin mesa') : '🥡 PARA LLEVAR'}
               </div>
@@ -105,8 +146,9 @@ export const printKitchenRouting = async (params: KitchenPrintParams) => {
         </html>
       `;
 
-      console.log(`🖨️ KITCHEN ROUTING: Enviando ticket a zona/impresora "${zone || 'Default'}"...`);
-      await qzService.printHTML(zone, html);
+      console.log(`🖨️ KITCHEN ROUTING: Enviando comanda unificada a impresora "${targetPrinter}" con ${items.length} artículos...`);
+      const printerArg = targetPrinter === 'DEFAULT' ? '' : targetPrinter;
+      await qzService.printHTML(printerArg, html);
     }
   } catch (err) {
     console.error('Error procesando Kitchen Routing:', err);
@@ -129,17 +171,26 @@ export const printMainTicket = async (params: TicketPrintParams) => {
   }
 
   try {
+    const isOrderOnly = ticketData.paymentMethod === 'Pendiente' || ticketData.paymentMethod === 'En attente';
+    const ticketTitle = isOrderOnly
+      ? (t('ticket.order_title') || 'COMMANDE / TICKET DE PEDIDO')
+      : (t('ticket.title') || 'Ticket de Venta');
+
+    const cleanOrderNum = String(ticketData.orderNumber || '').startsWith('#')
+      ? ticketData.orderNumber
+      : `#${ticketData.orderNumber}`;
+
     const printContent = `
       <div class="ticket">
         <div class="header">
           <h1>☕ ${companyInfo.company_name || 'Restaurante'}</h1>
           ${companyInfo.address ? `<p>${companyInfo.address}</p>` : ''}
           ${companyInfo.phone ? `<p>Tel: ${companyInfo.phone}</p>` : ''}
-          <p>${t('ticket.title') || 'Ticket de Venta'}</p>
+          <p style="font-weight: bold; font-size: 13px; margin: 3px 0; text-transform: uppercase;">${ticketTitle}</p>
         </div>
 
         <div class="ticket-info">
-          <div><strong>Ticket:</strong> ${ticketData.orderNumber}</div>
+          <div><strong>Ticket:</strong> ${cleanOrderNum}</div>
           <div><strong>Date:</strong> ${new Date(ticketData.orderDate || new Date()).toLocaleDateString('es-ES')}</div>
           <div><strong>Heure :</strong> ${new Date(ticketData.orderDate || new Date()).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
           <div><strong>Caissier :</strong> ${ticketData.cashierName || 'Cajero'}</div>
@@ -158,11 +209,11 @@ export const printMainTicket = async (params: TicketPrintParams) => {
             ${ticketData.items.map((item: any) => {
               const rawProduct = item.product || item.products;
               const prod = Array.isArray(rawProduct) ? rawProduct[0] : rawProduct;
-              const productName = prod?.name || '';
+              const productName = prod?.name || item.name || '';
               
               const rawSize = item.size || item.product_sizes;
               const size = Array.isArray(rawSize) ? rawSize[0] : rawSize;
-              const sizeName = size?.size_name || '';
+              const sizeName = typeof size === 'string' ? size : (size?.size_name || '');
               
               const displayName = sizeName ? `${productName} (${sizeName})` : productName;
               const price = item.price || item.unit_price || 0;
@@ -188,11 +239,11 @@ export const printMainTicket = async (params: TicketPrintParams) => {
         </div>
 
         <div class="ticket-info" style="margin-top: 6px">
-          <div>Paiement : ${ticketData.paymentMethod || 'Efectivo'}</div>
+          <div>Paiement : <strong>${ticketData.paymentMethod || 'Efectivo'}</strong></div>
         </div>
 
         <div class="footer">
-          <div class="thanks">${t('ticket.thanks') || '¡Gracias por su compra!'}</div>
+          <div class="thanks">${t('ticket.thanks') || '¡Gracias por su visita!'}</div>
           <div>${new Date(ticketData.orderDate || new Date()).toLocaleDateString('es-ES')}</div>
           <div>${companyInfo.company_name || 'Restaurante'}</div>
         </div>
@@ -203,7 +254,7 @@ export const printMainTicket = async (params: TicketPrintParams) => {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${t('ticket.title') || 'Ticket'}</title>
+  <title>${ticketTitle}</title>
   <style>
     @page { size: 80mm auto; margin: 0; }
     html, body { margin: 0; padding: 0; background: white; }
@@ -237,23 +288,28 @@ export const printMainTicket = async (params: TicketPrintParams) => {
 };
 
 export const markOrderPrintedLocally = (orderId: string, type: 'kitchen' | 'invoice') => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && orderId) {
     if (!(window as any).__localPrintedOrders) {
       (window as any).__localPrintedOrders = new Set<string>();
     }
-    const key = `${type}_${orderId}`;
-    (window as any).__localPrintedOrders.add(key);
-    console.log(`📌 Registrado pedido como impreso localmente [${key}]`);
+    const cleanId = String(orderId).replace(/^#/, '').trim();
+    const key1 = `${type}_${orderId}`;
+    const key2 = `${type}_${cleanId}`;
+    (window as any).__localPrintedOrders.add(key1);
+    (window as any).__localPrintedOrders.add(key2);
+    console.log(`📌 Registrado pedido como impreso localmente [${key1}]`);
     setTimeout(() => {
-      (window as any).__localPrintedOrders?.delete(key);
+      (window as any).__localPrintedOrders?.delete(key1);
+      (window as any).__localPrintedOrders?.delete(key2);
     }, 5 * 60 * 1000);
   }
 };
 
 export const isOrderPrintedLocally = (orderId: string, type: 'kitchen' | 'invoice'): boolean => {
-  if (typeof window !== 'undefined' && (window as any).__localPrintedOrders) {
-    const key = `${type}_${orderId}`;
-    return (window as any).__localPrintedOrders.has(key);
+  if (typeof window !== 'undefined' && (window as any).__localPrintedOrders && orderId) {
+    const cleanId = String(orderId).replace(/^#/, '').trim();
+    return (window as any).__localPrintedOrders.has(`${type}_${orderId}`) ||
+           (window as any).__localPrintedOrders.has(`${type}_${cleanId}`);
   }
   return false;
 };

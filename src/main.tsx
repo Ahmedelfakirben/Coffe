@@ -3,7 +3,7 @@ import App from './App.tsx';
 import './index.css';
 
 // Control de versión para forzar actualización y purga de caché en clientes y móviles
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2-pre';
 try {
   const currentStored = localStorage.getItem('app_version');
   if (currentStored && currentStored !== APP_VERSION) {

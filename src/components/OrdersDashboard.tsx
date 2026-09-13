@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCart } from '../contexts/CartContext';
+import { markOrderPrintedLocally } from '../lib/printerService';
 
 interface Order {
   id: string;
@@ -120,6 +121,23 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
     paymentMethod: string;
     cashierName: string;
   } | null>(null);
+
+  // Limpiar ticketData tras completarse la impresión
+  useEffect(() => {
+    if (ticketData) {
+      const handleTicketPrinted = () => {
+        setTicketData(null);
+      };
+      window.addEventListener('ticketPrinted', handleTicketPrinted);
+      const timer = setTimeout(() => {
+        setTicketData(null);
+      }, 5000);
+      return () => {
+        window.removeEventListener('ticketPrinted', handleTicketPrinted);
+        clearTimeout(timer);
+      };
+    }
+  }, [ticketData]);
 
   // Function to get the last 2 AM timestamp (24-hour window for cashiers)
   const getLast2AMTimestamp = () => {
@@ -516,6 +534,14 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
         // Formatear método de pago
         const paymentMethodText = selectedPaymentMethod === 'cash' ? 'Efectivo' :
                                   selectedPaymentMethod === 'card' ? 'Tarjeta' : 'Digital';
+
+        // Registrar orden como impresa localmente para que PrintServer no la duplique
+        if (order.id) {
+          markOrderPrintedLocally(order.id, 'invoice');
+        }
+        if (order.order_number) {
+          markOrderPrintedLocally(order.order_number.toString(), 'invoice');
+        }
 
         // Preparar datos del ticket
         setTicketData({

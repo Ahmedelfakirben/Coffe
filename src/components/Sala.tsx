@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
+import { markOrderPrintedLocally } from '../lib/printerService';
 
 type TableStatus = 'available' | 'occupied';
 
@@ -235,6 +236,12 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         size: Array.isArray(i.product_sizes) ? i.product_sizes[0]?.size_name : i.product_sizes?.size_name,
         quantity: i.quantity, price: i.unit_price,
       }));
+      if (orderId) {
+        markOrderPrintedLocally(orderId, 'invoice');
+      }
+      if (od.order_number) {
+        markOrderPrintedLocally(String(od.order_number), 'invoice');
+      }
       setTicket({
         orderDate: new Date(od.created_at),
         orderNumber: od.order_number ? String(od.order_number).padStart(3, '0') : orderId.slice(-8),
