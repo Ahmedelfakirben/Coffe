@@ -9,7 +9,7 @@ import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, Ch
 import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
 import { isMobileDevice } from '../lib/qzTray';
-import { printKitchenRouting, markOrderPrintedLocally } from '../lib/printerService';
+import { printKitchenRouting, printMainTicket, markOrderPrintedLocally } from '../lib/printerService';
 
 // Removed pagination - show all products per category
 
@@ -504,6 +504,14 @@ export function POS() {
 
         if (orderError) throw orderError;
 
+        // Registrar inmediatamente como local para que PrintServer no duplique la comanda
+        markOrderPrintedLocally(order.id, 'kitchen');
+        markOrderPrintedLocally(order.id, 'invoice');
+        if (order.order_number) {
+          markOrderPrintedLocally(String(order.order_number), 'kitchen');
+          markOrderPrintedLocally(String(order.order_number), 'invoice');
+        }
+
         await insertOrderItems(orderItemsPayload, order.id);
 
         // Store ticket data for later validation and printing
@@ -543,6 +551,14 @@ export function POS() {
           .update({ total: newTotal, status: newStatus, payment_method: paymentMethod || 'cash' })
           .eq('id', activeOrderId);
         if (updateErr) throw updateErr;
+
+        // Registrar inmediatamente como local para que PrintServer no duplique la comanda
+        markOrderPrintedLocally(activeOrderId, 'kitchen');
+        markOrderPrintedLocally(activeOrderId, 'invoice');
+        if (existingOrder.order_number) {
+          markOrderPrintedLocally(String(existingOrder.order_number), 'kitchen');
+          markOrderPrintedLocally(String(existingOrder.order_number), 'invoice');
+        }
 
         // Store ticket data for later validation and printing
         const ticketData = {
@@ -609,12 +625,25 @@ export function POS() {
       const orderNum = pendingOrderData.orderNumber;
       await executeKitchenRouting(orderNum, cart, activeOrderId || undefined);
 
-      // 2. Imprimir ticket de pedido para control en caja (solo en PC central de caja)
+      // 2. Imprimir ticket de pedido para cliente/caja (directo a impresora predeterminada)
       if (!isMobileDevice()) {
-        console.log('🖨️ POS: Imprimiendo ticket de pedido para caja:', pendingOrderData);
-        setTicket({
-          ...pendingOrderData,
-          paymentMethod: 'Pendiente'
+        console.log('🖨️ POS: Imprimiendo ticket de pedido para cliente/caja (directo):', pendingOrderData);
+        let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
+        try {
+          const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
+          if (comp) compInfo = comp;
+        } catch (e) {
+          console.warn('Error obteniendo company_settings:', e);
+        }
+
+        await printMainTicket({
+          ticketData: {
+            ...pendingOrderData,
+            paymentMethod: 'Pendiente'
+          },
+          companyInfo: compInfo,
+          formatCurrency,
+          t
         });
       }
 
@@ -687,10 +716,23 @@ export function POS() {
       // Imprimir comandas por zona (Kitchen Routing) si no se enviaron antes
       await executeKitchenRouting(updatedTicketData.orderNumber, cart, activeOrderId);
 
-      // Imprimir ticket de cliente (TicketPrinter estándar solo en PC/Caja)
+      // Imprimir ticket de cobro final directamente
       if (!isMobileDevice()) {
-        console.log('Setting ticket for auto-print:', updatedTicketData);
-        setTicket(updatedTicketData);
+        console.log('🖨️ POS: Imprimiendo ticket de cobro final (directo):', updatedTicketData);
+        let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
+        try {
+          const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
+          if (comp) compInfo = comp;
+        } catch (e) {
+          console.warn('Error obteniendo company_settings:', e);
+        }
+
+        await printMainTicket({
+          ticketData: updatedTicketData,
+          companyInfo: compInfo,
+          formatCurrency,
+          t
+        });
       }
       setShowPaymentModal(false);
       setPendingOrderData(null);

@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
-import { markOrderPrintedLocally } from '../lib/printerService';
+import { markOrderPrintedLocally, printMainTicket } from '../lib/printerService';
+import { isMobileDevice } from '../lib/qzTray';
 
 type TableStatus = 'available' | 'occupied';
 
@@ -242,14 +243,28 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       if (od.order_number) {
         markOrderPrintedLocally(String(od.order_number), 'invoice');
       }
-      setTicket({
-        orderDate: new Date(od.created_at),
-        orderNumber: od.order_number ? String(od.order_number).padStart(3, '0') : orderId.slice(-8),
-        items,
-        total: typeof od.total === 'string' ? parseFloat(od.total) : od.total,
-        paymentMethod: paymentMethod === 'cash' ? t('Efectivo') : paymentMethod === 'card' ? t('Tarjeta') : t('Digital'),
-        cashierName: user.user_metadata?.full_name || user.email || 'Usuario',
-      });
+
+      if (!isMobileDevice()) {
+        let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
+        try {
+          const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
+          if (comp) compInfo = comp;
+        } catch {}
+
+        await printMainTicket({
+          ticketData: {
+            orderDate: new Date(od.created_at),
+            orderNumber: od.order_number ? String(od.order_number).padStart(3, '0') : orderId.slice(-8),
+            items,
+            total: typeof od.total === 'string' ? parseFloat(od.total) : od.total,
+            paymentMethod: paymentMethod === 'cash' ? t('Efectivo') : paymentMethod === 'card' ? t('Tarjeta') : t('Digital'),
+            cashierName: user.user_metadata?.full_name || user.email || 'Usuario',
+          },
+          companyInfo: compInfo,
+          formatCurrency,
+          t
+        });
+      }
       if (ordersForTable.filter(o => o.id !== orderId).length === 0)
         await supabase.from('tables').update({ status: 'available' }).eq('id', tableId);
       toast.success(t('Pedido validado'));

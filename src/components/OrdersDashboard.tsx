@@ -7,7 +7,8 @@ import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCart } from '../contexts/CartContext';
-import { markOrderPrintedLocally } from '../lib/printerService';
+import { markOrderPrintedLocally, printMainTicket } from '../lib/printerService';
+import { isMobileDevice } from '../lib/qzTray';
 
 interface Order {
   id: string;
@@ -543,15 +544,30 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
           markOrderPrintedLocally(order.order_number.toString(), 'invoice');
         }
 
-        // Preparar datos del ticket
-        setTicketData({
-          orderDate: new Date(order.created_at),
-          orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
-          items: ticketItems,
-          total: order.total,
-          paymentMethod: paymentMethodText,
-          cashierName: cashierName
-        });
+        // Preparar e imprimir ticket directamente si estamos en PC de caja
+        if (!isMobileDevice()) {
+          let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
+          try {
+            const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
+            if (comp) compInfo = comp;
+          } catch (e) {
+            console.warn('Error obteniendo company_settings:', e);
+          }
+
+          await printMainTicket({
+            ticketData: {
+              orderDate: new Date(order.created_at),
+              orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
+              items: ticketItems,
+              total: order.total,
+              paymentMethod: paymentMethodText,
+              cashierName: cashierName
+            },
+            companyInfo: compInfo,
+            formatCurrency,
+            t
+          });
+        }
       }
 
       setShowPaymentModal(false);
