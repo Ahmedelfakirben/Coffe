@@ -40,7 +40,10 @@ export function TableManager() {
         .order('name');
 
       if (error) throw error;
-      setTables(data || []);
+      const sorted = (data || []).sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
+      setTables(sorted);
     } catch (error: any) {
       console.error('Error fetching tables:', error);
       toast.error(t('Error al cargar mesas'));

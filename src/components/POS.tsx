@@ -8,8 +8,8 @@ import { Category, Product, ProductSize } from '../types/supabase';
 import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote, Smartphone, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
-import { qzService, isMobileDevice } from '../lib/qzTray';
-import { printKitchenRouting, printMainTicket, markOrderPrintedLocally } from '../lib/printerService';
+import { isMobileDevice } from '../lib/qzTray';
+import { printKitchenRouting, markOrderPrintedLocally } from '../lib/printerService';
 
 // Removed pagination - show all products per category
 
@@ -133,7 +133,10 @@ export function POS() {
         .select('*')
         .order('name');
       if (error) throw error;
-      setTables(data || []);
+      const sorted = (data || []).sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
+      setTables(sorted);
     } catch (err) {
       console.error('Error fetching tables:', err);
     }

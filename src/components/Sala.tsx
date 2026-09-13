@@ -138,7 +138,10 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
     try {
       const { data, error } = await supabase.from('tables').select('*').order('name');
       if (error) throw error;
-      setTables(data || []);
+      const sorted = (data || []).sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
+      setTables(sorted);
     } catch { toast.error(t('Error al cargar mesas')); }
     finally { setLoading(false); }
   };
