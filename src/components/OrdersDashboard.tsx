@@ -582,26 +582,29 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
           markOrderPrintedLocally(order.order_number.toString(), 'invoice');
         }
 
-        // Preparar e imprimir ticket directamente si estamos en PC de caja
-        if (!isMobileDevice()) {
-          let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
-          try {
-            const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
-            if (comp) compInfo = comp;
-          } catch (e) {
-            console.warn('Error obteniendo company_settings:', e);
-          }
-          await enqueuePrintJob(order.id, 'receipt', {
-            ticketData: {
-              orderDate: new Date(order.created_at),
-              orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-8)}`,
-              items: ticketItems,
-              total: order.total,
-              paymentMethod: paymentMethodText,
-              cashierName: cashierName
-            }
-          });
+        // Preparar e imprimir ticket (2 copias)
+        let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
+        try {
+          const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
+          if (comp) compInfo = comp;
+        } catch (e) {
+          console.warn('Error obteniendo company_settings:', e);
         }
+
+        const payload = {
+          ticketData: {
+            orderDate: new Date(order.created_at),
+            orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-8)}`,
+            items: ticketItems,
+            total: order.total,
+            paymentMethod: paymentMethodText,
+            cashierName: cashierName
+          }
+        };
+
+        // 2 COPIAS DEL TICKET FINAL
+        await enqueuePrintJob(order.id, 'receipt', payload);
+        await enqueuePrintJob(order.id, 'receipt', payload);
       }
 
       setShowPaymentModal(false);
