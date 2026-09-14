@@ -308,14 +308,11 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={async () => {
-              try {
-                if ('serviceWorker' in navigator) {
-                  const regs = await navigator.serviceWorker.getRegistrations();
-                  await Promise.all(regs.map(r => r.update()));
-                  const waiting = regs[0]?.waiting;
-                  if (waiting) { waiting.postMessage({ type: 'SKIP_WAITING' }); await new Promise(r => setTimeout(r, 300)); }
-                }
-              } finally { window.location.reload(); }
+              if (typeof (window as any).purgeCacheAndReload === 'function') {
+                await (window as any).purgeCacheAndReload();
+              } else {
+                window.location.reload();
+              }
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800/40 text-amber-200 rounded-xl text-xs font-bold transition-all active:scale-95"
             title={t('Actualizar')}

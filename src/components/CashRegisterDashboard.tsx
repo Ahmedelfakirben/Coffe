@@ -44,6 +44,7 @@ interface WaiterReport {
   employeeId: string;
   employeeName: string;
   role: string;
+  isSystem?: boolean;
   totalOrders: number;
   completedOrders: number;
   pendingOrders: number;
@@ -59,6 +60,60 @@ interface WaiterReport {
   }>;
 }
 
+/**
+ * Determina a qué jornada comercial de hostelería pertenece un timestamp.
+ * La jornada comercial va de 04:00 AM a 03:59:59 AM del día siguiente.
+ * Si la hora local es anterior a las 04:00 AM, pertenece a la jornada de ayer.
+ */
+export const getBusinessDateStr = (timestamp: string | Date = new Date()): string => {
+  const d = new Date(timestamp);
+  if (d.getHours() < 4) {
+    d.setDate(d.getDate() - 1);
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Retorna el rango de consulta (inicio y fin en ISO UTC) para una jornada comercial (YYYY-MM-DD).
+ * Inicio: YYYY-MM-DD a las 04:00:00 hora local.
+ * Fin: día siguiente a las 03:59:59.999 hora local.
+ */
+export const getBusinessDayRange = (dateStr: string) => {
+  const parts = dateStr.includes('-') ? dateStr.split('-').map(Number) : [];
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    const startLocal = new Date(year, month - 1, day, 4, 0, 0, 0);
+    const endLocal = new Date(year, month - 1, day + 1, 3, 59, 59, 999);
+    return {
+      startLocal,
+      endLocal,
+      startIso: startLocal.toISOString(),
+      endIso: endLocal.toISOString()
+    };
+  }
+  const base = new Date(dateStr);
+  const startLocal = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 4, 0, 0, 0);
+  const endLocal = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1, 3, 59, 59, 999);
+  return {
+    startLocal,
+    endLocal,
+    startIso: startLocal.toISOString(),
+    endIso: endLocal.toISOString()
+  };
+};
+
+/**
+ * Retorna el rango de consulta para un rango de fechas (startDateStr a endDateStr).
+ */
+export const getBusinessDateRange = (startDateStr: string, endDateStr: string) => {
+  const { startIso } = getBusinessDayRange(startDateStr);
+  const { endIso } = getBusinessDayRange(endDateStr);
+  return { startIso, endIso };
+};
+
 export function CashRegisterDashboard() {
   const { user, profile } = useAuth();
   const { t, currentLanguage } = useLanguage();
@@ -70,34 +125,17 @@ export function CashRegisterDashboard() {
   const [loadingWaiters, setLoadingWaiters] = useState(false);
   const [expandedWaiterId, setExpandedWaiterId] = useState<string | null>(null);
 
-  // Estados de filtro de fecha para Ventas por Camarero
-  const [waiterDate, setWaiterDate] = useState(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  });
+  // Estados de filtro de fecha para Ventas por Camarero (inicia en la jornada comercial de hoy)
+  const [waiterDate, setWaiterDate] = useState(() => getBusinessDateStr());
   const [waiterFilterMode, setWaiterFilterMode] = useState<'day' | 'range'>('day');
-  const [waiterStartDate, setWaiterStartDate] = useState(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  });
-  const [waiterEndDate, setWaiterEndDate] = useState(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  });
+  const [waiterStartDate, setWaiterStartDate] = useState(() => getBusinessDateStr());
+  const [waiterEndDate, setWaiterEndDate] = useState(() => getBusinessDateStr());
   const [waiterSearchTerm, setWaiterSearchTerm] = useState('');
 
+  // Filtros de fecha iniciales para Sesiones de Caja (por defecto la jornada comercial de hoy)
   const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
+    startDate: getBusinessDateStr(),
+    endDate: getBusinessDateStr(),
     status: 'all' as 'all' | 'open' | 'closed',
     employeeId: 'all' as string,
   });
@@ -248,24 +286,23 @@ export function CashRegisterDashboard() {
         .neq('employee_profiles.role', 'super_admin') // Ocultar sesiones de super_admin
         .order('opened_at', { ascending: false });
 
-      // Para cajeros: solo sus sesiones y solo del día actual (hora local)
+      // Para cajeros: solo sus sesiones y solo de la jornada comercial actual
       if (profile?.role === 'cashier') {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const today = `${year}-${month}-${day}`;
+        const todayBusiness = getBusinessDateStr();
+        const { startIso, endIso } = getBusinessDayRange(todayBusiness);
         query = query
           .eq('employee_id', user.id)
-          .gte('opened_at', `${today}T00:00:00`)
-          .lte('opened_at', `${today}T23:59:59.999Z`);
+          .gte('opened_at', startIso)
+          .lte('opened_at', endIso);
       } else {
-        // Para administradores: aplicar filtros
+        // Para administradores: aplicar filtros de jornada comercial
         if (filters.startDate) {
-          query = query.gte('opened_at', `${filters.startDate}T00:00:00`);
+          const { startIso } = getBusinessDayRange(filters.startDate);
+          query = query.gte('opened_at', startIso);
         }
         if (filters.endDate) {
-          query = query.lte('opened_at', `${filters.endDate}T23:59:59.999Z`);
+          const { endIso } = getBusinessDayRange(filters.endDate);
+          query = query.lte('opened_at', endIso);
         }
         if (filters.status !== 'all') {
           query = query.eq('status', filters.status);
@@ -313,12 +350,14 @@ export function CashRegisterDashboard() {
     try {
       const { data, error } = await supabase
         .from('employee_profiles')
-        .select('id, full_name')
-        .neq('role', 'super_admin') // Ocultar super_admin
+        .select('id, full_name, role')
         .order('full_name');
 
       if (error) throw error;
-      setEmployees(data || []);
+      setEmployees((data || []).map(e => ({
+        id: e.id,
+        full_name: e.role === 'super_admin' ? `${e.full_name} (${t('Sistema') || 'Sistema'})` : e.full_name
+      })));
     } catch (err) {
       console.error('Error fetching employees:', err);
     }
@@ -375,7 +414,11 @@ export function CashRegisterDashboard() {
 
   const fetchCurrentCashStatus = async () => {
     try {
-      // Obtener la sesión más reciente del usuario (o de cualquiera para admin)
+      // 1. Rango de la jornada comercial actual (04:00 AM a 03:59:59 AM)
+      const todayBusiness = getBusinessDateStr();
+      const { startIso, endIso } = getBusinessDayRange(todayBusiness);
+
+      // 2. Obtener la sesión más reciente
       let query = supabase
         .from('cash_register_sessions')
         .select('*')
@@ -389,49 +432,43 @@ export function CashRegisterDashboard() {
       const { data, error } = await query;
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        const latestSession = data[0];
-        const sessionStart = latestSession.opened_at;
-        const sessionEnd = latestSession.closed_at || new Date().toISOString();
+      const latestSession = (data && data.length > 0) ? data[0] : null;
 
-        // Ventas completadas durante esta sesión
-        const { data: sessionOrders } = await supabase
-          .from('orders')
-          .select('total')
-          .eq('status', 'completed')
-          .gte('created_at', sessionStart)
-          .lte('created_at', sessionEnd);
+      // 3. Ventas completadas de TODA la jornada comercial de hoy (incluye ventas previas a la apertura)
+      const { data: dayOrders } = await supabase
+        .from('orders')
+        .select('total')
+        .eq('status', 'completed')
+        .gte('created_at', startIso)
+        .lte('created_at', endIso);
 
-        const liveSales = (sessionOrders || []).reduce((sum, o) => sum + (o.total || 0), 0);
+      const liveSales = (dayOrders || []).reduce((sum, o) => sum + (o.total || 0), 0);
 
-        // Retiros durante esta sesión
+      // 4. Retiros de la sesión actual o de la jornada
+      let liveWithdrawals = 0;
+      if (latestSession) {
         const { data: sessionWithdrawals } = await supabase
           .from('cash_withdrawals')
           .select('amount')
           .eq('session_id', latestSession.id);
 
-        const liveWithdrawals = (sessionWithdrawals || []).reduce((sum, w) => sum + (w.amount || 0), 0);
-
-        // Dinero en directo en caja:
-        let currentAmount = (latestSession.opening_amount || 0) + liveSales - liveWithdrawals;
-        // Si está cerrada con un monto de cierre explícito > 0, usar closing_amount
-        if (latestSession.status === 'closed' && latestSession.closing_amount !== null && latestSession.closing_amount !== undefined && latestSession.closing_amount > 0) {
-          currentAmount = latestSession.closing_amount;
-        }
-
-        setCurrentCashStatus({
-          currentAmount,
-          lastSessionStatus: latestSession.status,
-          lastSessionTime: latestSession.status === 'open' ? latestSession.opened_at : (latestSession.closed_at || latestSession.opened_at),
-        });
-      } else {
-        // No sessions found
-        setCurrentCashStatus({
-          currentAmount: 0,
-          lastSessionStatus: 'closed',
-          lastSessionTime: '',
-        });
+        liveWithdrawals = (sessionWithdrawals || []).reduce((sum, w) => sum + (w.amount || 0), 0);
       }
+
+      // Dinero total en caja: Fondo de apertura + Ventas completadas de la jornada - Retiros
+      const openingAmount = latestSession ? (latestSession.opening_amount || 0) : 0;
+      let currentAmount = openingAmount + liveSales - liveWithdrawals;
+
+      // Si está cerrada con un monto de cierre explícito > 0 y no hubo ventas posteriores
+      if (latestSession && latestSession.status === 'closed' && latestSession.closing_amount !== null && latestSession.closing_amount !== undefined && latestSession.closing_amount > 0) {
+        currentAmount = latestSession.closing_amount;
+      }
+
+      setCurrentCashStatus({
+        currentAmount,
+        lastSessionStatus: latestSession ? latestSession.status : 'closed',
+        lastSessionTime: latestSession ? (latestSession.status === 'open' ? latestSession.opened_at : (latestSession.closed_at || latestSession.opened_at)) : '',
+      });
     } catch (err) {
       console.error('Error fetching current cash status:', err);
       setCurrentCashStatus({
@@ -444,12 +481,12 @@ export function CashRegisterDashboard() {
 
   const groupSessionsByDay = async () => {
     const grouped = sessions.reduce((acc: Record<string, any>, session) => {
-      const date = new Date(session.opened_at).toDateString();
-      const employeeKey = `${date}-${session.employee_id}`;
+      const businessDate = getBusinessDateStr(session.opened_at);
+      const employeeKey = `${businessDate}-${session.employee_id}`;
 
       if (!acc[employeeKey]) {
         acc[employeeKey] = {
-          date,
+          date: businessDate,
           employee_id: session.employee_id,
           employee_profiles: session.employee_profiles,
           sessions: [],
@@ -481,21 +518,18 @@ export function CashRegisterDashboard() {
       return acc;
     }, {} as Record<string, any>);
 
-    // Calcular ventas y retiros para cada día
+    // Calcular ventas y retiros para cada jornada comercial
     for (const employeeKey of Object.keys(grouped)) {
       const dayData = grouped[employeeKey];
-      const startOfDay = new Date(dayData.date);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(dayData.date);
-      endOfDay.setHours(23, 59, 59, 999);
+      const { startIso, endIso } = getBusinessDayRange(dayData.date);
 
-      // Obtener todas las ventas completadas del día (todas las ventas van a la caja)
+      // Obtener todas las ventas completadas de la jornada comercial (04:00 AM a 03:59:59 AM)
       const { data: orders } = await supabase
         .from('orders')
         .select('total')
         .eq('status', 'completed')
-        .gte('created_at', startOfDay.toISOString())
-        .lte('created_at', endOfDay.toISOString());
+        .gte('created_at', startIso)
+        .lte('created_at', endIso);
 
       dayData.totalSales = (orders || []).reduce((sum, order) => sum + (order.total || 0), 0);
 
@@ -522,8 +556,8 @@ export function CashRegisterDashboard() {
     }
 
     const dailyArray = Object.values(grouped).sort((a: any, b: any) => {
-      // Sort by date desc, then by employee name
-      const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
+      // Sort by business date desc, then by employee name
+      const dateCompare = new Date(b.date + 'T12:00:00').getTime() - new Date(a.date + 'T12:00:00').getTime();
       if (dateCompare !== 0) return dateCompare;
       return (a.employee_profiles?.full_name || '').localeCompare(b.employee_profiles?.full_name || '');
     });
@@ -547,12 +581,10 @@ export function CashRegisterDashboard() {
 
   const printDailyReport = async (day: any) => {
     try {
-      // Fetch orders for the entire day
-      const startOfDay = new Date(day.date);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(day.date);
-      endOfDay.setHours(23, 59, 59, 999);
+      // 1. Rango de la jornada comercial (04:00 AM a 03:59:59 AM)
+      const { startIso, endIso } = getBusinessDayRange(day.date);
 
+      // 2. Obtener órdenes completadas de la jornada comercial
       const { data: orders, error } = await supabase
         .from('orders')
         .select(`
@@ -560,48 +592,129 @@ export function CashRegisterDashboard() {
           total,
           order_number,
           created_at,
+          updated_at,
           status,
+          payment_method,
+          employee_id,
+          table_id,
+          service_type,
           order_items (
             quantity,
             unit_price,
-            products (name)
+            products (name),
+            product_sizes (size_name)
           )
         `)
-        .gte('created_at', startOfDay.toISOString())
-        .lte('created_at', endOfDay.toISOString())
-        .eq('status', 'completed');
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
 
-      // Calculate order totals
+      // 3. Obtener nombres de empleados, mesas y registros de cobro
+      const orderIds = (orders || []).map(o => o.id);
+      const tableIds = [...new Set((orders || []).map(o => o.table_id).filter(Boolean))];
+
+      const [employeesRes, tablesRes, historyRes] = await Promise.all([
+        supabase.from('employee_profiles').select('id, full_name, role'),
+        tableIds.length > 0
+          ? supabase.from('tables').select('id, name').in('id', tableIds)
+          : Promise.resolve({ data: [] }),
+        orderIds.length > 0
+          ? supabase.from('order_history').select('order_id, employee_id, created_at, action').in('order_id', orderIds).eq('action', 'completed')
+          : Promise.resolve({ data: [] })
+      ]);
+
+      const empMap = new Map<string, { full_name: string; role: string }>();
+      (employeesRes.data || []).forEach(e => empMap.set(e.id, { full_name: e.full_name, role: e.role }));
+
+      const tableMap = new Map<string, string>();
+      (tablesRes.data || []).forEach(t => tableMap.set(t.id, t.name));
+
+      const completedHistoryMap = new Map<string, { employee_id: string; created_at: string }>();
+      (historyRes.data || []).forEach(h => {
+        if (!completedHistoryMap.has(h.order_id)) {
+          completedHistoryMap.set(h.order_id, h);
+        }
+      });
+
+      // Calcular totales
       const fetchedTotal = (orders || []).reduce((sum, order) => sum + (order.total || 0), 0);
       const orderTotal = fetchedTotal > 0 ? fetchedTotal : (day.totalSales || 0);
       const orderCount = orders?.length || 0;
+      const expectedBalance = day.totalOpening + orderTotal - (day.totalWithdrawals || 0);
 
-      // Create professional invoice-style print content in French
+      // 4. Generar filas de pedidos con detalle completo en una sola línea
+      const ordersRowsHtml = (orders || []).map((order: any) => {
+        const orderNumStr = order.order_number ? `#${String(order.order_number).padStart(3, '0')}` : `#${order.id.slice(-6)}`;
+        const tableStr = order.table_id ? `Mesa ${tableMap.get(order.table_id) || ''}` : (order.service_type === 'takeaway' ? 'À emporter' : 'Comptoir');
+
+        // Creador / Camarero y hora de pedido
+        const creatorEmp = order.employee_id ? empMap.get(order.employee_id) : null;
+        const creatorName = creatorEmp?.role === 'super_admin' ? 'Sistema' : (creatorEmp?.full_name || 'Serveur');
+        const createdTime = new Date(order.created_at);
+        const createdTimeStr = createdTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+        // Cobrador / Cajero y hora de cobro
+        const historyEntry = completedHistoryMap.get(order.id);
+        const cashierEmpId = historyEntry?.employee_id || day.employee_id;
+        const cashierEmp = cashierEmpId ? empMap.get(cashierEmpId) : null;
+        const cashierName = cashierEmp?.role === 'super_admin' ? 'Sistema' : (cashierEmp?.full_name || day.employee_profiles?.full_name || 'Caisse');
+        const paidTime = historyEntry?.created_at ? new Date(historyEntry.created_at) : (order.updated_at ? new Date(order.updated_at) : createdTime);
+        const paidTimeStr = paidTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+        // Tiempo de atención
+        const diffMs = paidTime.getTime() - createdTime.getTime();
+        const waitMinutes = Math.max(0, Math.round(diffMs / 60000));
+        const waitTimeStr = `${waitMinutes} min`;
+
+        // Productos reales con cantidades y tamaños
+        const productsList = (order.order_items || []).map((item: any) => {
+          const pName = Array.isArray(item.products) ? item.products[0]?.name : item.products?.name;
+          const sName = Array.isArray(item.product_sizes) ? item.product_sizes[0]?.size_name : item.product_sizes?.size_name;
+          return `${item.quantity}x ${pName || 'Produit'}${sName ? ` (${sName})` : ''}`;
+        }).join(', ');
+
+        // Método de pago
+        const payMethodStr = order.payment_method === 'cash' ? 'Espèces' : order.payment_method === 'card' ? 'Carte' : order.payment_method === 'digital' ? 'Digital' : 'Espèces';
+
+        return `
+          <tr>
+            <td style="font-weight: bold; white-space: nowrap;">${orderNumStr} <span style="font-weight: normal; color: #555; font-size: 11px;">(${tableStr})</span></td>
+            <td style="white-space: nowrap;"><strong>${creatorName}</strong><br/><span style="color: #64748b; font-size: 11px;">${createdTimeStr}</span></td>
+            <td style="white-space: nowrap;"><strong>${cashierName}</strong><br/><span style="color: #64748b; font-size: 11px;">${paidTimeStr}</span></td>
+            <td style="text-align: center; font-weight: bold; color: #0284c7; white-space: nowrap;">${waitTimeStr}</td>
+            <td style="font-size: 11px; max-width: 320px; word-break: break-word;">${productsList || 'Sans articles'}</td>
+            <td style="text-align: center; font-size: 11px; white-space: nowrap;">${payMethodStr}</td>
+            <td style="text-align: right; font-weight: bold; font-size: 12px; white-space: nowrap;">${formatCurrency(order.total)}</td>
+          </tr>
+        `;
+      }).join('');
+
       const printContent = `
         <div class="report">
           <div class="header">
             <h1>LIN-Caisse</h1>
-            <p>Système de Gestion Intégré</p>
-            <p>Rapport Journalier de Caisse</p>
+            <p>Système de Point de Vente & Gestion de Caisse</p>
+            <p><strong>RAPPORT JOURNALIER D'ACTIVITÉ ET ENCAISSEMENT</strong></p>
           </div>
 
           <div class="info-section">
             <div class="info-item">
               <strong>${new Date(day.date).toLocaleDateString('fr-FR')}</strong>
-              <span>Date du Rapport</span>
+              <span>Date de l'Activité</span>
             </div>
             <div class="info-item">
               <strong>${profile?.role === 'admin' || profile?.role === 'super_admin' ? (day.employee_profiles?.full_name || profile?.full_name || 'Caissier') : (profile?.full_name || 'Vous')}</strong>
-              <span>Employé</span>
+              <span>Responsable Caisse</span>
             </div>
             <div class="info-item">
               <strong>${orderCount}</strong>
-              <span>Total Commandes</span>
+              <span>Commandes Payées</span>
             </div>
             <div class="info-item">
-              <strong>${formatCurrency(orderTotal)}</strong>
+              <strong style="color: #0284c7;">${formatCurrency(orderTotal)}</strong>
               <span>Ventes Totales</span>
             </div>
           </div>
@@ -613,70 +726,66 @@ export function CashRegisterDashboard() {
               <span>Fond de Caisse Initial</span>
             </div>
             <div class="summary-item">
-              <strong>${formatCurrency(day.totalClosing)}</strong>
+              <strong>${day.hasOpenSession ? '<span style="color: #16a34a;">En cours (Ouverte)</span>' : formatCurrency(day.totalClosing)}</strong>
               <span>Fond de Caisse Final</span>
             </div>
             <div class="summary-item">
-              <strong>${formatCurrency(day.totalClosing - day.totalOpening)}</strong>
-              <span>Solde du Jour</span>
+              <strong style="color: #16a34a;">${formatCurrency(expectedBalance)}</strong>
+              <span>Solde Attendu en Caisse</span>
             </div>
             <div class="summary-item">
               <strong>${day.sessions.length}</strong>
-              <span>Sessions de Caisse</span>
+              <span>Session(s) de Caisse</span>
             </div>
           </div>
 
-          <div class="section-title">DÉTAIL DES SESSIONS</div>
+          <div class="section-title">DÉTAIL DES SESSIONS DE CAISSE</div>
           <div class="table-container">
             <table>
               <thead>
                 <tr>
                   <th>Session</th>
-                  <th>Heure Ouverture</th>
-                  <th>Montant Initial</th>
-                  <th>Heure Fermeture</th>
-                  <th>Montant Final</th>
+                  <th>Ouverture</th>
+                  <th>Fond Initial</th>
+                  <th>Fermeture</th>
+                  <th>Fond Final</th>
                   <th>Statut</th>
                 </tr>
               </thead>
               <tbody>
                 ${day.sessions.map((session: CashSession, index: number) => `
                   <tr>
-                    <td>${index + 1}</td>
+                    <td><strong>#${index + 1}</strong></td>
                     <td>${new Date(session.opened_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
                     <td>${formatCurrency(session.opening_amount)}</td>
                     <td>${session.closed_at ? new Date(session.closed_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
-                    <td>${session.closing_amount ? formatCurrency(session.closing_amount) : '-'}</td>
-                    <td>${session.closed_at ? 'Fermée' : 'Ouverte'}</td>
+                    <td>${session.closing_amount !== null && session.closing_amount !== undefined ? formatCurrency(session.closing_amount) : '-'}</td>
+                    <td><span style="font-weight: bold; color: ${session.closed_at ? '#475569' : '#16a34a'};">${session.closed_at ? 'Fermée' : 'En cours'}</span></td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
           </div>
 
-          <div class="section-title">DÉTAIL DES COMMANDES</div>
+          <div class="section-title">DÉTAIL DES COMMANDES (TIEMPO DE ATENCIÓN Y RESPONSABLES)</div>
           <div class="table-container">
             <table>
               <thead>
                 <tr>
-                  <th>N° Commande</th>
-                  <th>Heure</th>
-                  <th>Produits</th>
-                  <th>Total</th>
+                  <th>N° Commande & Lieu</th>
+                  <th>Prise (Serveur)</th>
+                  <th>Encaissement</th>
+                  <th style="text-align: center;">Durée Service</th>
+                  <th>Articles & Produits</th>
+                  <th style="text-align: center;">Mode</th>
+                  <th style="text-align: right;">Total</th>
                 </tr>
               </thead>
               <tbody>
-                ${(orders || []).map(order => `
-                  <tr>
-                    <td>${order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8)}</td>
-                    <td>${new Date(order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
-                    <td>${order.order_items.map(item => `${item.quantity}x ${item.products[0]?.name || 'Produit'}`).join(', ')}</td>
-                    <td>${formatCurrency(order.total)}</td>
-                  </tr>
-                `).join('')}
+                ${ordersRowsHtml || '<tr><td colspan="7" style="text-align: center; padding: 15px;">Aucune commande pour cette journée</td></tr>'}
                 <tr class="total-row">
-                  <td colspan="3" style="text-align: right; font-weight: bold;">TOTAL DU JOUR</td>
-                  <td style="font-weight: bold; font-size: 16px;">${formatCurrency(orderTotal)}</td>
+                  <td colspan="6" style="text-align: right; font-weight: bold; font-size: 13px;">TOTAL DES VENTES DU JOUR:</td>
+                  <td style="font-weight: bold; font-size: 14px; text-align: right; color: #0f172a;">${formatCurrency(orderTotal)}</td>
                 </tr>
               </tbody>
             </table>
@@ -684,64 +793,66 @@ export function CashRegisterDashboard() {
 
           <div class="signature-section">
             <div class="signature-box">
-              <p>Signature de l'Employé</p>
+              <p style="font-weight: bold; margin-bottom: 25px;">Signature du Caissier / Serveur</p>
               <p>${profile?.role === 'admin' || profile?.role === 'super_admin' ? day.employee_profiles?.full_name || 'N/A' : profile?.full_name || 'Utilisateur'}</p>
             </div>
             <div class="signature-box">
-              <p>Signature de l'Administrateur</p>
+              <p style="font-weight: bold; margin-bottom: 25px;">Signature de la Direction / Admin</p>
+              <p>Visa & Approbation</p>
             </div>
           </div>
 
           <div class="footer">
-            <p>Ce document est officiel et fait partie de la comptabilité de LIN-Caisse</p>
-            <p>Rapport généré le ${new Date().toLocaleString('fr-FR')}</p>
+            <p>Document officiel certifié généré par LIN-Caisse Système de Gestion</p>
+            <p>Rapport émis le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
           </div>
         </div>
       `;
 
-      // Print in professional invoice format
-      const printWindow = window.open('', '', 'height=800,width=1000');
+      const printWindow = window.open('', '', 'height=800,width=1100');
       if (printWindow) {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Reporte Diario de Caja</title>
+              <title>Rapport Journalier de Caisse - LIN-Caisse</title>
               <style>
                 body {
-                  font-family: 'Arial', sans-serif;
+                  font-family: 'Segoe UI', Arial, sans-serif;
                   margin: 0;
-                  padding: 20px;
+                  padding: 15px;
                   background: white;
+                  color: #0f172a;
                 }
                 .report {
-                  max-width: 210mm;
+                  max-width: 230mm;
                   margin: 0 auto;
-                  padding: 20px;
+                  padding: 15px;
                   background: white;
-                  box-shadow: 0 0 10px rgba(0,0,0,0.1);
                 }
                 .header {
                   text-align: center;
-                  border-bottom: 2px solid #333;
-                  padding-bottom: 20px;
-                  margin-bottom: 30px;
+                  border-bottom: 2px solid #0f172a;
+                  padding-bottom: 12px;
+                  margin-bottom: 20px;
                 }
                 .header h1 {
-                  color: #333;
+                  color: #0f172a;
                   margin: 0;
-                  font-size: 28px;
+                  font-size: 24px;
+                  letter-spacing: 0.5px;
                 }
                 .header p {
-                  color: #666;
-                  margin: 5px 0;
-                  font-size: 14px;
+                  color: #475569;
+                  margin: 3px 0;
+                  font-size: 13px;
                 }
                 .info-section {
                   display: flex;
                   justify-content: space-between;
-                  margin-bottom: 30px;
-                  padding: 15px;
-                  background: #f8f9fa;
+                  margin-bottom: 20px;
+                  padding: 12px;
+                  background: #f8fafc;
+                  border: 1px solid #e2e8f0;
                   border-radius: 8px;
                 }
                 .info-item {
@@ -750,86 +861,96 @@ export function CashRegisterDashboard() {
                 }
                 .info-item strong {
                   display: block;
-                  font-size: 18px;
-                  color: #333;
-                  margin-bottom: 5px;
+                  font-size: 16px;
+                  color: #0f172a;
+                  margin-bottom: 3px;
                 }
                 .info-item span {
-                  color: #666;
-                  font-size: 14px;
+                  color: #64748b;
+                  font-size: 11px;
+                  text-transform: uppercase;
                 }
                 .section-title {
-                  font-size: 16px;
-                  font-weight: bold;
-                  color: #333;
-                  margin: 20px 0 10px 0;
-                  padding-bottom: 5px;
-                  border-bottom: 1px solid #ddd;
+                  font-size: 13px;
+                  font-weight: 700;
+                  color: #0f172a;
+                  margin: 18px 0 8px 0;
+                  padding-bottom: 4px;
+                  border-bottom: 1px solid #cbd5e1;
+                  text-transform: uppercase;
+                  letter-spacing: 0.5px;
                 }
                 .summary-grid {
                   display: grid;
-                  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                  gap: 15px;
-                  margin: 20px 0;
+                  grid-template-columns: repeat(4, 1fr);
+                  gap: 12px;
+                  margin: 10px 0 18px 0;
                 }
                 .summary-item {
-                  padding: 15px;
-                  background: #f8f9fa;
+                  padding: 12px;
+                  background: #f8fafc;
+                  border: 1px solid #e2e8f0;
                   border-radius: 8px;
                   text-align: center;
                 }
                 .summary-item strong {
                   display: block;
-                  font-size: 20px;
-                  color: #333;
-                  margin-bottom: 5px;
+                  font-size: 17px;
+                  color: #0f172a;
+                  margin-bottom: 3px;
                 }
                 .summary-item span {
-                  color: #666;
-                  font-size: 14px;
+                  color: #64748b;
+                  font-size: 11px;
                 }
                 .table-container {
-                  margin: 20px 0;
-                  border: 1px solid #ddd;
+                  margin: 10px 0 18px 0;
+                  border: 1px solid #cbd5e1;
                   border-radius: 8px;
                   overflow: hidden;
                 }
                 table {
                   width: 100%;
                   border-collapse: collapse;
+                  font-size: 11px;
                 }
                 th, td {
-                  padding: 10px 12px;
+                  padding: 7px 9px;
                   text-align: left;
-                  border-bottom: 1px solid #ddd;
+                  border-bottom: 1px solid #e2e8f0;
                 }
                 th {
-                  background: #f8f9fa;
-                  font-weight: bold;
-                  color: #333;
+                  background: #f1f5f9;
+                  font-weight: 700;
+                  color: #334155;
+                  font-size: 10px;
+                  text-transform: uppercase;
+                  letter-spacing: 0.4px;
                 }
                 .total-row {
-                  background: #e9ecef;
+                  background: #f8fafc;
                   font-weight: bold;
                 }
-                .footer {
-                  margin-top: 40px;
-                  text-align: center;
-                  padding-top: 20px;
-                  border-top: 1px solid #ddd;
-                  color: #666;
-                  font-size: 12px;
-                }
                 .signature-section {
-                  margin-top: 40px;
+                  margin-top: 30px;
                   display: flex;
                   justify-content: space-between;
                 }
                 .signature-box {
-                  width: 200px;
+                  width: 220px;
                   text-align: center;
-                  border-top: 1px solid #333;
+                  border-top: 1px solid #334155;
+                  padding-top: 8px;
+                  font-size: 11px;
+                  color: #334155;
+                }
+                .footer {
+                  margin-top: 25px;
+                  text-align: center;
                   padding-top: 10px;
+                  border-top: 1px solid #e2e8f0;
+                  color: #94a3b8;
+                  font-size: 10px;
                 }
                 @media print {
                   body {
@@ -839,7 +960,8 @@ export function CashRegisterDashboard() {
                   .report {
                     box-shadow: none;
                     margin: 0;
-                    padding: 15mm;
+                    padding: 8mm;
+                    max-width: 100%;
                   }
                 }
               </style>
@@ -987,29 +1109,26 @@ export function CashRegisterDashboard() {
   };
 
   const shiftWaiterDate = (days: number) => {
-    const d = new Date(waiterDate + 'T12:00:00');
-    d.setDate(d.getDate() + days);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const [y, m, d] = waiterDate.split('-').map(Number);
+    const nextD = new Date(y, m - 1, d + days, 12, 0, 0);
+    const year = nextD.getFullYear();
+    const month = String(nextD.getMonth() + 1).padStart(2, '0');
+    const day = String(nextD.getDate()).padStart(2, '0');
     setWaiterDate(`${year}-${month}-${day}`);
     setWaiterFilterMode('day');
   };
 
   const getTodayStr = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return getBusinessDateStr();
   };
 
   const getYesterdayStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const today = getBusinessDateStr();
+    const [y, m, d] = today.split('-').map(Number);
+    const prev = new Date(y, m - 1, d - 1, 12, 0, 0);
+    const year = prev.getFullYear();
+    const month = String(prev.getMonth() + 1).padStart(2, '0');
+    const day = String(prev.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
@@ -1049,7 +1168,6 @@ export function CashRegisterDashboard() {
       const { data: employeesData, error: empErr } = await supabase
         .from('employee_profiles')
         .select('id, full_name, role')
-        .neq('role', 'super_admin')
         .order('full_name');
 
       if (empErr) throw empErr;
@@ -1058,11 +1176,13 @@ export function CashRegisterDashboard() {
       let endDateIso: string;
 
       if (waiterFilterMode === 'day') {
-        startDateIso = `${waiterDate}T00:00:00`;
-        endDateIso = `${waiterDate}T23:59:59.999Z`;
+        const range = getBusinessDayRange(waiterDate);
+        startDateIso = range.startIso;
+        endDateIso = range.endIso;
       } else {
-        startDateIso = `${waiterStartDate}T00:00:00`;
-        endDateIso = `${waiterEndDate}T23:59:59.999Z`;
+        const range = getBusinessDateRange(waiterStartDate, waiterEndDate);
+        startDateIso = range.startIso;
+        endDateIso = range.endIso;
       }
 
       const { data: ordersData, error: ordersErr } = await supabase
@@ -1089,36 +1209,47 @@ export function CashRegisterDashboard() {
 
       const reportsMap = new Map<string, WaiterReport>();
 
+      // Registro especial de Sistema para super_admin o ventas sin camarero asignado
+      const SYSTEM_ID = 'system-sales';
+      const systemReport: WaiterReport = {
+        employeeId: SYSTEM_ID,
+        employeeName: t('Sistema') || 'Sistema',
+        role: 'super_admin',
+        isSystem: true,
+        totalOrders: 0,
+        completedOrders: 0,
+        pendingOrders: 0,
+        totalSales: 0,
+        orders: [],
+      };
+      reportsMap.set(SYSTEM_ID, systemReport);
+
       (employeesData || []).forEach(emp => {
-        reportsMap.set(emp.id, {
-          employeeId: emp.id,
-          employeeName: emp.full_name || 'Empleado',
-          role: emp.role || 'camarero',
-          totalOrders: 0,
-          completedOrders: 0,
-          pendingOrders: 0,
-          totalSales: 0,
-          orders: [],
-        });
-      });
-
-      (ordersData || []).forEach((ord: any) => {
-        if (!ord.employee_id) return;
-
-        let report = reportsMap.get(ord.employee_id);
-        if (!report) {
-          report = {
-            employeeId: ord.employee_id,
-            employeeName: 'Empleado sin perfil',
-            role: 'waiter',
+        if (emp.role === 'super_admin') {
+          // El super_admin mapea al reporte de Sistema
+          reportsMap.set(emp.id, systemReport);
+        } else {
+          reportsMap.set(emp.id, {
+            employeeId: emp.id,
+            employeeName: emp.full_name || 'Empleado',
+            role: emp.role || 'camarero',
+            isSystem: false,
             totalOrders: 0,
             completedOrders: 0,
             pendingOrders: 0,
             totalSales: 0,
             orders: [],
-          };
-          reportsMap.set(ord.employee_id, report);
+          });
         }
+      });
+
+      (ordersData || []).forEach((ord: any) => {
+        let targetId = ord.employee_id;
+        if (!targetId || !reportsMap.has(targetId)) {
+          targetId = SYSTEM_ID;
+        }
+
+        const report = reportsMap.get(targetId)!;
 
         const orderTotal = typeof ord.total === 'string' ? parseFloat(ord.total) : (ord.total || 0);
         report.totalOrders += 1;
@@ -1144,8 +1275,10 @@ export function CashRegisterDashboard() {
         });
       });
 
-      const result = Array.from(reportsMap.values())
-        .filter(r => r.totalOrders > 0 || profile?.role === 'admin' || profile?.role === 'super_admin')
+      // Eliminar duplicados de referencia al objeto systemReport
+      const uniqueReports = Array.from(new Set(reportsMap.values()));
+      const result = uniqueReports
+        .filter(r => r.totalOrders > 0 || (r.employeeId !== SYSTEM_ID && (profile?.role === 'admin' || profile?.role === 'super_admin')))
         .sort((a, b) => b.totalSales - a.totalSales);
 
       setWaiterReports(result);
@@ -1158,6 +1291,10 @@ export function CashRegisterDashboard() {
   };
 
   const printWaiterReportTicket = (report: WaiterReport) => {
+    const isSystemOrSuperAdmin = report.isSystem || report.role === 'super_admin';
+    const displayName = isSystemOrSuperAdmin ? 'Sistema' : report.employeeName;
+    const displayRole = isSystemOrSuperAdmin ? 'Système' : report.role;
+
     const ticketContent = `
       <div style="font-family: monospace; max-width: 300px; margin: 0 auto; padding: 10px;">
         <h2 style="text-align: center; margin-bottom: 5px;">LIN-Caisse</h2>
@@ -1165,10 +1302,10 @@ export function CashRegisterDashboard() {
         <div style="border-bottom: 1px solid #000; margin-bottom: 10px;"></div>
 
         <div style="margin-bottom: 5px;">
-          <strong>Serveur:</strong> ${report.employeeName}
+          <strong>Serveur / Utilisateur:</strong> ${displayName}
         </div>
         <div style="margin-bottom: 5px;">
-          <strong>Rôle:</strong> ${report.role}
+          <strong>Rôle:</strong> ${displayRole}
         </div>
         <div style="margin-bottom: 5px;">
           <strong>Période:</strong> ${getFormattedWaiterFilterLabel()}
@@ -1767,18 +1904,48 @@ export function CashRegisterDashboard() {
                 .filter(r => !waiterSearchTerm || r.employeeName.toLowerCase().includes(waiterSearchTerm.toLowerCase()) || r.role.toLowerCase().includes(waiterSearchTerm.toLowerCase()))
                 .map(report => {
                 const isExpanded = expandedWaiterId === report.employeeId;
+                const isSystemOrSuperAdmin = report.isSystem || report.role === 'super_admin';
                 return (
-                  <div key={report.employeeId} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="p-5 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-gray-50 to-white">
+                  <div
+                    key={report.employeeId}
+                    className={`bg-white rounded-2xl shadow-sm border overflow-hidden transition-all ${
+                      isSystemOrSuperAdmin ? 'border-red-300 ring-1 ring-red-200' : 'border-gray-200'
+                    }`}
+                  >
+                    <div
+                      className={`p-5 flex flex-wrap items-center justify-between gap-4 ${
+                        isSystemOrSuperAdmin
+                          ? 'bg-gradient-to-r from-red-50 via-rose-50/40 to-white'
+                          : 'bg-gradient-to-r from-gray-50 to-white'
+                      }`}
+                    >
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-md text-white font-bold text-xl">
-                          {report.employeeName.charAt(0).toUpperCase()}
+                        <div
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md text-white font-bold text-xl ${
+                            isSystemOrSuperAdmin
+                              ? 'bg-gradient-to-br from-red-500 to-rose-600'
+                              : 'bg-gradient-to-br from-amber-500 to-orange-500'
+                          }`}
+                        >
+                          {isSystemOrSuperAdmin ? '⚙️' : report.employeeName.charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-extrabold text-gray-900">{report.employeeName}</h3>
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 capitalize">
-                              {report.role}
+                            <h3
+                              className={`text-lg font-extrabold ${
+                                isSystemOrSuperAdmin ? 'text-red-900' : 'text-gray-900'
+                              }`}
+                            >
+                              {isSystemOrSuperAdmin ? (t('Sistema') || 'Sistema') : report.employeeName}
+                            </h3>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
+                                isSystemOrSuperAdmin
+                                  ? 'bg-red-100 text-red-800 border border-red-200'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {isSystemOrSuperAdmin ? (t('Sistema') || 'Sistema') : report.role}
                             </span>
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5">
@@ -1790,18 +1957,28 @@ export function CashRegisterDashboard() {
                       <div className="flex items-center gap-4">
                         <div className="text-right">
                           <p className="text-xs text-gray-500 font-semibold">{t('Total Recaudado')}</p>
-                          <p className="text-2xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                          <p
+                            className={`text-2xl font-black ${
+                              isSystemOrSuperAdmin
+                                ? 'text-red-600'
+                                : 'bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent'
+                            }`}
+                          >
                             {formatCurrency(report.totalSales)}
                           </p>
                         </div>
 
                         <button
                           onClick={() => printWaiterReportTicket(report)}
-                          className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
-                          title={t('Imprimir ticket para ajustar cuentas con el camarero')}
+                          className={`flex items-center gap-2 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 ${
+                            isSystemOrSuperAdmin
+                              ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700'
+                              : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700'
+                          }`}
+                          title={t('Imprimir ticket para ajustar cuentas')}
                         >
                           <Printer className="w-4 h-4" />
-                          <span>{t('Imprimir Ticket Camarero')}</span>
+                          <span>{t('Imprimir Ticket')}</span>
                         </button>
 
                         <button
