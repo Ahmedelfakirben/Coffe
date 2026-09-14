@@ -10,8 +10,9 @@ import {
 } from 'lucide-react';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
-import { markOrderPrintedLocally, printMainTicket } from '../lib/printerService';
+import { markOrderPrintedLocally } from '../lib/printerService';
 import { isMobileDevice } from '../lib/qzTray';
+import { enqueuePrintJob } from '../lib/spoolerService';
 
 type TableStatus = 'available' | 'occupied';
 
@@ -271,27 +272,19 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         }
       }
 
-      if (!isMobileDevice()) {
-        let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
-        try {
-          const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
-          if (comp) compInfo = comp;
-        } catch {}
-
-        await printMainTicket({
-          ticketData: {
-            orderDate: firstOrderDate,
-            orderNumber: firstOrderNumber ? firstOrderNumber.padStart(3, '0') : orderIdsToProcess[0].slice(-8),
-            items: allItems,
-            total: grandTotal,
-            paymentMethod: paymentMethod === 'cash' ? t('Efectivo') : paymentMethod === 'card' ? t('Tarjeta') : t('Digital'),
-            cashierName: user.user_metadata?.full_name || user.email || 'Usuario',
-          },
-          companyInfo: compInfo,
-          formatCurrency,
-          t
-        });
-      }
+      const ticketPayload = {
+        ticketData: {
+          orderDate: firstOrderDate,
+          orderNumber: firstOrderNumber ? firstOrderNumber.padStart(3, '0') : orderIdsToProcess[0].slice(-8),
+          items: allItems,
+          total: grandTotal,
+          paymentMethod: paymentMethod === 'cash' ? t('Efectivo') : paymentMethod === 'card' ? t('Tarjeta') : t('Digital'),
+          cashierName: user.user_metadata?.full_name || user.email || 'Usuario',
+        }
+      };
+      
+      // Encolar el ticket de caja principal (factura) en el spooler para que aparezca en auditoría y se imprima centralizado
+      await enqueuePrintJob(orderIdsToProcess[0], 'invoice', ticketPayload);
       
       // Update table status if we just cleared all orders (or if there are no other active orders left)
       if (targetOrderId === 'ALL' || ordersForTable.filter(o => o.id !== targetOrderId).length === 0) {
