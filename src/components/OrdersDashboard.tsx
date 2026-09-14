@@ -1021,27 +1021,39 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
                     </p>
 
                     {order.status === 'preparing' && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditOrder(order)}
-                          className="px-3.5 py-3 text-sm font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-1.5"
-                          title={t('common.edit') || 'Modifier'}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          <span>{t('common.edit') || 'Modifier'}</span>
-                        </button>
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'completed')}
-                          className="flex-1 px-4 py-3 text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                        >
-                          {t('Completar')}
-                        </button>
-                        {profile?.role !== 'waiter' && (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2 w-full">
                           <button
-                            onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                            className="px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                            onClick={() => handleEditOrder(order)}
+                            className="px-3.5 py-3 text-sm font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-1.5"
+                            title={t('common.edit') || 'Modifier'}
                           >
-                            {t('Cancelar')}
+                            <Edit2 className="w-4 h-4" />
+                            <span>{t('common.edit') || 'Modifier'}</span>
+                          </button>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'completed')}
+                            className="flex-1 px-4 py-3 text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          >
+                            {t('Completar')}
+                          </button>
+                          {profile?.role !== 'waiter' && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                              className="px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                            >
+                              {t('Cancelar')}
+                            </button>
+                          )}
+                        </div>
+                        
+                        {(profile?.role === 'admin' || profile?.role === 'super_admin' || profile?.role === 'cashier') && (
+                          <button
+                            onClick={() => handleReprintOrder(order)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          >
+                            <Printer className="w-5 h-5" />
+                            {t('Reimprimir Ticket')}
                           </button>
                         )}
                       </div>
