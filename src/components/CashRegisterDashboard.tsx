@@ -2010,10 +2010,10 @@ export function CashRegisterDashboard() {
                         ) : (
                           <div className="space-y-2">
                             {report.orders.map(ord => (
-                              <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center justify-between gap-3">
+                              <div key={ord.id} className={`bg-white p-3.5 rounded-xl border flex items-center justify-between gap-3 ${ord.status === 'cancelled' ? 'border-red-200 opacity-75' : 'border-gray-200'}`}>
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-extrabold text-gray-900 text-sm">
+                                    <span className={`font-extrabold text-sm ${ord.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                                       #{ord.order_number ? String(ord.order_number).padStart(3, '0') : ord.id.slice(-6)}
                                     </span>
                                     <span className="text-xs text-gray-500">
@@ -2025,17 +2025,19 @@ export function CashRegisterDashboard() {
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-xs text-gray-600 mt-1">
+                                  <p className={`text-xs mt-1 ${ord.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
                                     {ord.itemsSummary || t('Artículos del pedido')}
                                   </p>
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <span className={`text-xs px-2 py-0.5 rounded font-bold ${
-                                    ord.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                    ord.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                                    ord.status === 'cancelled' ? 'bg-red-100 text-red-800' : 
+                                    'bg-amber-100 text-amber-800'
                                   }`}>
-                                    {ord.status === 'completed' ? t('Cobrado') : t('Pendiente')}
+                                    {ord.status === 'completed' ? t('Cobrado') : ord.status === 'cancelled' ? t('Anulado') : t('Pendiente')}
                                   </span>
-                                  <p className="font-bold text-gray-900 text-sm mt-0.5">
+                                  <p className={`font-bold text-sm mt-0.5 ${ord.status === 'cancelled' ? 'text-red-400 line-through' : 'text-gray-900'}`}>
                                     {formatCurrency(ord.total)}
                                   </p>
                                 </div>
