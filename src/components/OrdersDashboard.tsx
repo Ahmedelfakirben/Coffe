@@ -599,7 +599,7 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
             total: order.total,
             paymentMethod: paymentMethodText,
             cashierName: cashierName,
-            tableName: order.tables?.name || '',
+            tableName: order.table_name || '',
             serviceType: order.service_type || 'takeaway'
           }
         };
