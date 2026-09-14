@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { PrintJob } from '../types/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
-import { RefreshCw, CheckCircle, XCircle, Clock, Printer, AlertTriangle } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, Clock, Printer, AlertTriangle, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
@@ -10,6 +10,7 @@ export function PrintMonitor() {
   const { t } = useLanguage();
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchJobs = async () => {
     try {
@@ -79,6 +80,26 @@ export function PrintMonitor() {
     return <div className="p-8 text-center text-gray-500">{t('Cargando historial de impresión...')}</div>;
   }
 
+  const filteredJobs = jobs.filter(job => {
+    if (!searchTerm) return true;
+    
+    let orderNum = '';
+    let cashierName = '';
+    
+    if (job.content) {
+      if (job.ticket_type === 'kitchen') {
+        orderNum = job.content.orderNum || '';
+      } else {
+        orderNum = job.content.ticketData?.orderNumber || '';
+        cashierName = job.content.ticketData?.cashierName || '';
+      }
+    }
+    
+    const searchLower = searchTerm.toLowerCase();
+    return orderNum.toLowerCase().includes(searchLower) || 
+           cashierName.toLowerCase().includes(searchLower);
+  });
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -91,13 +112,25 @@ export function PrintMonitor() {
             {t('Monitor en tiempo real de todos los tickets enviados a las impresoras.')}
           </p>
         </div>
-        <button
-          onClick={fetchJobs}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
-        >
-          <RefreshCw className="w-4 h-4" />
-          {t('Actualizar')}
-        </button>
+        <div className="flex gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder={t('Buscar por #pedido o cajero...')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-amber-500 focus:border-amber-500 w-64 shadow-sm"
+            />
+          </div>
+          <button
+            onClick={fetchJobs}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+          >
+            <RefreshCw className="w-4 h-4" />
+            {t('Actualizar')}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -113,14 +146,14 @@ export function PrintMonitor() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {jobs.length === 0 ? (
+              {filteredJobs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                    {t('No hay trabajos de impresión registrados.')}
+                    {searchTerm ? t('No se encontraron resultados.') : t('No hay trabajos de impresión registrados.')}
                   </td>
                 </tr>
               ) : (
-                jobs.map((job) => (
+                filteredJobs.map((job) => (
                   <tr key={job.id} className={`hover:bg-gray-50 transition-colors ${job.status === 'failed' ? 'bg-red-50/30' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {format(new Date(job.created_at), 'dd/MM/yyyy HH:mm:ss')}
@@ -143,14 +176,28 @@ export function PrintMonitor() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {job.error_message ? (
-                        <div className="flex items-start gap-2 text-red-600 text-sm max-w-xs">
-                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                          <span className="truncate" title={job.error_message}>{job.error_message}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 text-sm">-</span>
-                      )}
+                      {(() => {
+                        let details = [];
+                        if (job.content) {
+                          if (job.ticket_type === 'kitchen') {
+                            details.push(<span key="ord" className="block text-xs font-bold text-gray-800">Pedido: {job.content.orderNum || '-'}</span>);
+                          } else {
+                            details.push(<span key="ord" className="block text-xs font-bold text-gray-800">Pedido: {job.content.ticketData?.orderNumber || '-'}</span>);
+                            if (job.content.ticketData?.cashierName) {
+                              details.push(<span key="usr" className="block text-xs text-gray-500">Cajero: {job.content.ticketData.cashierName}</span>);
+                            }
+                          }
+                        }
+                        if (job.error_message) {
+                          details.push(
+                            <div key="err" className="flex items-start gap-1 text-red-600 text-xs mt-1.5 max-w-xs">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                              <span className="truncate" title={job.error_message}>{job.error_message}</span>
+                            </div>
+                          );
+                        }
+                        return details.length > 0 ? <div className="space-y-0.5">{details}</div> : <span className="text-gray-400 text-sm">-</span>;
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       {job.status === 'failed' && (

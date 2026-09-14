@@ -574,7 +574,7 @@ export function POS() {
           orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
           items: ticketItems,
           total,
-          paymentMethod: 'Pendiente',
+          paymentMethod: 'En attente',
           cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
         };
 
@@ -612,7 +612,7 @@ export function POS() {
           orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
           items: ticketItems,
           total: newTotal,
-          paymentMethod: 'Pendiente',
+          paymentMethod: 'En attente',
           cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
         };
 
@@ -660,7 +660,7 @@ export function POS() {
       const printPayload = {
         ticketData: {
           ...pendingOrderData,
-          paymentMethod: 'Pendiente'
+          paymentMethod: 'En attente'
         }
       };
       
@@ -1120,7 +1120,7 @@ export function POS() {
                     orderNumber: existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-8),
                     items: existingItems,
                     total: existingOrderTotal,
-                    paymentMethod: 'Pendiente',
+                    paymentMethod: 'En attente',
                     cashierName: user ? ((user.user_metadata as any)?.full_name || user.email || 'Usuario') : 'Usuario',
                   };
                   setPendingOrderData(ticketData);
@@ -1441,7 +1441,7 @@ export function POS() {
                         orderNumber: existingOrderNumber ? existingOrderNumber.toString().padStart(3, '0') : activeOrderId.slice(-8),
                         items: existingItems,
                         total: existingOrderTotal,
-                        paymentMethod: 'Pendiente',
+                        paymentMethod: 'En attente',
                         cashierName: user ? ((user.user_metadata as any)?.full_name || user.email || 'Usuario') : 'Usuario',
                       };
                       setPendingOrderData(ticketData);

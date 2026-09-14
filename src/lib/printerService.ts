@@ -133,7 +133,7 @@ export const printKitchenRouting = async (params: KitchenPrintParams) => {
                   <div class="name">
                     ${productName}
                     ${sizeName ? `<span style="font-weight: normal;"> (${sizeName})</span>` : ''}
-                    ${i.notes ? `<div style="font-weight: 900; font-size: 14px; padding: 2px 4px; border: 1px dashed #000; display: inline-block; margin-top: 4px;">*** ${i.notes} ***</div>` : ''}
+                    ${i.notes ? `<div style="font-weight: 900; font-size: 14px; padding: 2px 4px; border: 1px dashed #000; display: inline-block; margin-top: 4px;">${i.notes}</div>` : ''}
                   </div>
                 </div>
                 `;

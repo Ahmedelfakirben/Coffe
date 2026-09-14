@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2, Edit2 } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Banknote, CreditCard, Smartphone, Trash2, Edit2, Printer } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { TicketPrinter } from './TicketPrinter';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCart } from '../contexts/CartContext';
-import { markOrderPrintedLocally, printMainTicket } from '../lib/printerService';
+import { markOrderPrintedLocally } from '../lib/printerService';
+import { enqueuePrintJob } from '../lib/spoolerService';
 import { isMobileDevice } from '../lib/qzTray';
 
 interface Order {
@@ -90,6 +91,43 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
       onGoToPOS();
     }
   };
+
+  const handleReprintOrder = async (order: OrderWithItems) => {
+    try {
+      const ticketItems = (order.order_items || []).map(item => {
+        const unitPrice = Number(item.unit_price || 0) || (item.quantity > 0 ? Number(item.subtotal || 0) / item.quantity : 0);
+        return {
+          name: item.products?.name || 'Producto',
+          size: item.product_sizes?.size_name || undefined,
+          quantity: item.quantity || 0,
+          price: unitPrice
+        };
+      });
+
+      let paymentMethodText = 'Efectivo';
+      if (order.payment_method === 'card') paymentMethodText = 'Tarjeta';
+      else if (order.payment_method === 'digital') paymentMethodText = 'Digital';
+      else if (order.status !== 'completed') paymentMethodText = 'En attente';
+
+      const printPayload = {
+        ticketData: {
+          orderDate: new Date(order.created_at),
+          orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-8)}`,
+          items: ticketItems,
+          total: order.total,
+          paymentMethod: paymentMethodText,
+          cashierName: order.employee_profiles?.full_name || 'Usuario'
+        }
+      };
+
+      await enqueuePrintJob(order.id, 'receipt', printPayload);
+      toast.success(t('Ticket enviado a la cola de impresión'));
+    } catch (err) {
+      console.error('Error al re-imprimir:', err);
+      toast.error(t('Error al enviar a imprimir'));
+    }
+  };
+
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('preparing');
@@ -553,19 +591,15 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
           } catch (e) {
             console.warn('Error obteniendo company_settings:', e);
           }
-
-          await printMainTicket({
+          await enqueuePrintJob(order.id, 'receipt', {
             ticketData: {
               orderDate: new Date(order.created_at),
-              orderNumber: order.order_number ? order.order_number.toString().padStart(3, '0') : order.id.slice(-8),
+              orderNumber: order.order_number ? `#${order.order_number.toString().padStart(3, '0')}` : `#${order.id.slice(-8)}`,
               items: ticketItems,
               total: order.total,
               paymentMethod: paymentMethodText,
               cashierName: cashierName
-            },
-            companyInfo: compInfo,
-            formatCurrency,
-            t
+            }
           });
         }
       }
@@ -1013,17 +1047,29 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
                       </div>
                     )}
 
-                    {order.status === 'completed' && (profile?.role === 'admin' || profile?.role === 'super_admin') && (
-                      <button
-                        onClick={() => {
-                          setOrderToDelete(order);
-                          setShowDeleteModal(true);
-                        }}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                        {t('Eliminar Pedido')}
-                      </button>
+                    {order.status === 'completed' && (profile?.role === 'admin' || profile?.role === 'super_admin' || profile?.role === 'cashier') && (
+                      <div className="flex flex-col gap-2 w-full mt-2">
+                        <button
+                          onClick={() => handleReprintOrder(order)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                        >
+                          <Printer className="w-5 h-5" />
+                          {t('Reimprimir Ticket')}
+                        </button>
+                        
+                        {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
+                          <button
+                            onClick={() => {
+                              setOrderToDelete(order);
+                              setShowDeleteModal(true);
+                            }}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                            {t('Eliminar Pedido')}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
