@@ -462,7 +462,11 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                 <div className="w-12 h-12 rounded-xl bg-amber-500/15 group-hover:bg-amber-500/25 flex items-center justify-center transition-colors">
                   <Plus className="w-7 h-7 text-amber-400" />
                 </div>
-                <span className="font-bold text-sm text-amber-200">{t('Nuevo pedido') || 'Nouveau commande'}</span>
+                <span className="font-bold text-sm text-amber-200">
+                  {(activeOrders[activeTableAction.id] || []).length > 0 
+                    ? (t('Añadir / Modificar') || 'Ajouter / Modifier') 
+                    : (t('Nuevo pedido') || 'Nouveau commande')}
+                </span>
               </button>
 
               {/* Ver cuenta */}

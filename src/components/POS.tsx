@@ -1001,11 +1001,12 @@ export function POS() {
           <select
             value={tableId || ''}
             onChange={(e) => setTableId(e.target.value || null)}
-            className="w-full px-3 py-2 rounded-lg border bg-white text-sm"
+            disabled={!!activeOrderId}
+            className="w-full px-3 py-2 rounded-lg border bg-white text-sm disabled:bg-gray-100 disabled:opacity-75 disabled:cursor-not-allowed"
           >
             <option value="">{t('Seleccione mesa')}</option>
             {tables.map(t => (
-              <option key={t.id} value={t.id}>
+              <option key={t.id} value={t.id} disabled={!activeOrderId && t.status !== 'available' && t.id !== tableId}>
                 {t.name} • {t.status === 'available' ? 'Disponible' : 'Ocupada'}
               </option>
             ))}
@@ -1649,11 +1650,12 @@ export function POS() {
                   <select
                     value={tableId || ''}
                     onChange={(e) => setTableId(e.target.value || null)}
-                    className="flex-1 px-2 py-2 rounded-lg border-2 bg-white text-sm"
+                    disabled={!!activeOrderId}
+                    className="flex-1 px-2 py-2 rounded-lg border-2 bg-white text-sm disabled:bg-gray-100 disabled:opacity-75 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccione mesa</option>
                     {tables.map(t => (
-                      <option key={t.id} value={t.id}>
+                      <option key={t.id} value={t.id} disabled={!activeOrderId && t.status !== 'available' && t.id !== tableId}>
                         {t.name} • {t.seats} plazas • {t.status === 'available' ? 'Disponible' : t.status === 'occupied' ? 'Ocupada' : 'Reservada'}
                       </option>
                     ))}
