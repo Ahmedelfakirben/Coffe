@@ -762,8 +762,12 @@ export function POS() {
           total: typeof fullOrder.total === 'string' ? parseFloat(fullOrder.total) : fullOrder.total,
           orderDate: new Date(fullOrder.created_at)
         };
+        // 2 COPIAS DEL TICKET FINAL
+        await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: fullTicketData });
         await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: fullTicketData });
       } else {
+        // 2 COPIAS DEL TICKET FINAL
+        await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: updatedTicketData });
         await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: updatedTicketData });
       }
 
