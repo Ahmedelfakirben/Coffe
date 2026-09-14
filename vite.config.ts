@@ -70,25 +70,11 @@ export default defineConfig(({ mode }) => {
         // Activar inmediatamente al instalar, sin esperar a cerrar pestañas
         skipWaiting: true,
         clientsClaim: true,
-        // Excluir index.html para que NUNCA quede atrapado en Cache-First
-        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+        // Incluir html en precaché para que navigateFallback funcione perfectamente
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/version\.json/],
         runtimeCaching: [
-          {
-            // Peticiones de navegación (recargar página o abrir la app):
-            // NetworkFirst garantiza que si hay red, SIEMPRE descarga el index.html nuevo del servidor.
-            // Si está offline, usa la copia en caché de forma transparente.
-            urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'html-cache',
-              networkTimeoutSeconds: 3,
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
           {
             // version.json SIEMPRE directo a la red sin caché
             urlPattern: /version\.json/,

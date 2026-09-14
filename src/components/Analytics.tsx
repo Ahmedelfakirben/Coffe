@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { TrendingUp, DollarSign, ShoppingBag, Users, Clock, Activity, AlertTriangle, Bell, Download, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingBag, Clock, Activity, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 
@@ -28,13 +28,6 @@ interface EmployeeActivity {
   total_orders_today: number;
   total_sales_today: number;
   is_online: boolean;
-}
-
-interface ExpenseData {
-  date: string;
-  amount: number;
-  category: string;
-  description: string;
 }
 
 interface FinancialSummary {
@@ -469,843 +462,728 @@ export function Analytics() {
     }
   };
 
-  const generateDailyReport = async (summary: FinancialSummary) => {
+  // ==========================================
+  // HELPER FUNCTIONS & CORPORATE EXCEL ENGINE
+  // ==========================================
+
+  const getBusinessDateStr = (dateObj: Date = new Date()) => {
+    const d = new Date(dateObj);
+    if (d.getHours() < 4) {
+      d.setDate(d.getDate() - 1);
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getBusinessDayRange = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const start = new Date(year, month - 1, day, 4, 0, 0, 0);
+    const end = new Date(year, month - 1, day + 1, 3, 59, 59, 999);
+    return { startIso: start.toISOString(), endIso: end.toISOString() };
+  };
+
+  const getBusinessWeekRange = (dateObj: Date = new Date()) => {
+    const d = new Date(dateObj);
+    if (d.getHours() < 4) {
+      d.setDate(d.getDate() - 1);
+    }
+    const dayOfWeek = d.getDay();
+    const distanceToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - distanceToMonday);
+
+    const start = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate(), 4, 0, 0, 0);
+    const nextMonday = new Date(start);
+    nextMonday.setDate(start.getDate() + 7);
+    const end = new Date(nextMonday.getTime() - 1);
+
+    return { startIso: start.toISOString(), endIso: end.toISOString() };
+  };
+
+  const getBusinessMonthRange = (dateObj: Date = new Date()) => {
+    const d = new Date(dateObj);
+    if (d.getHours() < 4) {
+      d.setDate(d.getDate() - 1);
+    }
+    const start = new Date(d.getFullYear(), d.getMonth(), 1, 4, 0, 0, 0);
+    const nextMonthFirst = new Date(d.getFullYear(), d.getMonth() + 1, 1, 4, 0, 0, 0);
+    const end = new Date(nextMonthFirst.getTime() - 1);
+
+    return { startIso: start.toISOString(), endIso: end.toISOString() };
+  };
+
+  const autoFitColumns = (worksheet: XLSX.WorkSheet, data: any[][]) => {
+    const colWidths = data.reduce((widths: number[], row: any[]) => {
+      row.forEach((val, colIdx) => {
+        const str = val !== null && val !== undefined ? String(val) : '';
+        const len = Math.min(Math.max(str.length + 3, 11), 60);
+        widths[colIdx] = Math.max(widths[colIdx] || 11, len);
+      });
+      return widths;
+    }, []);
+    worksheet['!cols'] = colWidths.map((w: number) => ({ wch: w }));
+  };
+
+  interface CorporateReportConfig {
+    periodType: 'daily' | 'weekly' | 'monthly' | 'general';
+    startIso: string;
+    endIso: string;
+    periodLabel: string;
+    filename: string;
+    toastId: string;
+  }
+
+  const generateCorporateExcelReport = async (config: CorporateReportConfig) => {
     try {
-      toast.loading(t('reports.generating_daily'), { id: 'daily-report' });
+      toast.loading(t('reports.generating_excel') || 'Génération du rapport d\'entreprise...', { id: config.toastId });
 
-      const today = new Date();
-      const dayStart = new Date(today.toDateString());
-      const dayEnd = new Date(today.toDateString() + ' 23:59:59');
+      // 1. Consultation des données en parallèle
+      const [
+        ordersRes,
+        expensesRes,
+        sessionsRes,
+        withdrawalsRes,
+        employeesRes,
+        tablesRes,
+        historyRes,
+        categoriesRes
+      ] = await Promise.all([
+        supabase
+          .from('orders')
+          .select(`
+            id,
+            total,
+            order_number,
+            status,
+            created_at,
+            updated_at,
+            payment_method,
+            employee_id,
+            table_id,
+            service_type,
+            order_items (
+              id,
+              quantity,
+              unit_price,
+              subtotal,
+              products (id, name, category_id),
+              product_sizes (id, size_name)
+            )
+          `)
+          .gte('created_at', config.startIso)
+          .lte('created_at', config.endIso)
+          .eq('status', 'completed')
+          .order('created_at', { ascending: true }),
 
-      // Get all sessions for today
-      const { data: sessions } = await supabase
-        .from('cash_register_sessions')
-        .select(`
-          id,
-          employee_id,
-          opening_amount,
-          closing_amount,
-          opened_at,
-          closed_at,
-          status,
-          employee_profiles!inner(full_name)
-        `)
-        .gte('opened_at', dayStart.toISOString())
-        .lte('opened_at', dayEnd.toISOString())
-        .order('opened_at', { ascending: true });
+        supabase
+          .from('expenses')
+          .select('*')
+          .gte('created_at', config.startIso)
+          .lte('created_at', config.endIso)
+          .order('created_at', { ascending: true }),
 
-      // Get all expenses for today
-      const { data: expenses } = await supabase
-        .from('expenses')
-        .select('*')
-        .gte('created_at', dayStart.toISOString())
-        .lte('created_at', dayEnd.toISOString())
-        .order('created_at', { ascending: true });
+        supabase
+          .from('cash_register_sessions')
+          .select('*')
+          .gte('opened_at', config.startIso)
+          .lte('opened_at', config.endIso)
+          .order('opened_at', { ascending: true }),
 
-      // Get orders for today
-      const { data: orders } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          total,
-          created_at,
-          employee_id,
-          order_items (
-            quantity,
-            unit_price,
-            products (name)
-          ),
-          employee_profiles!inner(full_name)
-        `)
-        .gte('created_at', dayStart.toISOString())
-        .lte('created_at', dayEnd.toISOString())
-        .eq('status', 'completed')
-        .order('created_at', { ascending: true });
+        supabase
+          .from('cash_withdrawals')
+          .select('*')
+          .gte('withdrawn_at', config.startIso)
+          .lte('withdrawn_at', config.endIso)
+          .order('withdrawn_at', { ascending: true }),
 
-      // Calculate totals
-      const totalSales = (orders || []).reduce((sum, order) => sum + order.total, 0);
-      const totalExpenses = (expenses || []).reduce((sum, exp) => sum + exp.amount, 0);
-      const profit = totalSales - totalExpenses;
+        supabase.from('employee_profiles').select('id, full_name, role'),
+        supabase.from('tables').select('id, name'),
+        supabase.from('order_history').select('order_id, employee_id, created_at, action').eq('action', 'completed'),
+        supabase.from('categories').select('id, name')
+      ]);
 
-      // Group sessions by employee
-      const employeeSessions = (sessions || []).reduce((acc: any, session) => {
-        const empId = session.employee_id;
-        if (!acc[empId]) {
-          acc[empId] = {
-            employee_name: (session.employee_profiles as any)?.full_name || 'N/A',
-            sessions: [],
-            totalOpening: 0,
-            totalClosing: 0,
-            firstOpen: session.opened_at,
-            lastClose: session.closed_at,
-          };
+      const orders = ordersRes.data || [];
+      const expenses = expensesRes.data || [];
+      const sessions = sessionsRes.data || [];
+      const withdrawals = withdrawalsRes.data || [];
+
+      // 2. Indexation rapide par Map
+      const empMap = new Map<string, { full_name: string; role: string }>();
+      (employeesRes.data || []).forEach(e => empMap.set(e.id, { full_name: e.full_name, role: e.role }));
+
+      const tableMap = new Map<string, string>();
+      (tablesRes.data || []).forEach(t => tableMap.set(t.id, t.name));
+
+      const categoryMap = new Map<string, string>();
+      (categoriesRes.data || []).forEach(c => categoryMap.set(c.id, c.name));
+
+      const completedHistoryMap = new Map<string, { employee_id: string; created_at: string }>();
+      (historyRes.data || []).forEach(h => {
+        if (!completedHistoryMap.has(h.order_id)) {
+          completedHistoryMap.set(h.order_id, h);
         }
-        acc[empId].sessions.push(session);
-        acc[empId].totalOpening += session.opening_amount;
-        if (session.closing_amount) {
-          acc[empId].totalClosing += session.closing_amount;
-        }
-        if (new Date(session.opened_at) < new Date(acc[empId].firstOpen)) {
-          acc[empId].firstOpen = session.opened_at;
-        }
-        if (session.closed_at && (!acc[empId].lastClose || new Date(session.closed_at) > new Date(acc[empId].lastClose))) {
-          acc[empId].lastClose = session.closed_at;
-        }
-        return acc;
-      }, {});
+      });
 
-      // Create Excel workbook
+      // 3. Calculs financiers globaux
+      const totalSales = orders.reduce((sum, o) => sum + (typeof o.total === 'string' ? parseFloat(o.total) : (o.total || 0)), 0);
+      const totalExpenses = expenses.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : (e.amount || 0)), 0);
+      const netProfit = totalSales - totalExpenses;
+      const profitMargin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0;
+      const orderCount = orders.length;
+      const avgTicket = orderCount > 0 ? totalSales / orderCount : 0;
+
+      // Modes de paiement
+      let payCashCount = 0, payCashTotal = 0;
+      let payCardCount = 0, payCardTotal = 0;
+      let payDigitalCount = 0, payDigitalTotal = 0;
+
+      orders.forEach(o => {
+        const amt = typeof o.total === 'string' ? parseFloat(o.total) : (o.total || 0);
+        if (o.payment_method === 'card') {
+          payCardCount++;
+          payCardTotal += amt;
+        } else if (o.payment_method === 'digital') {
+          payDigitalCount++;
+          payDigitalTotal += amt;
+        } else {
+          payCashCount++;
+          payCashTotal += amt;
+        }
+      });
+
+      const payCashPct = totalSales > 0 ? (payCashTotal / totalSales) * 100 : 0;
+      const payCardPct = totalSales > 0 ? (payCardTotal / totalSales) * 100 : 0;
+      const payDigitalPct = totalSales > 0 ? (payDigitalTotal / totalSales) * 100 : 0;
+
+      // Types de service
+      let dineInCount = 0, dineInTotal = 0;
+      let takeawayCount = 0, takeawayTotal = 0;
+
+      orders.forEach(o => {
+        const amt = typeof o.total === 'string' ? parseFloat(o.total) : (o.total || 0);
+        if (o.service_type === 'takeaway') {
+          takeawayCount++;
+          takeawayTotal += amt;
+        } else {
+          dineInCount++;
+          dineInTotal += amt;
+        }
+      });
+
+      const dineInPct = totalSales > 0 ? (dineInTotal / totalSales) * 100 : 0;
+      const takeawayPct = totalSales > 0 ? (takeawayTotal / totalSales) * 100 : 0;
+
+      const totalUnitsSold = orders.reduce((sum, o) => {
+        return sum + (o.order_items || []).reduce((iSum: number, item: any) => iSum + (item.quantity || 0), 0);
+      }, 0);
+
+      // 4. Mix de Produits et Pareto ABC (80/20)
+      const productMap = new Map<string, {
+        name: string;
+        categoryName: string;
+        quantity: number;
+        revenue: number;
+      }>();
+
+      orders.forEach(o => {
+        (o.order_items || []).forEach((it: any) => {
+          const pObj = Array.isArray(it.products) ? it.products[0] : it.products;
+          const pName = pObj?.name || 'Produit inconnu';
+          const catName = pObj?.category_id ? (categoryMap.get(pObj.category_id) || 'Divers') : 'Divers';
+          const sObj = Array.isArray(it.product_sizes) ? it.product_sizes[0] : it.product_sizes;
+          const fullName = sObj?.size_name ? `${pName} (${sObj.size_name})` : pName;
+          const q = it.quantity || 0;
+          const rev = it.subtotal ? (typeof it.subtotal === 'string' ? parseFloat(it.subtotal) : it.subtotal) : (q * (it.unit_price || 0));
+
+          if (!productMap.has(fullName)) {
+            productMap.set(fullName, { name: fullName, categoryName: catName, quantity: 0, revenue: 0 });
+          }
+          const rec = productMap.get(fullName)!;
+          rec.quantity += q;
+          rec.revenue += rev;
+        });
+      });
+
+      const productMixSorted = Array.from(productMap.values()).sort((a, b) => b.revenue - a.revenue);
+      let cumulativeRevenue = 0;
+      const productMixFinal = productMixSorted.map((p, idx) => {
+        cumulativeRevenue += p.revenue;
+        const sharePct = totalSales > 0 ? (p.revenue / totalSales) * 100 : 0;
+        const cumPct = totalSales > 0 ? (cumulativeRevenue / totalSales) * 100 : 0;
+        const avgPrice = p.quantity > 0 ? p.revenue / p.quantity : 0;
+        let paretoClass = 'Classe A (Produit Star)';
+        if (cumPct > 95) {
+          paretoClass = 'Classe C (Faible rotation)';
+        } else if (cumPct > 80) {
+          paretoClass = 'Classe B (Intermédiaire)';
+        }
+        return [
+          idx + 1,
+          p.categoryName,
+          p.name,
+          p.quantity,
+          Number(avgPrice.toFixed(2)),
+          Number(p.revenue.toFixed(2)),
+          `${sharePct.toFixed(2)}%`,
+          `${cumPct.toFixed(2)}%`,
+          paretoClass
+        ];
+      });
+
+      // 5. Rendement du Personnel / Serveurs
+      const staffMap = new Map<string, {
+        name: string;
+        role: string;
+        orderCount: number;
+        totalSales: number;
+        waitMinutesSum: number;
+      }>();
+
+      orders.forEach(o => {
+        const empId = o.employee_id || 'system';
+        const empProfile = empMap.get(empId);
+        const name = (!empProfile || empProfile.role === 'super_admin') ? 'Système (Super Admin)' : empProfile.full_name;
+        const role = empProfile?.role || 'Service';
+        const amt = typeof o.total === 'string' ? parseFloat(o.total) : (o.total || 0);
+
+        const created = new Date(o.created_at).getTime();
+        const hist = completedHistoryMap.get(o.id);
+        const paid = hist?.created_at ? new Date(hist.created_at).getTime() : (o.updated_at ? new Date(o.updated_at).getTime() : created);
+        const waitMin = Math.max(0, Math.round((paid - created) / 60000));
+
+        if (!staffMap.has(name)) {
+          staffMap.set(name, { name, role, orderCount: 0, totalSales: 0, waitMinutesSum: 0 });
+        }
+        const sRec = staffMap.get(name)!;
+        sRec.orderCount++;
+        sRec.totalSales += amt;
+        sRec.waitMinutesSum += waitMin;
+      });
+
+      const staffRows = Array.from(staffMap.values())
+        .sort((a, b) => b.totalSales - a.totalSales)
+        .map(s => {
+          const sharePct = totalSales > 0 ? (s.totalSales / totalSales) * 100 : 0;
+          const avgT = s.orderCount > 0 ? s.totalSales / s.orderCount : 0;
+          const avgW = s.orderCount > 0 ? Math.round(s.waitMinutesSum / s.orderCount) : 0;
+          return [
+            s.name,
+            s.role,
+            s.orderCount,
+            Number(s.totalSales.toFixed(2)),
+            Number(avgT.toFixed(2)),
+            avgW,
+            `${sharePct.toFixed(2)}%`
+          ];
+        });
+
+      // 6. Analyse Temporelle (Horaire ou Journalière)
+      let temporalHeader: string[] = [];
+      let temporalDataRows: any[][] = [];
+
+      if (config.periodType === 'daily') {
+        temporalHeader = ['Tranche Horaire', 'Commandes Encaissées', 'Chiffre d\'Affaires (DH)', 'Part du Jour (%)', 'Ticket Moyen (DH)', 'Affluence Estimée'];
+        const hourlyMap = new Array(24).fill(0).map((_, h) => ({
+          hourLabel: `${String(h).padStart(2, '0')}:00 - ${String(h).padStart(2, '0')}:59`,
+          orderCount: 0,
+          totalSales: 0
+        }));
+
+        orders.forEach(o => {
+          const h = new Date(o.created_at).getHours();
+          const amt = typeof o.total === 'string' ? parseFloat(o.total) : (o.total || 0);
+          if (hourlyMap[h]) {
+            hourlyMap[h].orderCount++;
+            hourlyMap[h].totalSales += amt;
+          }
+        });
+
+        temporalDataRows = hourlyMap.map(hm => {
+          const share = totalSales > 0 ? (hm.totalSales / totalSales) * 100 : 0;
+          const avg = hm.orderCount > 0 ? hm.totalSales / hm.orderCount : 0;
+          let affluence = 'Calme';
+          if (share > 15) affluence = 'Très Élevée (Coup de feu)';
+          else if (share > 8) affluence = 'Moyenne (Active)';
+          return [
+            hm.hourLabel,
+            hm.orderCount,
+            Number(hm.totalSales.toFixed(2)),
+            `${share.toFixed(1)}%`,
+            Number(avg.toFixed(2)),
+            affluence
+          ];
+        });
+      } else {
+        temporalHeader = ['Date', 'Jour de la Semaine', 'Commandes Encaissées', 'Chiffre d\'Affaires (DH)', 'Dépenses (DH)', 'Bénéfice (DH)', 'Ticket Moyen (DH)'];
+        const dailyMap = new Map<string, { dateStr: string; weekday: string; orderCount: number; totalSales: number; expenses: number }>();
+
+        orders.forEach(o => {
+          const dObj = new Date(o.created_at);
+          const dateStr = dObj.toLocaleDateString('fr-FR');
+          const weekday = dObj.toLocaleDateString('fr-FR', { weekday: 'long' });
+          const amt = typeof o.total === 'string' ? parseFloat(o.total) : (o.total || 0);
+          if (!dailyMap.has(dateStr)) {
+            dailyMap.set(dateStr, { dateStr, weekday, orderCount: 0, totalSales: 0, expenses: 0 });
+          }
+          const rec = dailyMap.get(dateStr)!;
+          rec.orderCount++;
+          rec.totalSales += amt;
+        });
+
+        expenses.forEach(e => {
+          const dObj = new Date(e.created_at);
+          const dateStr = dObj.toLocaleDateString('fr-FR');
+          const weekday = dObj.toLocaleDateString('fr-FR', { weekday: 'long' });
+          const amt = typeof e.amount === 'string' ? parseFloat(e.amount) : (e.amount || 0);
+          if (!dailyMap.has(dateStr)) {
+            dailyMap.set(dateStr, { dateStr, weekday, orderCount: 0, totalSales: 0, expenses: 0 });
+          }
+          const rec = dailyMap.get(dateStr)!;
+          rec.expenses += amt;
+        });
+
+        temporalDataRows = Array.from(dailyMap.values()).map(dm => {
+          const prof = dm.totalSales - dm.expenses;
+          const avg = dm.orderCount > 0 ? dm.totalSales / dm.orderCount : 0;
+          return [
+            dm.dateStr,
+            dm.weekday.toUpperCase(),
+            dm.orderCount,
+            Number(dm.totalSales.toFixed(2)),
+            Number(dm.expenses.toFixed(2)),
+            Number(prof.toFixed(2)),
+            Number(avg.toFixed(2))
+          ];
+        });
+      }
+
+      // 7. Dépenses d'exploitation par catégorie
+      const catExpensesMap = new Map<string, { count: number; total: number }>();
+      expenses.forEach(e => {
+        const cat = e.category || 'Non Catégorisé';
+        const amt = typeof e.amount === 'string' ? parseFloat(e.amount) : (e.amount || 0);
+        if (!catExpensesMap.has(cat)) {
+          catExpensesMap.set(cat, { count: 0, total: 0 });
+        }
+        const rec = catExpensesMap.get(cat)!;
+        rec.count++;
+        rec.total += amt;
+      });
+
+      const catExpensesRows = Array.from(catExpensesMap.entries()).map(([cat, val]) => {
+        const pct = totalExpenses > 0 ? (val.total / totalExpenses) * 100 : 0;
+        return [cat, val.count, Number(val.total.toFixed(2)), `${pct.toFixed(1)}%`];
+      });
+
+      const totalWithdrawalsSum = withdrawals.reduce((sum, w) => sum + (typeof w.amount === 'string' ? parseFloat(w.amount) : (w.amount || 0)), 0);
+
+      // ==========================================
+      // CRÉATION DU CLASSEUR EXCEL MULTI-FEUILLES
+      // ==========================================
       const wb = XLSX.utils.book_new();
 
-      // Company Header Sheet
-      const headerData = [
-        [t('reports.company_info')],
+      // --- FEUILLE 1 : TABLEAU DE BORD & KPIS ---
+      const summaryRows: any[][] = [
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['LIN-CAISSE - RAPPORT DE GESTION & AUDIT FINANCIER D\'ENTREPRISE'],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
         [''],
-        ...(companySettings ? [
-          [t('reports.company'), companySettings.company_name],
-          [t('Dirección'), companySettings.address || t('reports.not_specified')],
-          [t('reports.phone'), companySettings.phone || t('reports.not_specified')],
-          [''],
-        ] : [
-          [t('reports.company'), t('reports.not_configured')],
-          [''],
+        ['INFORMATIONS GÉNÉRALES DE L\'ÉTABLISSEMENT', ''],
+        ['Établissement / Société:', companySettings?.company_name || 'LIN-Caisse Restaurant & Café'],
+        ['Adresse:', companySettings?.address || 'Non spécifiée'],
+        ['Téléphone:', companySettings?.phone || 'Non spécifié'],
+        ['Type de Rapport:', config.periodLabel],
+        ['Période Analysée:', `${new Date(config.startIso).toLocaleString('fr-FR')} au ${new Date(config.endIso).toLocaleString('fr-FR')}`],
+        ['Date d\'Émission:', new Date().toLocaleDateString('fr-FR')],
+        ['Heure d\'Émission:', new Date().toLocaleTimeString('fr-FR')],
+        ['Émis par:', profile?.full_name || 'Système'],
+        [''],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['INDICATEURS CLÉS DE PERFORMANCE (KPIS FINANCIERS)'],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['Indicateur Financier', 'Montant / Valeur', 'Unité'],
+        ['Chiffre d\'Affaires Brut (Ventes Totales)', Number(totalSales.toFixed(2)), 'DH'],
+        ['Total Commandes Encaissées', orderCount, 'Commandes'],
+        ['Panier Moyen / Ticket Moyen', Number(avgTicket.toFixed(2)), 'DH / Commande'],
+        ['Total Charges & Dépenses d\'Exploitation', Number(totalExpenses.toFixed(2)), 'DH'],
+        ['Bénéfice Net d\'Exploitation', Number(netProfit.toFixed(2)), 'DH'],
+        ['Marge Bénéficiaire Nette', `${profitMargin.toFixed(2)}%`, 'Taux de Rentabilité'],
+        ['Total Articles / Produits Vendus', totalUnitsSold, 'Unités'],
+        ['Nombre de Sessions de Caisse', sessions.length, 'Sessions'],
+        [''],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['RÉPARTITION PAR MODE D\'ENCAISSEMENT (PAIEMENTS)'],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['Mode de Paiement', 'Nombre de Commandes', 'Total Encaissé (DH)', 'Part de Marché (%)'],
+        ['Espèces (Cash)', payCashCount, Number(payCashTotal.toFixed(2)), `${payCashPct.toFixed(1)}%`],
+        ['Carte Bancaire (TPE)', payCardCount, Number(payCardTotal.toFixed(2)), `${payCardPct.toFixed(1)}%`],
+        ['Paiement Digital / Virement', payDigitalCount, Number(payDigitalTotal.toFixed(2)), `${payDigitalPct.toFixed(1)}%`],
+        ['TOTAL TOUS MODES', orderCount, Number(totalSales.toFixed(2)), '100.0%'],
+        [''],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['RÉPARTITION PAR TYPE DE SERVICE'],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['Type de Service', 'Nombre de Commandes', 'Total Ventes (DH)', 'Part (%)'],
+        ['En Salle (Dine-in)', dineInCount, Number(dineInTotal.toFixed(2)), `${dineInPct.toFixed(1)}%`],
+        ['À Emporter (Takeaway)', takeawayCount, Number(takeawayTotal.toFixed(2)), `${takeawayPct.toFixed(1)}%`],
+        ['TOTAL SERVICE', orderCount, Number(totalSales.toFixed(2)), '100.0%']
+      ];
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      autoFitColumns(wsSummary, summaryRows);
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Tableau de Bord & KPIs');
+
+      // --- FEUILLE 2 : MIX PRODUITS & PARETO ---
+      const productRows: any[][] = [
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['ANALYSE DE VENTES PAR PRODUIT & CLASSIFICATION PARETO (80/20)'],
+        ['Période:', `${new Date(config.startIso).toLocaleDateString('fr-FR')} au ${new Date(config.endIso).toLocaleDateString('fr-FR')}`],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        [''],
+        ['Rang', 'Catégorie', 'Désignation du Produit', 'Quantité Vendue', 'Prix Moyen (DH)', 'Chiffre d\'Affaires (DH)', 'Part des Ventes (%)', 'Part Cumulée (%)', 'Classification Pareto'],
+        ...productMixFinal,
+        [''],
+        ['TOTAL DES VENTES PRODUITS:', '', '', totalUnitsSold, '', Number(totalSales.toFixed(2)), '100.0%', '100.0%', '']
+      ];
+
+      const wsProducts = XLSX.utils.aoa_to_sheet(productRows);
+      autoFitColumns(wsProducts, productRows);
+      XLSX.utils.book_append_sheet(wb, wsProducts, 'Mix Produits (Pareto)');
+
+      // --- FEUILLE 3 : RENDEMENT DU PERSONNEL ---
+      const overallAvgWait = staffRows.length > 0
+        ? Math.round(staffRows.reduce((acc, r) => acc + (Number(r[5]) || 0), 0) / staffRows.length)
+        : 0;
+
+      const staffSheetRows: any[][] = [
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['PERFORMANCE ET ANALYSE D\'ACTIVITÉ DU PERSONNEL'],
+        ['Période:', `${new Date(config.startIso).toLocaleDateString('fr-FR')} au ${new Date(config.endIso).toLocaleDateString('fr-FR')}`],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        [''],
+        ['Employé / Serveur', 'Rôle', 'Commandes Traitées', 'Ventes Totales (DH)', 'Ticket Moyen (DH)', 'Temps Moyen de Service (min)', 'Contribution aux Ventes (%)'],
+        ...staffRows,
+        [''],
+        ['TOTAL ÉQUIPE:', '', orderCount, Number(totalSales.toFixed(2)), Number(avgTicket.toFixed(2)), overallAvgWait, '100.0%']
+      ];
+
+      const wsStaff = XLSX.utils.aoa_to_sheet(staffSheetRows);
+      autoFitColumns(wsStaff, staffSheetRows);
+      XLSX.utils.book_append_sheet(wb, wsStaff, 'Rendement Personnel');
+
+      // --- FEUILLE 4 : DÉTAIL DES COMMANDES (AUDIT LIGNE À LIGNE) ---
+      const ordersAuditRows: any[][] = [
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['AUDIT COMPLET DES COMMANDES ENCAISSÉES (TRANSACTIONS LIGNE PAR LIGNE)'],
+        ['Période:', `${new Date(config.startIso).toLocaleDateString('fr-FR')} au ${new Date(config.endIso).toLocaleDateString('fr-FR')}`],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        [''],
+        ['N° Commande', 'Date', 'Heure Prise', 'Heure Paiement', 'Durée Service (min)', 'Lieu / Table', 'Serveur (Prise)', 'Caissier (Encaissement)', 'Articles Consommés', 'Mode de Paiement', 'Montant Total (DH)'],
+        ...orders.map(order => {
+          const orderNumStr = order.order_number ? `#${String(order.order_number).padStart(3, '0')}` : `#${order.id.slice(-6)}`;
+          const tableStr = order.table_id ? `Mesa ${tableMap.get(order.table_id) || ''}` : (order.service_type === 'takeaway' ? 'À emporter' : 'Comptoir');
+
+          const creatorEmp = order.employee_id ? empMap.get(order.employee_id) : null;
+          const creatorName = creatorEmp?.role === 'super_admin' ? 'Système' : (creatorEmp?.full_name || 'Serveur');
+          const createdTime = new Date(order.created_at);
+          const createdTimeStr = createdTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          const orderDateStr = createdTime.toLocaleDateString('fr-FR');
+
+          const historyEntry = completedHistoryMap.get(order.id);
+          const cashierEmpId = historyEntry?.employee_id;
+          const cashierEmp = cashierEmpId ? empMap.get(cashierEmpId) : null;
+          const cashierName = cashierEmp?.role === 'super_admin' ? 'Système' : (cashierEmp?.full_name || 'Caisse');
+          const paidTime = historyEntry?.created_at ? new Date(historyEntry.created_at) : (order.updated_at ? new Date(order.updated_at) : createdTime);
+          const paidTimeStr = paidTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+          const diffMs = paidTime.getTime() - createdTime.getTime();
+          const serviceMinutes = Math.max(0, Math.round(diffMs / 60000));
+
+          const itemsStr = (order.order_items || []).map((item: any) => {
+            const pName = Array.isArray(item.products) ? item.products[0]?.name : item.products?.name;
+            const sName = Array.isArray(item.product_sizes) ? item.product_sizes[0]?.size_name : item.product_sizes?.size_name;
+            return `${item.quantity}x ${pName || 'Produit'}${sName ? ` (${sName})` : ''}`;
+          }).join(', ');
+
+          const payMethodStr = order.payment_method === 'cash' ? 'Espèces' : order.payment_method === 'card' ? 'Carte' : order.payment_method === 'digital' ? 'Digital' : 'Espèces';
+
+          return [
+            orderNumStr,
+            orderDateStr,
+            createdTimeStr,
+            paidTimeStr,
+            serviceMinutes,
+            tableStr,
+            creatorName,
+            cashierName,
+            itemsStr || 'Sans détail',
+            payMethodStr,
+            Number((typeof order.total === 'string' ? parseFloat(order.total) : (order.total || 0)).toFixed(2))
+          ];
+        }),
+        [''],
+        ['TOTAL DES VENTES:', '', '', '', '', '', '', '', '', '', Number(totalSales.toFixed(2))]
+      ];
+
+      const wsOrders = XLSX.utils.aoa_to_sheet(ordersAuditRows);
+      autoFitColumns(wsOrders, ordersAuditRows);
+      XLSX.utils.book_append_sheet(wb, wsOrders, 'Détail des Commandes');
+
+      // --- FEUILLE 5 : CONTRÔLE DE CAISSE & ARQUEOS ---
+      const cashRows: any[][] = [
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['HISTORIQUE DES SESSIONS DE CAISSE ET CONTRÔLE D\'ARQUEO'],
+        ['Période:', `${new Date(config.startIso).toLocaleDateString('fr-FR')} au ${new Date(config.endIso).toLocaleDateString('fr-FR')}`],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        [''],
+        ['Session #', 'Date', 'Caissier', 'Heure Ouverture', 'Heure Fermeture', 'Fond Initial (DH)', 'Fond Final Réel (DH)', 'Statut de Session'],
+        ...sessions.map((session, idx) => {
+          const emp = empMap.get(session.employee_id);
+          const cName = emp?.role === 'super_admin' ? 'Système' : (emp?.full_name || 'Caissier');
+          const dStr = new Date(session.opened_at).toLocaleDateString('fr-FR');
+          const oTime = new Date(session.opened_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          const cTime = session.closed_at ? new Date(session.closed_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'En cours';
+          return [
+            `Session #${idx + 1}`,
+            dStr,
+            cName,
+            oTime,
+            cTime,
+            session.opening_amount || 0,
+            session.closing_amount !== null && session.closing_amount !== undefined ? session.closing_amount : 'En cours (Ouverte)',
+            session.status === 'open' ? 'Ouverte' : 'Clôturée'
+          ];
+        }),
+        [''],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['REGISTRE DES RETRAITS DE CAISSE'],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['Date & Heure', 'Effectué par', 'Motif / Raison du Retrait', 'Montant (DH)', 'Notes complémentaires'],
+        ...withdrawals.map(w => [
+          new Date(w.withdrawn_at).toLocaleString('fr-FR'),
+          empMap.get(w.withdrawn_by)?.full_name || 'Personnel',
+          w.reason || 'Dépense / Retrait',
+          Number((typeof w.amount === 'string' ? parseFloat(w.amount) : (w.amount || 0)).toFixed(2)),
+          w.notes || '-'
         ]),
-        [t('reports.daily_operations')],
+        ['TOTAL RETRAITS:', '', '', Number(totalWithdrawalsSum.toFixed(2)), '']
+      ];
+
+      const wsCash = XLSX.utils.aoa_to_sheet(cashRows);
+      autoFitColumns(wsCash, cashRows);
+      XLSX.utils.book_append_sheet(wb, wsCash, 'Contrôle de Caisse');
+
+      // --- FEUILLE 6 : ANALYSE TEMPORELLE & HEURES DE POINTE ---
+      const temporalSheetRows: any[][] = [
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        [config.periodType === 'daily' ? 'ANALYSE DE L\'AFFLUENCE PAR TRANCHE HORAIRE' : 'ÉVOLUTION QUOTIDIENNE DES VENTES DU CYCLE'],
+        ['Période:', `${new Date(config.startIso).toLocaleDateString('fr-FR')} au ${new Date(config.endIso).toLocaleDateString('fr-FR')}`],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
         [''],
-        [t('reports.report_date'), today.toLocaleDateString('es-ES', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        })],
-        [t('reports.generation_time'), today.toLocaleTimeString('es-ES')],
-        [t('reports.generated_by'), profile?.full_name || t('reports.system')],
+        temporalHeader,
+        ...temporalDataRows,
         [''],
-        ['═'.repeat(50)],
-        [t('reports.executive_summary')],
-        ['═'.repeat(50)]
+        ['TOTAL:', orderCount, Number(totalSales.toFixed(2)), '100.0%', Number(avgTicket.toFixed(2)), '']
       ];
 
-      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
-      wsHeader['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
-        { s: { r: 8, c: 0 }, e: { r: 8, c: 3 } },
-        { s: { r: 9, c: 0 }, e: { r: 9, c: 3 } }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsHeader, t('reports.cover_sheet'));
+      const wsTemporal = XLSX.utils.aoa_to_sheet(temporalSheetRows);
+      autoFitColumns(wsTemporal, temporalSheetRows);
+      XLSX.utils.book_append_sheet(wb, wsTemporal, 'Analyse Temporelle');
 
-      // Summary Sheet
-      const summaryData = [
-        [t('reports.daily_financial_summary')],
+      // --- FEUILLE 7 : DÉPENSES D'EXPLOITATION ---
+      const expensesSheetRows: any[][] = [
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
+        ['REGISTRE DÉTAILLÉ DES DÉPENSES D\'EXPLOITATION'],
+        ['Période:', `${new Date(config.startIso).toLocaleDateString('fr-FR')} au ${new Date(config.endIso).toLocaleDateString('fr-FR')}`],
+        ['═══════════════════════════════════════════════════════════════════════════════════'],
         [''],
-        [t('reports.indicator'), t('reports.value'), t('reports.detail')],
-        [t('reports.total_sales'), `$${totalSales.toFixed(2)}`, `${(orders || []).length} ${t('reports.orders_completed')}`],
-        [t('reports.total_expenses'), `$${totalExpenses.toFixed(2)}`, `${(expenses || []).length} ${t('reports.expenses_registered')}`],
-        [t('reports.net_profit'), `$${profit.toFixed(2)}`, `${((profit / totalSales) * 100 || 0).toFixed(2)}% ${t('reports.margin')}`],
-        [t('reports.products_sold'), orders?.reduce((sum, order) =>
-          sum + (order.order_items?.reduce((itemSum: number, item: any) => itemSum + item.quantity, 0) || 0), 0) || 0, t('reports.units')],
-        [t('reports.active_employees'), Object.keys(employeeSessions).length, t('reports.with_cash_sessions')],
-        [t('reports.cash_sessions'), (sessions || []).length, t('reports.openings_registered')]
+        ['RÉSUMÉ PAR CATÉGORIE DE DÉPENSES'],
+        ['Catégorie', 'Nombre de Dépenses', 'Montant Total (DH)', 'Part des Dépenses (%)'],
+        ...catExpensesRows,
+        ['TOTAL DES CHARGES:', expenses.length, Number(totalExpenses.toFixed(2)), '100.0%'],
+        [''],
+        ['DÉTAIL CHRONOLOGIQUE DES DÉPENSES'],
+        ['Date', 'Heure', 'Catégorie', 'Description / Motif', 'Montant (DH)'],
+        ...expenses.map(e => [
+          new Date(e.created_at).toLocaleDateString('fr-FR'),
+          new Date(e.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          e.category || 'Général',
+          e.description || '-',
+          Number((typeof e.amount === 'string' ? parseFloat(e.amount) : (e.amount || 0)).toFixed(2))
+        ]),
+        ['TOTAL DÉPENSES:', '', '', '', Number(totalExpenses.toFixed(2))]
       ];
 
-      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      wsSummary['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsSummary, t('reports.summary_sheet'));
+      const wsExpenses = XLSX.utils.aoa_to_sheet(expensesSheetRows);
+      autoFitColumns(wsExpenses, expensesSheetRows);
+      XLSX.utils.book_append_sheet(wb, wsExpenses, 'Dépenses d\'Exploitation');
 
-      // Employee Sessions Sheet
-      if (Object.keys(employeeSessions).length > 0) {
-        const employeeData = [
-          [t('reports.sessions_by_employee')],
-          [''],
-          [t('reports.employee'), t('reports.sessions'), t('reports.first_opening'), t('reports.last_closing'), t('reports.initial_amount'), t('reports.final_amount'), t('reports.difference')],
-          ...Object.values(employeeSessions).map((emp: any) => [
-            emp.employee_name,
-            emp.sessions.length,
-            new Date(emp.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            emp.lastClose ? new Date(emp.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : t('reports.pending'),
-            `$${emp.totalOpening.toFixed(2)}`,
-            `$${emp.totalClosing.toFixed(2)}`,
-            `$${(emp.totalClosing - emp.totalOpening).toFixed(2)}`
-          ])
-        ];
-
-        const wsEmployees = XLSX.utils.aoa_to_sheet(employeeData);
-        wsEmployees['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsEmployees, t('reports.employees_sheet'));
-      }
-
-      // Orders Detail Sheet
-      if (orders && orders.length > 0) {
-        const ordersData = [
-          [t('reports.detailed_orders_breakdown')],
-          [''],
-          [t('reports.time'), t('reports.order'), t('reports.employee'), t('reports.products'), t('reports.total')],
-          ...orders.map(order => [
-            new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            `#${order.id.slice(-8)}`,
-            (order.employee_profiles as any)?.full_name || 'N/A',
-            order.order_items?.map((item: any) =>
-              `${item.quantity}x ${item.products?.[0]?.name || t('reports.product')}`
-            ).join(', ') || t('reports.no_products'),
-            `$${order.total.toFixed(2)}`
-          ])
-        ];
-
-        const wsOrders = XLSX.utils.aoa_to_sheet(ordersData);
-        wsOrders['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsOrders, t('reports.orders_sheet'));
-      }
-
-      // Expenses Detail Sheet
-      if (expenses && expenses.length > 0) {
-        const expensesData = [
-          [t('reports.detailed_expenses_breakdown')],
-          [''],
-          [t('reports.time'), t('reports.description'), t('reports.category'), t('reports.amount')],
-          ...expenses.map(expense => [
-            new Date(expense.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            expense.description,
-            expense.category,
-            `$${expense.amount.toFixed(2)}`
-          ])
-        ];
-
-        const wsExpenses = XLSX.utils.aoa_to_sheet(expensesData);
-        wsExpenses['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsExpenses, t('reports.expenses_sheet'));
-      }
-
-      // Generate filename with timestamp
-      const timestamp = today.toISOString().split('T')[0];
-      const filename = `Reporte_Diario_CoffeeShop_${timestamp}.xlsx`;
-
-      // Save file
-      XLSX.writeFile(wb, filename);
-
-      toast.success(t('reports.daily_generated_success'), { id: 'daily-report' });
+      // 8. Sauvegarde du fichier
+      XLSX.writeFile(wb, config.filename);
+      toast.success(t('reports.excel_generated_success') || 'Rapport Excel généré avec succès !', { id: config.toastId });
     } catch (error) {
-      console.error('Error generating daily report:', error);
-      toast.error(t('reports.error_generating_daily'), { id: 'daily-report' });
+      console.error('Erreur lors de la génération du rapport d\'entreprise:', error);
+      toast.error(t('reports.error_generating_excel') || 'Erreur lors de la génération du rapport Excel', { id: config.toastId });
     }
   };
 
-  const generateWeeklyReport = async (summary: FinancialSummary) => {
-    try {
-      toast.loading(t('reports.generating_weekly'), { id: 'weekly-report' });
-
-      const currentDate = new Date();
-      const weekStart = new Date(currentDate);
-      weekStart.setDate(currentDate.getDate() - currentDate.getDay()); // Start of week (Sunday)
-      weekStart.setHours(0, 0, 0, 0);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6); // End of week (Saturday)
-      weekEnd.setHours(23, 59, 59, 999);
-
-      // Get all sessions for the week
-      const { data: sessions } = await supabase
-        .from('cash_register_sessions')
-        .select(`
-          id,
-          employee_id,
-          opening_amount,
-          closing_amount,
-          opened_at,
-          closed_at,
-          status,
-          employee_profiles!inner(full_name)
-        `)
-        .gte('opened_at', weekStart.toISOString())
-        .lte('opened_at', weekEnd.toISOString())
-        .order('opened_at', { ascending: true });
-
-      // Get all expenses for the week
-      const { data: expenses } = await supabase
-        .from('expenses')
-        .select('*')
-        .gte('created_at', weekStart.toISOString())
-        .lte('created_at', weekEnd.toISOString())
-        .order('created_at', { ascending: true });
-
-      // Group sessions by day
-      const dailySessions = (sessions || []).reduce((acc: any, session) => {
-        const date = new Date(session.opened_at).toDateString();
-        const employeeKey = `${date}-${session.employee_id}`;
-
-        if (!acc[employeeKey]) {
-          acc[employeeKey] = {
-            date,
-            employee_id: session.employee_id,
-            employee_profiles: session.employee_profiles,
-            employee_name: (session.employee_profiles as any)?.full_name || 'N/A',
-            sessions: [],
-            totalOpening: 0,
-            totalClosing: 0,
-            firstOpen: session.opened_at,
-            lastClose: session.closed_at,
-          };
-        }
-        acc[employeeKey].sessions.push(session);
-        acc[employeeKey].totalOpening += session.opening_amount;
-        if (session.closing_amount) {
-          acc[employeeKey].totalClosing += session.closing_amount;
-        }
-        if (new Date(session.opened_at) < new Date(acc[employeeKey].firstOpen)) {
-          acc[employeeKey].firstOpen = session.opened_at;
-        }
-        if (session.closed_at && (!acc[employeeKey].lastClose || new Date(session.closed_at) > new Date(acc[employeeKey].lastClose))) {
-          acc[employeeKey].lastClose = session.closed_at;
-        }
-        return acc;
-      }, {});
-
-      // Create Excel workbook
-      const wb = XLSX.utils.book_new();
-
-      // Company Header Sheet
-      const headerData = [
-        [t('reports.company_info')],
-        [''],
-        ...(companySettings ? [
-          [t('reports.company'), companySettings.company_name],
-          [t('Dirección'), companySettings.address || t('reports.not_specified')],
-          [t('reports.phone'), companySettings.phone || t('reports.not_specified')],
-          [''],
-        ] : [
-          [t('reports.company'), t('reports.not_configured')],
-          [''],
-        ]),
-        [t('reports.weekly_operations')],
-        [''],
-        [t('reports.report_period'), `${weekStart.toLocaleDateString('es-ES')} - ${weekEnd.toLocaleDateString('es-ES')}`],
-        [t('reports.week_of_year'), `${t('reports.week')} ${Math.ceil((currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))}`],
-        [t('reports.generation_time'), currentDate.toLocaleTimeString('es-ES')],
-        [t('reports.generated_by'), profile?.full_name || t('reports.system')],
-        [''],
-        ['═'.repeat(60)],
-        [t('reports.weekly_executive_summary')],
-        ['═'.repeat(60)]
-      ];
-
-      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
-      wsHeader['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-        { s: { r: 9, c: 0 }, e: { r: 9, c: 4 } },
-        { s: { r: 10, c: 0 }, e: { r: 10, c: 4 } }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsHeader, t('reports.cover_sheet'));
-
-      // Summary Sheet
-      const summaryData = [
-        [t('reports.weekly_financial_summary')],
-        [''],
-        [t('reports.indicator'), t('reports.value'), t('reports.detail'), t('reports.comparison')],
-        [t('reports.total_sales'), `$${summary.sales.toFixed(2)}`, t('reports.gross_income_week'), '📈'],
-        [t('reports.total_expenses'), `$${summary.expenses.toFixed(2)}`, `${expenses?.length || 0} ${t('reports.expenses_registered')}`, '📉'],
-        [t('reports.net_profit'), `$${summary.profit.toFixed(2)}`, t('reports.sales_minus_expenses'), '🎯'],
-        [t('reports.profit_margin'), `${summary.profit_margin.toFixed(2)}%`, t('reports.operational_efficiency'), '⭐'],
-        [t('reports.active_employees'), Object.keys(dailySessions).length, t('reports.with_activity_week'), '👥'],
-        [t('reports.cash_sessions'), Object.values(dailySessions).reduce((sum: number, emp: any) => sum + emp.sessions.length, 0), t('reports.total_cash_openings'), '💼'],
-        [t('reports.daily_average'), `$${(summary.sales / 7).toFixed(2)}`, t('reports.average_sales_per_day'), '📅']
-      ];
-
-      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      wsSummary['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsSummary, t('reports.summary_sheet'));
-
-      // Daily Breakdown Sheet
-      if (Object.keys(dailySessions).length > 0) {
-        const dailyBreakdown = [
-          [t('reports.daily_summary_by_employee')],
-          [''],
-          [t('reports.date'), t('reports.employee'), t('reports.sessions'), t('reports.opening'), t('reports.closing'), t('reports.income'), t('reports.expenses'), t('reports.balance')]
-        ];
-
-        // Group by date and calculate daily totals
-        const dailyTotals: any = {};
-        Object.values(dailySessions).forEach((emp: any) => {
-          const date = new Date(emp.date).toLocaleDateString('es-ES');
-          if (!dailyTotals[date]) {
-            dailyTotals[date] = { sales: 0, expenses: 0, sessions: 0 };
-          }
-          dailyTotals[date].sessions += emp.sessions.length;
-        });
-
-        Object.entries(dailySessions).forEach(([key, emp]: [string, any]) => {
-          const date = new Date(emp.date).toLocaleDateString('es-ES');
-          dailyBreakdown.push([
-            date,
-            emp.employee_name,
-            emp.sessions.length,
-            new Date(emp.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            emp.lastClose ? new Date(emp.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : t('reports.pending'),
-            `$${emp.totalOpening.toFixed(2)}`,
-            `$${emp.totalClosing.toFixed(2)}`,
-            `$${(emp.totalClosing - emp.totalOpening).toFixed(2)}`
-          ]);
-        });
-
-        const wsDaily = XLSX.utils.aoa_to_sheet(dailyBreakdown);
-        wsDaily['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsDaily, t('reports.daily_breakdown_sheet'));
-      }
-
-      // Expenses Detail Sheet
-      if (expenses && expenses.length > 0) {
-        const expensesData = [
-          [t('reports.weekly_expenses_breakdown')],
-          [''],
-          [t('reports.date'), t('reports.description'), t('reports.category'), t('reports.amount'), t('reports.day_of_week')]
-        ];
-
-        expenses.forEach(expense => {
-          const expenseDate = new Date(expense.created_at);
-          expensesData.push([
-            expenseDate.toLocaleDateString('es-ES'),
-            expense.description,
-            expense.category,
-            `$${expense.amount.toFixed(2)}`,
-            expenseDate.toLocaleDateString('es-ES', { weekday: 'long' })
-          ]);
-        });
-
-        const wsExpenses = XLSX.utils.aoa_to_sheet(expensesData);
-        wsExpenses['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsExpenses, t('reports.detailed_expenses_sheet'));
-      }
-
-      // Generate filename with timestamp
-      const weekNumber = Math.ceil((currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
-      const filename = `Reporte_Semanal_CoffeeShop_Semana_${weekNumber}_${currentDate.getFullYear()}.xlsx`;
-
-      // Save file
-      XLSX.writeFile(wb, filename);
-
-      toast.success(t('reports.weekly_generated_success'), { id: 'weekly-report' });
-    } catch (error) {
-      console.error('Error generating weekly report:', error);
-      toast.error(t('reports.error_generating_weekly'), { id: 'weekly-report' });
-    }
+  const generateDailyReport = async (_summary?: FinancialSummary) => {
+    const todayBusiness = getBusinessDateStr();
+    const { startIso, endIso } = getBusinessDayRange(todayBusiness);
+    await generateCorporateExcelReport({
+      periodType: 'daily',
+      startIso,
+      endIso,
+      periodLabel: `Journalier (${todayBusiness})`,
+      filename: `Rapport_Journalier_LIN-Caisse_${todayBusiness}.xlsx`,
+      toastId: 'daily-report'
+    });
   };
 
-  const generateMonthlyReport = async (monthlySummary: FinancialSummary) => {
-    try {
-      toast.loading(t('reports.generating_monthly'), { id: 'monthly-report' });
+  const generateWeeklyReport = async (_summary?: FinancialSummary) => {
+    const { startIso, endIso } = getBusinessWeekRange();
+    const weekStartStr = new Date(startIso).toLocaleDateString('fr-FR').replace(/\//g, '-');
+    const weekEndStr = new Date(endIso).toLocaleDateString('fr-FR').replace(/\//g, '-');
+    await generateCorporateExcelReport({
+      periodType: 'weekly',
+      startIso,
+      endIso,
+      periodLabel: `Hebdomadaire (${weekStartStr} au ${weekEndStr})`,
+      filename: `Rapport_Hebdomadaire_LIN-Caisse_${weekStartStr}_au_${weekEndStr}.xlsx`,
+      toastId: 'weekly-report'
+    });
+  };
 
-      const currentDate = new Date();
-      const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
-
-      // Get all daily sessions for the month
-      const { data: sessions } = await supabase
-        .from('cash_register_sessions')
-        .select(`
-          id,
-          employee_id,
-          opening_amount,
-          closing_amount,
-          opened_at,
-          closed_at,
-          status,
-          employee_profiles!inner(full_name)
-        `)
-        .gte('opened_at', monthStart.toISOString())
-        .lte('opened_at', monthEnd.toISOString())
-        .order('opened_at', { ascending: true });
-
-      // Get all expenses for the month
-      const { data: expenses } = await supabase
-        .from('expenses')
-        .select('*')
-        .gte('created_at', monthStart.toISOString())
-        .lte('created_at', monthEnd.toISOString())
-        .order('created_at', { ascending: true });
-
-      // Group sessions by day
-      const dailySessions = (sessions || []).reduce((acc: any, session) => {
-        const date = new Date(session.opened_at).toDateString();
-        const employeeKey = `${date}-${session.employee_id}`;
-
-        if (!acc[employeeKey]) {
-          acc[employeeKey] = {
-            date,
-            employee_id: session.employee_id,
-            employee_profiles: session.employee_profiles,
-            employee_name: (session.employee_profiles as any)?.full_name || 'N/A',
-            sessions: [],
-            totalOpening: 0,
-            totalClosing: 0,
-            firstOpen: session.opened_at,
-            lastClose: session.closed_at,
-          };
-        }
-        acc[employeeKey].sessions.push(session);
-        acc[employeeKey].totalOpening += session.opening_amount;
-        if (session.closing_amount) {
-          acc[employeeKey].totalClosing += session.closing_amount;
-        }
-        if (new Date(session.opened_at) < new Date(acc[employeeKey].firstOpen)) {
-          acc[employeeKey].firstOpen = session.opened_at;
-        }
-        if (session.closed_at && (!acc[employeeKey].lastClose || new Date(session.closed_at) > new Date(acc[employeeKey].lastClose))) {
-          acc[employeeKey].lastClose = session.closed_at;
-        }
-        return acc;
-      }, {});
-
-      // Create Excel workbook
-      const wb = XLSX.utils.book_new();
-
-      // Company Header Sheet
-      const headerData = [
-        [t('reports.company_info')],
-        [''],
-        ...(companySettings ? [
-          [t('reports.company'), companySettings.company_name],
-          [t('Dirección'), companySettings.address || t('reports.not_specified')],
-          [t('reports.phone'), companySettings.phone || t('reports.not_specified')],
-          [''],
-        ] : [
-          [t('reports.company'), t('reports.not_configured')],
-          [''],
-        ]),
-        [t('reports.monthly_operations')],
-        [''],
-        [t('reports.report_period'), `${monthStart.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`],
-        [t('reports.month_of_year'), currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })],
-        [t('reports.generation_time'), currentDate.toLocaleTimeString('es-ES')],
-        [t('reports.generated_by'), profile?.full_name || t('reports.system')],
-        [''],
-        ['═'.repeat(60)],
-        [t('reports.monthly_executive_summary')],
-        ['═'.repeat(60)]
-      ];
-
-      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
-      wsHeader['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-        { s: { r: 9, c: 0 }, e: { r: 9, c: 4 } },
-        { s: { r: 10, c: 0 }, e: { r: 10, c: 4 } }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsHeader, t('reports.cover_sheet'));
-
-      // Summary Sheet
-      const summaryData = [
-        [t('reports.monthly_financial_summary')],
-        [''],
-        [t('reports.indicator'), t('reports.value'), t('reports.detail'), t('reports.trend')],
-        [t('reports.total_sales'), `$${monthlySummary.sales.toFixed(2)}`, t('reports.gross_income_month'), '📈'],
-        [t('reports.total_expenses'), `$${monthlySummary.expenses.toFixed(2)}`, `${expenses?.length || 0} ${t('reports.expenses_registered')}`, '📉'],
-        [t('reports.net_profit'), `$${monthlySummary.profit.toFixed(2)}`, t('reports.sales_minus_expenses'), '🎯'],
-        [t('reports.profit_margin'), `${monthlySummary.profit_margin.toFixed(2)}%`, t('reports.monthly_operational_efficiency'), '⭐'],
-        [t('reports.operation_days'), new Set(Object.values(dailySessions).map((emp: any) => emp.date)).size, t('reports.days_with_activity'), '🗓️'],
-        [t('reports.active_employees'), Object.keys(dailySessions).length, t('reports.with_sessions_this_month'), '👥'],
-        [t('reports.total_sessions'), Object.values(dailySessions).reduce((sum: number, emp: any) => sum + emp.sessions.length, 0), t('reports.cash_openings'), '💼'],
-        [t('reports.daily_average'), `$${(monthlySummary.sales / new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()).toFixed(2)}`, t('reports.average_sales_per_day'), '📅']
-      ];
-
-      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      wsSummary['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsSummary, t('reports.summary_sheet'));
-
-      // Daily Performance Sheet
-      if (Object.keys(dailySessions).length > 0) {
-        const performanceData = [
-          [t('reports.daily_performance_by_employee')],
-          [''],
-          [t('reports.date'), t('reports.employee'), t('reports.sessions'), t('reports.opening'), t('reports.closing'), t('reports.income'), t('reports.expenses'), t('reports.daily_balance')]
-        ];
-
-        // Group by date for daily totals
-        const dailyTotals: any = {};
-        Object.values(dailySessions).forEach((emp: any) => {
-          const date = new Date(emp.date).toLocaleDateString('es-ES');
-          if (!dailyTotals[date]) {
-            dailyTotals[date] = { totalOpening: 0, totalClosing: 0, employees: 0 };
-          }
-          dailyTotals[date].totalOpening += emp.totalOpening;
-          dailyTotals[date].totalClosing += emp.totalClosing;
-          dailyTotals[date].employees += 1;
-        });
-
-        Object.entries(dailySessions).forEach(([key, emp]: [string, any]) => {
-          const date = new Date(emp.date).toLocaleDateString('es-ES');
-          performanceData.push([
-            date,
-            emp.employee_name,
-            emp.sessions.length,
-            new Date(emp.firstOpen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            emp.lastClose ? new Date(emp.lastClose).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : t('reports.pending'),
-            `$${emp.totalOpening.toFixed(2)}`,
-            `$${emp.totalClosing.toFixed(2)}`,
-            `$${(emp.totalClosing - emp.totalOpening).toFixed(2)}`
-          ]);
-        });
-
-        // Add daily totals row
-        performanceData.push([''], [t('reports.daily_totals')]);
-        Object.entries(dailyTotals).forEach(([date, totals]: [string, any]) => {
-          performanceData.push([
-            date,
-            `${totals.employees} ${t('reports.employees')}`,
-            '-',
-            '-',
-            '-',
-            `$${totals.totalOpening.toFixed(2)}`,
-            `$${totals.totalClosing.toFixed(2)}`,
-            `$${(totals.totalClosing - totals.totalOpening).toFixed(2)}`
-          ]);
-        });
-
-        const wsPerformance = XLSX.utils.aoa_to_sheet(performanceData);
-        wsPerformance['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsPerformance, t('reports.daily_performance_sheet'));
-      }
-
-      // Monthly Expenses Breakdown
-      if (expenses && expenses.length > 0) {
-        // Group expenses by category
-        const expensesByCategory: any = {};
-        expenses.forEach(expense => {
-          if (!expensesByCategory[expense.category]) {
-            expensesByCategory[expense.category] = { total: 0, count: 0, items: [] };
-          }
-          expensesByCategory[expense.category].total += expense.amount;
-          expensesByCategory[expense.category].count += 1;
-          expensesByCategory[expense.category].items.push(expense);
-        });
-
-        const expensesData = [
-          [t('reports.expenses_analysis_by_category')],
-          [''],
-          [t('reports.category'), t('reports.total'), t('reports.number_of_expenses'), t('reports.percentage_of_total')]
-        ];
-
-        const totalExpensesAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-        Object.entries(expensesByCategory).forEach(([category, data]: [string, any]) => {
-          expensesData.push([
-            category,
-            `$${data.total.toFixed(2)}`,
-            data.count,
-            `${((data.total / totalExpensesAmount) * 100).toFixed(2)}%`
-          ]);
-        });
-
-        const wsExpenses = XLSX.utils.aoa_to_sheet(expensesData);
-        wsExpenses['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsExpenses, t('reports.expenses_category_sheet'));
-      }
-
-      // Generate filename with month and year
-      const monthName = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-      const filename = `Reporte_Mensual_CoffeeShop_${monthName.replace(/ /g, '_')}.xlsx`;
-
-      // Save file
-      XLSX.writeFile(wb, filename);
-
-      toast.success(t('reports.monthly_generated_success'), { id: 'monthly-report' });
-    } catch (error) {
-      console.error('Error generating monthly report:', error);
-      toast.error(t('reports.error_generating_monthly'), { id: 'monthly-report' });
-    }
+  const generateMonthlyReport = async (_summary?: FinancialSummary) => {
+    const { startIso, endIso } = getBusinessMonthRange();
+    const monthYearStr = new Date(startIso).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    const year = new Date(startIso).getFullYear();
+    const month = String(new Date(startIso).getMonth() + 1).padStart(2, '0');
+    await generateCorporateExcelReport({
+      periodType: 'monthly',
+      startIso,
+      endIso,
+      periodLabel: `Mensuel (${monthYearStr})`,
+      filename: `Rapport_Mensuel_LIN-Caisse_${year}_${month}.xlsx`,
+      toastId: 'monthly-report'
+    });
   };
 
   const exportToExcel = async () => {
-    try {
-      toast.loading(t('reports.generating_excel'), { id: 'export' });
-
-      // Fetch all data
-      const [ordersData, sessionsData, expensesData, employeesData, productsData] = await Promise.all([
-        supabase.from('orders').select(`
-          id, total, status, created_at, employee_id,
-          employee_profiles!inner(full_name, role),
-          order_items(quantity, products(name))
-        `).neq('employee_profiles.role', 'super_admin').order('created_at', { ascending: false }),
-        supabase.from('cash_register_sessions').select(`
-          id, opening_amount, closing_amount, opened_at, closed_at, status, employee_id,
-          employee_profiles!inner(full_name, role)
-        `).neq('employee_profiles.role', 'super_admin').order('opened_at', { ascending: false }),
-        supabase.from('expenses').select('*').order('created_at', { ascending: false }),
-        supabase.from('employee_profiles').select('*').neq('role', 'super_admin'),
-        supabase.from('products').select(`
-          id, name, base_price, available, created_at,
-          categories!inner(name)
-        `)
-      ]);
-
-      // Create workbook
-      const wb = XLSX.utils.book_new();
-
-      // Company Header Sheet
-      const currentDate = new Date();
-      const headerData = [
-        [t('reports.company_info')],
-        [''],
-        ...(companySettings ? [
-          [t('reports.company'), companySettings.company_name],
-          [t('Dirección'), companySettings.address || t('reports.not_specified')],
-          [t('reports.phone'), companySettings.phone || t('reports.not_specified')],
-          [''],
-        ] : [
-          [t('reports.company'), t('reports.not_configured')],
-          [''],
-        ]),
-        [t('reports.complete_data_export')],
-        [''],
-        [t('reports.export_date'), currentDate.toLocaleDateString('es-ES')],
-        [t('reports.time'), currentDate.toLocaleTimeString('es-ES')],
-        [t('reports.generated_by'), profile?.full_name || t('reports.system')],
-        [''],
-        ['═'.repeat(60)],
-        [t('reports.general_information')],
-        ['═'.repeat(60)],
-        [''],
-        [t('reports.file_contains_all_data')],
-        [t('reports.sheets_included')]
-      ];
-
-      const wsHeader = XLSX.utils.aoa_to_sheet(headerData);
-      wsHeader['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-      ];
-      XLSX.utils.book_append_sheet(wb, wsHeader, t('reports.information_sheet'));
-
-      // Orders sheet
-      if (ordersData.data) {
-        const ordersFormatted = ordersData.data.map(order => ({
-          [t('reports.order_id')]: order.id,
-          [t('reports.date')]: new Date(order.created_at).toLocaleString('es-ES'),
-          [t('reports.status')]: order.status,
-          [t('reports.total')]: order.total,
-          [t('reports.employee')]: (order.employee_profiles as any)?.full_name || 'N/A',
-          [t('reports.items')]: (order.order_items as any[])?.map((item: any) =>
-            `${item.quantity}x ${(Array.isArray(item.products) ? item.products[0]?.name : item.products?.name) || t('reports.product')}`
-          ).join('; ') || ''
-        }));
-        const wsOrders = XLSX.utils.json_to_sheet(ordersFormatted);
-        XLSX.utils.book_append_sheet(wb, wsOrders, t('reports.orders_sheet'));
-      }
-
-      // Cash Sessions sheet
-      if (sessionsData.data) {
-        const sessionsFormatted = sessionsData.data.map(session => ({
-          [t('reports.session_id')]: session.id,
-          [t('reports.employee')]: (session.employee_profiles as any)?.full_name || 'N/A',
-          [t('reports.initial_amount')]: session.opening_amount,
-          [t('reports.final_amount')]: session.closing_amount || 0,
-          [t('reports.opening_date')]: new Date(session.opened_at).toLocaleString('es-ES'),
-          [t('reports.closing_date')]: session.closed_at ? new Date(session.closed_at).toLocaleString('es-ES') : t('reports.open'),
-          [t('reports.status')]: session.status,
-          [t('reports.balance')]: (session.closing_amount || 0) - session.opening_amount
-        }));
-        const wsSessions = XLSX.utils.json_to_sheet(sessionsFormatted);
-        XLSX.utils.book_append_sheet(wb, wsSessions, t('reports.cash_sessions_sheet'));
-      }
-
-      // Expenses sheet
-      if (expensesData.data) {
-        const expensesFormatted = expensesData.data.map(expense => ({
-          [t('reports.id')]: expense.id,
-          [t('reports.description')]: expense.description,
-          [t('reports.amount')]: expense.amount,
-          [t('reports.category')]: expense.category,
-          [t('reports.date')]: new Date(expense.created_at).toLocaleString('es-ES')
-        }));
-        const wsExpenses = XLSX.utils.json_to_sheet(expensesFormatted);
-        XLSX.utils.book_append_sheet(wb, wsExpenses, t('reports.expenses_sheet'));
-      }
-
-      // Employees sheet
-      if (employeesData.data) {
-        const employeesFormatted = employeesData.data.map(emp => ({
-          [t('reports.id')]: emp.id,
-          [t('reports.full_name')]: emp.full_name,
-          [t('reports.role')]: emp.role,
-          [t('reports.email')]: emp.email || '',
-          [t('reports.phone')]: emp.phone || '',
-          [t('reports.active')]: emp.active ? t('reports.yes') : t('reports.no'),
-          [t('reports.creation_date')]: new Date(emp.created_at).toLocaleString('es-ES'),
-          [t('reports.last_update')]: new Date(emp.updated_at).toLocaleString('es-ES')
-        }));
-        const wsEmployees = XLSX.utils.json_to_sheet(employeesFormatted);
-        XLSX.utils.book_append_sheet(wb, wsEmployees, t('reports.employees_sheet'));
-      }
-
-      // Products sheet
-      if (productsData.data) {
-        const productsFormatted = productsData.data.map(product => ({
-          [t('reports.id')]: product.id,
-          [t('reports.name')]: product.name,
-          [t('reports.base_price')]: product.base_price,
-          [t('reports.category')]: (product.categories as any)?.name || t('reports.no_category'),
-          [t('reports.available')]: product.available ? t('reports.yes') : t('reports.no'),
-          [t('reports.creation_date')]: new Date(product.created_at).toLocaleString('es-ES')
-        }));
-        const wsProducts = XLSX.utils.json_to_sheet(productsFormatted);
-        XLSX.utils.book_append_sheet(wb, wsProducts, t('reports.products_sheet'));
-      }
-
-      // Financial Summary sheet
-      const financialData = [
-        {
-          [t('reports.period')]: t('Hoy'),
-          [t('reports.sales')]: financialSummary[0]?.sales || 0,
-          [t('reports.expenses')]: financialSummary[0]?.expenses || 0,
-          [t('reports.profit')]: financialSummary[0]?.profit || 0,
-          [t('reports.margin_percentage')]: financialSummary[0]?.profit_margin || 0
-        },
-        {
-          [t('reports.period')]: t('Esta Semana'),
-          [t('reports.sales')]: financialSummary[1]?.sales || 0,
-          [t('reports.expenses')]: financialSummary[1]?.expenses || 0,
-          [t('reports.profit')]: financialSummary[1]?.profit || 0,
-          [t('reports.margin_percentage')]: financialSummary[1]?.profit_margin || 0
-        },
-        {
-          [t('reports.period')]: t('Este Mes'),
-          [t('reports.sales')]: financialSummary[2]?.sales || 0,
-          [t('reports.expenses')]: financialSummary[2]?.expenses || 0,
-          [t('reports.profit')]: financialSummary[2]?.profit || 0,
-          [t('reports.margin_percentage')]: financialSummary[2]?.profit_margin || 0
-        }
-      ];
-      const wsFinancial = XLSX.utils.json_to_sheet(financialData);
-      XLSX.utils.book_append_sheet(wb, wsFinancial, t('reports.financial_summary_sheet'));
-
-      // Generate filename with timestamp
-      const timestamp = new Date().toISOString().split('T')[0];
-      const filename = `CoffeeShop_Report_${timestamp}.xlsx`;
-
-      // Save file directly without opening new window
-      XLSX.writeFile(wb, filename);
-
-      toast.success(t('reports.excel_generated_success'), { id: 'export' });
-    } catch (error) {
-      console.error('Error exporting to Excel:', error);
-      toast.error(t('reports.error_generating_excel'), { id: 'export' });
-    }
+    const todayBusiness = getBusinessDateStr();
+    const { endIso } = getBusinessDayRange(todayBusiness);
+    // Export global complet
+    const startIso = new Date('2020-01-01T00:00:00.000Z').toISOString();
+    await generateCorporateExcelReport({
+      periodType: 'general',
+      startIso,
+      endIso,
+      periodLabel: 'Audit Global Complet',
+      filename: `Rapport_Global_Complet_LIN-Caisse_${todayBusiness}.xlsx`,
+      toastId: 'export'
+    });
   };
 
   const fetchOccupiedTables = async () => {

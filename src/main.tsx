@@ -40,22 +40,24 @@ export const clearAllCookies = () => {
 };
 
 export const purgeCacheAndReload = async () => {
-  console.log('🚀 Ejecutando purga total de caché PWA y recarga limpia...');
+  console.log('🚀 Ejecutando actualización y recarga limpia de la aplicación...');
   try {
+    // 1. Desregistrar Service Workers existentes para que no intercepten con errores
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(reg => reg.unregister()));
+    }
+    // 2. Limpiar cachés
     if ('caches' in window) {
       const names = await caches.keys();
       await Promise.all(names.map(name => caches.delete(name)));
     }
-    if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map(reg => reg.update()));
-    }
   } catch (err) {
     console.warn('Error purgando cachés PWA:', err);
   } finally {
-    // Forzar al navegador a descartar el index.html previo de memoria y pedir versión fresca
+    // Recarga limpia directa al origen sin query params que causen conflicto de enrutamiento
     const cleanUrl = window.location.origin + window.location.pathname;
-    window.location.replace(`${cleanUrl}?_r=${Date.now()}`);
+    window.location.href = cleanUrl;
   }
 };
 
