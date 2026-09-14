@@ -137,14 +137,27 @@ export interface InventoryIssueItem {
   created_at: string;
 }
 
+export type PrintJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type TicketType = 'kitchen' | 'invoice' | 'receipt';
+
+export interface ConnectedDevice {
+  device_id: string;
+  employee_id: string | null;
+  device_name: string;
+  app_version: string;
+  last_seen: string;
+  force_reload: boolean;
+  employee_profiles?: EmployeeProfile; // Join
+}
+
 export interface PrintJob {
   id: string;
   order_id: string | null;
-  ticket_type: 'kitchen' | 'invoice' | 'receipt';
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  ticket_type: TicketType;
+  status: PrintJobStatus;
   error_message: string | null;
   printer_target: string | null;
   content: any;
   created_at: string;
   updated_at: string;
-}
+}

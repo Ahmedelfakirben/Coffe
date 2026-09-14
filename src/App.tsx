@@ -27,7 +27,10 @@ import { TableManager } from './components/TableManager';
 import { EconomatDashboard } from './components/economat/EconomatDashboard';
 import { PrintServer } from './components/PrintServer';
 import { PrintMonitor } from './components/PrintMonitor';
+import { DeviceManager } from './components/DeviceManager';
 import { supabase } from './lib/supabase';
+import { registerDevice, listenForForceReload } from './lib/deviceService';
+import { purgeCacheAndReload } from './main';
 
 function AppContent() {
   const { user, profile, loading } = useAuth();
@@ -61,7 +64,7 @@ function AppContent() {
             'floor', 'pos', 'orders', 'products', 'categories', 'users',
             'suppliers', 'expenses', 'time-tracking', 'analytics', 'cash',
             'tables', 'role-management', 'company-settings', 'app-settings',
-            'cash', 'expenses', 'time-tracking', 'server', 'backup', 'economat', 'print-monitor'
+            'server', 'backup', 'economat', 'print-monitor', 'device-manager'
           ];
           allPages.forEach(p => { permissionsMap[p] = true; });
         }
@@ -168,6 +171,21 @@ function AppContent() {
 
   const hasPermission = (pageId: string) => profile?.role === 'super_admin' || !!userPermissions[pageId];
 
+  // Device Tracking: Registrar dispositivo y escuchar comandos nucleares
+  useEffect(() => {
+    // Registrar el dispositivo (con o sin profile)
+    registerDevice(profile?.id);
+
+    // Escuchar comandos de recarga forzada para este dispositivo
+    const unsubscribe = listenForForceReload(() => {
+      purgeCacheAndReload();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [profile?.id]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -207,6 +225,7 @@ function AppContent() {
         {currentView === 'backup' && hasPermission('backup') && <BackupManager />}
         {currentView === 'economat' && hasPermission('economat') && <EconomatDashboard />}
         {currentView === 'print-monitor' && hasPermission('print-monitor') && <PrintMonitor />}
+        {currentView === 'device-manager' && hasPermission('device-manager') && <DeviceManager />}
       </div>
 
       <Toaster

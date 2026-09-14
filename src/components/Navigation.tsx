@@ -96,6 +96,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
       name: t('nav.system'),
       items: [
         { id: 'print-monitor', label: t('Monitor de Impresión'), icon: Printer, roles: ['super_admin'] },
+        { id: 'device-manager', label: t('Gestor Dispositivos'), icon: Server, roles: ['super_admin'] },
         { id: 'role-management', label: t('nav.role-management'), icon: Shield, roles: ['super_admin'] },
         { id: 'company-settings', label: t('nav.company-settings'), icon: Building2, roles: ['super_admin'] },
         { id: 'app-settings', label: t('nav.app-settings'), icon: Settings, roles: ['super_admin'] },
