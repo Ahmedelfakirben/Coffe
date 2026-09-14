@@ -545,6 +545,8 @@ export function POS() {
         size: ci.size?.size_name,
         quantity: ci.quantity,
         price: ci.product.base_price + (ci.size?.price_modifier || 0),
+        product: ci.product,
+        notes: ci.notes
       }));
 
       // helpers están definidos fuera
