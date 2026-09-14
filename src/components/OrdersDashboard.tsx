@@ -178,17 +178,17 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
     }
   }, [ticketData]);
 
-  // Function to get the last 2 AM timestamp (24-hour window for cashiers)
-  const getLast2AMTimestamp = () => {
+  // Function to get the last 4 AM timestamp (24-hour window for cashiers)
+  const getLast4AMTimestamp = () => {
     const now = new Date();
-    const today2AM = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 2, 0, 0);
+    const today4AM = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0);
     
-    // If current time is before 2 AM today, use yesterday's 2 AM
-    if (now < today2AM) {
-      today2AM.setDate(today2AM.getDate() - 1);
+    // If current time is before 4 AM today, use yesterday's 4 AM
+    if (now < today4AM) {
+      today4AM.setDate(today4AM.getDate() - 1);
     }
     
-    return today2AM.toISOString();
+    return today4AM.toISOString();
   };
 
   useEffect(() => {
@@ -300,8 +300,8 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
       if (startDate) {
         query = query.gte('created_at', startDate);
       } else {
-        // Por defecto: mostrar solo desde las 2 AM del día actual
-        query = query.gte('created_at', getLast2AMTimestamp());
+        // Por defecto: mostrar solo desde las 4 AM del día actual
+        query = query.gte('created_at', getLast4AMTimestamp());
       }
       if (endDate) {
         // Add one day to end date to include the entire end date
@@ -383,10 +383,10 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
         `)
         .order('created_at', { ascending: false });
 
-      // Mostrar últimas 24 horas desde las 2 AM en vista actual
+      // Mostrar últimas 24 horas desde las 4 AM en vista actual
       if (viewMode === 'current') {
-        const last2AM = getLast2AMTimestamp();
-        query = query.gte('created_at', last2AM);
+        const last4AM = getLast4AMTimestamp();
+        query = query.gte('created_at', last4AM);
       }
 
       // Si el usuario es camarero, solo ver sus propias órdenes
@@ -394,7 +394,7 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
         query = query.eq('employee_id', user.id);
       }
 
-      query = query.limit(50);
+      query = query.limit(300); // Aumentado para evitar que los pedidos antiguos desaparezcan en días con mucho volumen
 
       const { data, error } = await query;
 
