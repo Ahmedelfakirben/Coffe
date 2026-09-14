@@ -613,7 +613,7 @@ export function POS() {
           orderDate: new Date(),
           orderNumber: existingOrder.order_number ? `#${existingOrder.order_number.toString().padStart(3, '0')}` : `#${activeOrderId.slice(-3).toUpperCase()}`,
           items: ticketItems,
-          total: newTotal,
+          total: deltaTotal, // Muestra solo el total añadido
           paymentMethod: 'En attente',
           cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
         };
@@ -736,9 +736,36 @@ export function POS() {
         serviceType
       });
 
-      // Imprimir ticket de cobro final
-      const printPayload = { ticketData: updatedTicketData };
-      await enqueuePrintJob(activeOrderId, 'receipt', printPayload);
+      // Imprimir ticket de cobro final con todos los productos del pedido acumulado
+      const { data: fullOrder } = await supabase
+        .from('orders')
+        .select(`
+          total,
+          created_at,
+          order_number,
+          order_items (quantity, unit_price, products(name), product_sizes(size_name))
+        `)
+        .eq('id', activeOrderId)
+        .single();
+        
+      if (fullOrder) {
+        const fullItems = fullOrder.order_items.map((i: any) => ({
+          name: Array.isArray(i.products) ? i.products[0]?.name : i.products?.name,
+          size: Array.isArray(i.product_sizes) ? i.product_sizes[0]?.size_name : i.product_sizes?.size_name,
+          quantity: i.quantity,
+          price: i.unit_price,
+        }));
+        
+        const fullTicketData = {
+          ...updatedTicketData,
+          items: fullItems,
+          total: typeof fullOrder.total === 'string' ? parseFloat(fullOrder.total) : fullOrder.total,
+          orderDate: new Date(fullOrder.created_at)
+        };
+        await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: fullTicketData });
+      } else {
+        await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: updatedTicketData });
+      }
 
       setShowPaymentModal(false);
       setPendingOrderData(null);
