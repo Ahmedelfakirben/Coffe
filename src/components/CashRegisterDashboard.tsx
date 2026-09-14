@@ -44,11 +44,12 @@ interface WaiterReport {
   employeeId: string;
   employeeName: string;
   role: string;
-  isSystem?: boolean;
   totalOrders: number;
   completedOrders: number;
   pendingOrders: number;
+  cancelledOrders: number;
   totalSales: number;
+  isSystem: boolean;
   orders: Array<{
     id: string;
     order_number: number | null;
@@ -1215,11 +1216,12 @@ export function CashRegisterDashboard() {
         employeeId: SYSTEM_ID,
         employeeName: t('Sistema') || 'Sistema',
         role: 'super_admin',
-        isSystem: true,
         totalOrders: 0,
         completedOrders: 0,
         pendingOrders: 0,
+        cancelledOrders: 0,
         totalSales: 0,
+        isSystem: true,
         orders: [],
       };
       reportsMap.set(SYSTEM_ID, systemReport);
@@ -1233,11 +1235,12 @@ export function CashRegisterDashboard() {
             employeeId: emp.id,
             employeeName: emp.full_name || 'Empleado',
             role: emp.role || 'camarero',
-            isSystem: false,
             totalOrders: 0,
             completedOrders: 0,
             pendingOrders: 0,
+            cancelledOrders: 0,
             totalSales: 0,
+            isSystem: false,
             orders: [],
           });
         }
@@ -1256,7 +1259,9 @@ export function CashRegisterDashboard() {
         if (ord.status === 'completed') {
           report.completedOrders += 1;
           report.totalSales += orderTotal;
-        } else if (ord.status !== 'cancelled') {
+        } else if (ord.status === 'cancelled') {
+          report.cancelledOrders += 1;
+        } else {
           report.pendingOrders += 1;
         }
 
@@ -1325,6 +1330,9 @@ export function CashRegisterDashboard() {
         <div style="margin-bottom: 5px; color: orange;">
           <strong>En attente:</strong> ${report.pendingOrders}
         </div>
+        <div style="margin-bottom: 5px; color: red;">
+          <strong>Annulées:</strong> ${report.cancelledOrders}
+        </div>
 
         <div style="margin-bottom: 10px; padding: 8px; background-color: #e8f5e9; border: 1px solid #4caf50; font-size: 16px;">
           <strong>TOTAL VENTES:</strong> ${formatCurrency(report.totalSales)}
@@ -1334,9 +1342,9 @@ export function CashRegisterDashboard() {
         <div style="margin-bottom: 10px; font-weight: bold;">DÉTAIL DES COMMANDES:</div>
 
         ${report.orders.map(ord => `
-          <div style="margin-bottom: 6px; border-bottom: 1px dashed #ccc; padding-bottom: 4px; font-size: 12px;">
+          <div style="margin-bottom: 6px; border-bottom: 1px dashed #ccc; padding-bottom: 4px; font-size: 12px; ${ord.status === 'cancelled' ? 'color: #999; text-decoration: line-through;' : ''}">
             <div><strong>#${ord.order_number ? String(ord.order_number).padStart(3, '0') : ord.id.slice(-6)}</strong> - ${new Date(ord.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (${ord.tableName ? 'Table ' + ord.tableName : 'À emporter'})</div>
-            <div>Statut: ${ord.status === 'completed' ? 'PAYÉE' : 'EN ATTENTE'}</div>
+            <div>Statut: <strong style="${ord.status === 'cancelled' ? 'color: red;' : ''}">${ord.status === 'completed' ? 'PAYÉE' : ord.status === 'cancelled' ? 'ANNULÉ' : 'EN ATTENTE'}</strong></div>
             <div style="font-weight: bold;">Total: ${formatCurrency(ord.total)}</div>
           </div>
         `).join('')}
