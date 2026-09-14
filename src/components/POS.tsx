@@ -95,7 +95,8 @@ export function POS() {
     setServiceType,
     setTableId,
     activeOrderId,
-    setActiveOrderId
+    setActiveOrderId,
+    setItemNotes
   } = useCart();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -117,7 +118,7 @@ export function POS() {
     paymentMethod: string;
     cashierName: string;
   } | null>(null);
-  const [existingItems, setExistingItems] = useState<Array<{ id: string; name: string; size?: string; quantity: number; price: number; subtotal: number }>>([]);
+  const [existingItems, setExistingItems] = useState<Array<{ id: string; name: string; size?: string; quantity: number; price: number; subtotal: number; notes?: string }>>([]);
   const [existingOrderTotal, setExistingOrderTotal] = useState<number>(0);
   const [existingOrderNumber, setExistingOrderNumber] = useState<number | null>(null);
   const [showMobileActiveModal, setShowMobileActiveModal] = useState(false);
@@ -132,6 +133,10 @@ export function POS() {
     paymentMethod: string;
     cashierName: string;
   } | null>(null);
+
+  // Estados para notas de productos en carrito
+  const [noteModalIndex, setNoteModalIndex] = useState<number | null>(null);
+  const [noteText, setNoteText] = useState<string>('');
 
   useEffect(() => {
     Promise.all([
@@ -253,7 +258,7 @@ export function POS() {
 
       const { data: items, error: itemsErr } = await supabase
         .from('order_items')
-        .select('id, quantity, unit_price, subtotal, size_id, product_id, products(name), product_sizes(size_name)')
+        .select('id, quantity, unit_price, subtotal, size_id, product_id, notes, products(name), product_sizes(size_name)')
         .eq('order_id', activeOrderId);
       if (itemsErr) throw itemsErr;
       const mapped = (items || []).map((it: any) => ({
@@ -263,6 +268,7 @@ export function POS() {
         quantity: it.quantity,
         price: typeof it.unit_price === 'string' ? parseFloat(it.unit_price) : (it.unit_price || 0),
         subtotal: typeof it.subtotal === 'string' ? parseFloat(it.subtotal) : (it.subtotal || 0),
+        notes: it.notes || undefined,
       }));
       setExistingItems(mapped);
     } catch (err) {
@@ -1201,6 +1207,43 @@ export function POS() {
           </div>
         </div>
       )}
+      {/* Modal de Notas para el carrito */}
+      {noteModalIndex !== null && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="font-bold text-gray-900 text-lg mb-4">
+              Ajouter une note à {cart[noteModalIndex]?.product?.name}
+            </h3>
+
+            <textarea
+              className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm focus:border-amber-500 outline-none resize-none mb-4"
+              rows={3}
+              placeholder="Écrire des instructions spéciales pour la cuisine..."
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+            />
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setNoteModalIndex(null); setNoteText(''); }}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => { 
+                  setItemNotes(noteModalIndex, noteText); 
+                  setNoteModalIndex(null); 
+                  setNoteText(''); 
+                }}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl text-sm transition-colors shadow-md"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Carrito Borrador en Móvil */}
       {showMobileCartModal && (
@@ -1239,14 +1282,24 @@ export function POS() {
                             {item.quantity}x {item.product.name}{item.size ? ` (${item.size.size_name})` : ''}
                           </h4>
                           <p className="text-xs text-gray-500">c/u {formatCurrency(itemUnitPrice)}</p>
+                          {item.notes && <p className="text-[11px] text-amber-600 font-bold italic mt-0.5">Nota: {item.notes}</p>}
                         </div>
-                        <button
-                          onClick={() => removeItem(actualIdx)}
-                          className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"
-                          title={t('Eliminar producto')}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => { setNoteModalIndex(actualIdx); setNoteText(item.notes || ''); }}
+                            className="text-amber-600 hover:bg-amber-50 p-1.5 rounded-lg transition-colors"
+                            title="Añadir nota"
+                          >
+                            <span className="text-sm">📝</span>
+                          </button>
+                          <button
+                            onClick={() => removeItem(actualIdx)}
+                            className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"
+                            title={t('Eliminar producto')}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
                         <div className="flex items-center gap-2 bg-amber-50/60 rounded-lg p-1 border border-amber-200">
@@ -1508,6 +1561,7 @@ export function POS() {
                           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
                             c/u {formatCurrency(it.price)}
                           </div>
+                          {it.notes && <div className="text-[11px] text-amber-600 font-bold italic mt-0.5">Nota: {it.notes}</div>}
                         </div>
                         {profile?.role !== 'waiter' && (
                           <button
@@ -1572,14 +1626,24 @@ export function POS() {
                         <p className="text-xs text-gray-500 mt-1 font-semibold">
                           c/u {formatCurrency(item.product.base_price + (item.size?.price_modifier || 0))}
                         </p>
+                        {item.notes && <p className="text-[11px] text-amber-600 font-bold italic mt-1">Nota: {item.notes}</p>}
                       </div>
-                      <button
-                        onClick={() => removeItem(cart.length - 1 - index)}
-                        className="text-red-500 hover:text-white hover:bg-red-500 p-2 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
-                        title="Eliminar producto"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setNoteModalIndex(cart.length - 1 - index); setNoteText(item.notes || ''); }}
+                          className="text-amber-600 hover:text-white hover:bg-amber-500 p-2 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
+                          title="Añadir nota"
+                        >
+                          📝
+                        </button>
+                        <button
+                          onClick={() => removeItem(cart.length - 1 - index)}
+                          className="text-red-500 hover:text-white hover:bg-red-500 p-2 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
+                          title="Eliminar producto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-1.5 border border-amber-200">
