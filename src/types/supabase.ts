@@ -135,4 +135,16 @@ export interface InventoryIssueItem {
   unit_cost: number;
   total_value: number;
   created_at: string;
+}
+
+export interface PrintJob {
+  id: string;
+  order_id: string | null;
+  ticket_type: 'kitchen' | 'invoice' | 'receipt';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error_message: string | null;
+  printer_target: string | null;
+  content: any;
+  created_at: string;
+  updated_at: string;
 }

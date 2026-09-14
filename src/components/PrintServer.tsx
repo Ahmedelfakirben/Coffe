@@ -1,22 +1,20 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { printKitchenRouting, printMainTicket, isOrderPrintedLocally } from '../lib/printerService';
+import { printKitchenRouting, printMainTicket } from '../lib/printerService';
 import { qzService } from '../lib/qzTray';
 
 export function PrintServer() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const processedOrders = useRef<Set<string>>(new Set());
-  const processedCompletedOrders = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Verificar si somos el servidor de impresión
     const isPrintServer = localStorage.getItem('print_server_active') === 'true';
     if (!isPrintServer) return;
 
-    console.log('🖨️ MODO SERVIDOR DE IMPRESIÓN ACTIVO: Escuchando nuevos pedidos...');
+    console.log('🖨️ MODO SERVIDOR DE IMPRESIÓN ACTIVO (SPOOLER): Escuchando cola de impresión...');
 
     // Inicializar y mantener viva la conexión QZ Tray
     const testQZConnection = async () => {
@@ -33,7 +31,6 @@ export function PrintServer() {
     };
     
     testQZConnection();
-    // Heartbeat cada 2 minutos para evitar desconexiones por inactividad
     const qzHeartbeat = setInterval(testQZConnection, 120000);
 
     const loadCompanyInfo = async () => {
@@ -53,203 +50,86 @@ export function PrintServer() {
       return { categories: categories || [], tables: tables || [] };
     };
 
-    const fetchOrderDetails = async (orderId: string) => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            id,
-            quantity,
-            unit_price,
-            product_id,
-            size_id,
-            notes,
-            products!product_id (
-              name,
-              category_id
-            ),
-            product_sizes!size_id (
-              size_name
-            )
-          )
-        `)
-        .eq('id', orderId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching order details for Print Server:', error);
-        return null;
-      }
-
-      if (data && data.employee_id) {
-        try {
-          const { data: emp } = await supabase
-            .from('employee_profiles')
-            .select('full_name')
-            .eq('id', data.employee_id)
-            .maybeSingle();
-          if (emp) {
-            data.employee_profiles = emp;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      return data;
-    };
-
-    const handleNewOrder = async (orderId: string) => {
-      // Retraso intencionado de 1.5s para evitar Condición de Carrera.
-      // Da tiempo a que el TPV reciba la respuesta HTTP y guarde el marcador local.
-      await new Promise(r => setTimeout(r, 1500));
-
-      if (isOrderPrintedLocally(orderId, 'kitchen')) {
-        console.log('ℹ️ PrintServer: Orden ya impresa localmente en este TPV. Omitiendo duplicado.');
-        return;
-      }
-
-      if (processedOrders.current.has(orderId)) return;
-      processedOrders.current.add(orderId);
-
+    const processPrintJob = async (jobId: string) => {
       try {
-        // Margen de 600ms para permitir que los order_items se inserten en la BD
-        await new Promise(r => setTimeout(r, 600));
+        // Bloquear atómicamente el trabajo para evitar que otro PC lo imprima
+        const { data: job, error: lockError } = await supabase
+          .from('print_jobs')
+          .update({ status: 'processing' })
+          .eq('id', jobId)
+          .eq('status', 'pending')
+          .select()
+          .maybeSingle();
 
-        let orderData = await fetchOrderDetails(orderId);
-        // Si no tiene items todavía, reintentar una vez
-        if (orderData && (!orderData.order_items || orderData.order_items.length === 0)) {
-          console.log('⏳ PrintServer: Esperando inserción de artículos de la orden...');
-          await new Promise(r => setTimeout(r, 800));
-          orderData = await fetchOrderDetails(orderId);
-        }
-
-        if (!orderData || !orderData.order_items || orderData.order_items.length === 0) {
-          console.warn('⚠️ PrintServer: Orden sin artículos o no encontrada:', orderId);
+        if (lockError || !job) {
+          // El trabajo ya fue tomado por otro servidor, o hubo un error
           return;
         }
 
-        const deps = await loadDependencies();
+        console.log(`🖨️ Procesando trabajo de impresión [${job.ticket_type}]: ${jobId}`);
 
-        const orderNum = orderData.order_number
-          ? `#${orderData.order_number.toString().padStart(3, '0')}`
-          : `#${orderData.id.slice(-3).toUpperCase()}`;
-
-        console.log(`🖨️ PrintServer: Enviando a cocina orden ${orderNum} (${orderData.order_items.length} artículos)`);
-        await printKitchenRouting({
-          orderNum,
-          cartItems: orderData.order_items,
-          categories: deps.categories,
-          tables: deps.tables,
-          tableId: orderData.table_id,
-          serviceType: orderData.service_type || 'takeaway'
-        });
-
-        // Si la orden no fue emitida desde este PC de caja, imprimir ticket de pedido para la caja central
-        if (!isOrderPrintedLocally(orderId, 'invoice') && !(orderData.order_number && isOrderPrintedLocally(String(orderData.order_number), 'invoice'))) {
+        if (job.ticket_type === 'kitchen') {
+          const deps = await loadDependencies();
+          await printKitchenRouting({
+            orderNum: job.content.orderNum,
+            cartItems: job.content.cartItems,
+            categories: deps.categories,
+            tables: deps.tables,
+            tableId: job.content.tableId,
+            serviceType: job.content.serviceType || 'takeaway'
+          });
+        } else if (job.ticket_type === 'invoice' || job.ticket_type === 'receipt') {
           const companyInfo = await loadCompanyInfo();
-          console.log(`🖨️ PrintServer: Imprimiendo ticket de pedido para caja ${orderNum}`);
-          const orderTicketData = {
-            orderNumber: orderNum,
-            orderDate: new Date(orderData.created_at),
-            items: orderData.order_items,
-            total: orderData.total,
-            paymentMethod: 'Pendiente',
-            cashierName: orderData.employee_profiles?.full_name || 'Camarero'
-          };
           await printMainTicket({
-            ticketData: orderTicketData,
+            ticketData: job.content.ticketData,
             companyInfo,
             formatCurrency,
             t
           });
         }
-      } catch (err) {
-        console.error('❌ PrintServer: Error procesando comanda de cocina:', err);
+
+        // Marcar como completado
+        await supabase
+          .from('print_jobs')
+          .update({ status: 'completed' })
+          .eq('id', jobId);
+
+        console.log(`✅ Trabajo de impresión completado: ${jobId}`);
+      } catch (err: any) {
+        console.error(`❌ Error procesando trabajo de impresión ${jobId}:`, err);
+        // Marcar como fallido
+        await supabase
+          .from('print_jobs')
+          .update({ status: 'failed', error_message: err.message || 'Error desconocido' })
+          .eq('id', jobId);
       }
     };
 
-    const handleCompletedOrder = async (orderId: string) => {
-      if (isOrderPrintedLocally(orderId, 'invoice')) {
-        console.log('ℹ️ PrintServer: Factura ya impresa localmente en este TPV. Omitiendo duplicado.');
-        return;
-      }
-
-      if (processedCompletedOrders.current.has(orderId)) return;
-
-      try {
-        const orderData = await fetchOrderDetails(orderId);
-        if (!orderData) return;
-
-        if (orderData.order_number && isOrderPrintedLocally(String(orderData.order_number), 'invoice')) {
-          console.log('ℹ️ PrintServer: Factura (#num) ya impresa localmente en este TPV. Omitiendo duplicado.');
-          return;
-        }
-
-        processedCompletedOrders.current.add(orderId);
-
-        const companyInfo = await loadCompanyInfo();
-
-        const orderNum = orderData.order_number
-          ? `#${orderData.order_number.toString().padStart(3, '0')}`
-          : `#${orderData.id.slice(-3).toUpperCase()}`;
-
-        let paymentMethodStr = 'Efectivo';
-        if (orderData.payment_method === 'card') paymentMethodStr = 'Tarjeta';
-        else if (orderData.payment_method === 'digital') paymentMethodStr = 'Digital';
-
-        const ticketData = {
-          orderNumber: orderNum,
-          orderDate: new Date(orderData.updated_at || orderData.created_at),
-          items: orderData.order_items,
-          total: orderData.total,
-          paymentMethod: paymentMethodStr,
-          cashierName: orderData.employee_profiles?.full_name || 'Cajero'
-        };
-
-        console.log(`🖨️ PrintServer: Imprimiendo ticket de pago final para orden ${orderNum}`);
-        await printMainTicket({
-          ticketData,
-          companyInfo,
-          formatCurrency,
-          t
-        });
-      } catch (err) {
-        console.error('❌ PrintServer: Error procesando factura:', err);
-      }
-    };
-
-    const channel = supabase.channel('print_server_orders')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
-        console.log('🔔 PrintServer: Evento INSERT recibido:', payload.new?.id, payload.new?.status);
-        const newOrder = payload.new;
-        if (newOrder?.status === 'preparing') {
-          handleNewOrder(newOrder.id);
-        }
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
-        console.log('🔔 PrintServer: Evento UPDATE recibido:', payload.new?.id, payload.new?.status);
-        const newOrder = payload.new;
-        const oldOrder = payload.old;
-
-        if (newOrder?.status === 'preparing' && oldOrder?.status !== 'preparing') {
-          handleNewOrder(newOrder.id);
-        }
-
-        if (newOrder?.status === 'completed' && oldOrder?.status !== 'completed') {
-          handleCompletedOrder(newOrder.id);
+    const channel = supabase.channel('print_server_spooler')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'print_jobs', filter: "status=eq.pending" }, (payload) => {
+        const newJob = payload.new;
+        if (newJob?.id) {
+          processPrintJob(newJob.id);
         }
       })
       .subscribe((status) => {
-        console.log('📡 PrintServer: Estado de suscripción Realtime:', status);
+        console.log('📡 PrintServer Spooler Realtime:', status);
+        
+        // Al conectar, procesar todos los pendientes que se quedaron colgados
+        if (status === 'SUBSCRIBED') {
+          supabase.from('print_jobs').select('id').eq('status', 'pending').then(({ data }) => {
+            if (data) {
+              data.forEach(job => processPrintJob(job.id));
+            }
+          });
+        }
       });
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(qzHeartbeat);
     };
-  }, [formatCurrency, t]);
+  }, [t, formatCurrency]);
 
-  return null; // Componente invisible
+  return null;
 }

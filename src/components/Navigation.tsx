@@ -95,6 +95,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     {
       name: t('nav.system'),
       items: [
+        { id: 'print-monitor', label: t('Monitor de Impresión'), icon: Printer, roles: ['super_admin'] },
         { id: 'role-management', label: t('nav.role-management'), icon: Shield, roles: ['super_admin'] },
         { id: 'company-settings', label: t('nav.company-settings'), icon: Building2, roles: ['super_admin'] },
         { id: 'app-settings', label: t('nav.app-settings'), icon: Settings, roles: ['super_admin'] },
@@ -175,8 +176,8 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           const allPages = [
             'floor', 'pos', 'orders', 'products', 'categories', 'users',
             'suppliers', 'expenses', 'time-tracking', 'analytics', 'cash',
-            'role-management', 'company-settings', 'app-settings', 'tables',
-            'server', 'backup', 'economat'
+            'tables', 'role-management', 'company-settings', 'app-settings',
+            'server', 'backup', 'economat', 'print-monitor'
           ];
           allPages.forEach(p => { permissionsMap[p] = true; });
         }

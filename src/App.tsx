@@ -26,6 +26,7 @@ import { BackupManager } from './components/BackupManager';
 import { TableManager } from './components/TableManager';
 import { EconomatDashboard } from './components/economat/EconomatDashboard';
 import { PrintServer } from './components/PrintServer';
+import { PrintMonitor } from './components/PrintMonitor';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -59,8 +60,8 @@ function AppContent() {
           const allPages = [
             'floor', 'pos', 'orders', 'products', 'categories', 'users',
             'suppliers', 'expenses', 'time-tracking', 'analytics', 'cash',
-            'role-management', 'company-settings', 'app-settings', 'tables',
-            'server', 'backup', 'economat'
+            'tables', 'role-management', 'company-settings', 'app-settings',
+            'cash', 'expenses', 'time-tracking', 'server', 'backup', 'economat', 'print-monitor'
           ];
           allPages.forEach(p => { permissionsMap[p] = true; });
         }
@@ -205,6 +206,7 @@ function AppContent() {
         {currentView === 'server' && hasPermission('server') && <ServerManager />}
         {currentView === 'backup' && hasPermission('backup') && <BackupManager />}
         {currentView === 'economat' && hasPermission('economat') && <EconomatDashboard />}
+        {currentView === 'print-monitor' && hasPermission('print-monitor') && <PrintMonitor />}
       </div>
 
       <Toaster
