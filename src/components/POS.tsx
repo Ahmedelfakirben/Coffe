@@ -692,7 +692,7 @@ export function POS() {
           console.warn('Error obteniendo company_settings:', e);
         }
 
-        await printMainTicket({
+        const printPayload = {
           ticketData: {
             ...pendingOrderData,
             paymentMethod: 'Pendiente'
@@ -700,7 +700,16 @@ export function POS() {
           companyInfo: compInfo,
           formatCurrency,
           t
-        });
+        };
+
+        // Imprimir Copia 1
+        await printMainTicket(printPayload);
+        
+        // Pequeña pausa para asegurar que el buffer de la impresora no colapse
+        await new Promise(r => setTimeout(r, 200));
+        
+        // Imprimir Copia 2
+        await printMainTicket(printPayload);
       }
 
       // 3. Si hay mesa, asegurar que el estado quede como 'occupied' en Sala

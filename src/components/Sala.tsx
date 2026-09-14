@@ -176,12 +176,20 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
   const openPOSForTable = async (table: Table) => {
     setTableId(table.id);
     setServiceType('dine_in');
-    try {
-      if ((activeOrders[table.id] || []).length === 0 && table.status !== 'available')
-        await supabase.from('tables').update({ status: 'available' }).eq('id', table.id);
-    } catch { /* ok */ }
-    setActiveOrderId(null);
-    toast.success(`${table.name} ${t('Mesa seleccionada:')}`);
+    
+    const existingOrders = activeOrders[table.id] || [];
+    if (existingOrders.length > 0) {
+      // Si ya hay pedidos, continuamos añadiendo al último pedido activo
+      setActiveOrderId(existingOrders[0].id);
+      toast.success(`${t('Añadiendo a cuenta en')} ${table.name}`);
+    } else {
+      try {
+        if (table.status !== 'available')
+          await supabase.from('tables').update({ status: 'available' }).eq('id', table.id);
+      } catch { /* ok */ }
+      setActiveOrderId(null);
+      toast.success(`${table.name} ${t('Mesa seleccionada:')}`);
+    }
     onGoToPOS?.();
   };
 

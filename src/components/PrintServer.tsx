@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { printKitchenRouting, printMainTicket, isOrderPrintedLocally } from '../lib/printerService';
+import { qzService } from '../lib/qzTray';
 
 export function PrintServer() {
   const { t } = useLanguage();
@@ -16,6 +17,24 @@ export function PrintServer() {
     if (!isPrintServer) return;
 
     console.log('🖨️ MODO SERVIDOR DE IMPRESIÓN ACTIVO: Escuchando nuevos pedidos...');
+
+    // Inicializar y mantener viva la conexión QZ Tray
+    const testQZConnection = async () => {
+      try {
+        const connected = await qzService.connect();
+        if (connected) {
+          console.log('✅ Conexión QZ Tray (Servidor) activa');
+        } else {
+          console.warn('⚠️ No se pudo establecer conexión QZ Tray');
+        }
+      } catch (e) {
+        console.error('Error en heartbeat QZ Tray:', e);
+      }
+    };
+    
+    testQZConnection();
+    // Heartbeat cada 2 minutos para evitar desconexiones por inactividad
+    const qzHeartbeat = setInterval(testQZConnection, 120000);
 
     const loadCompanyInfo = async () => {
       try {
@@ -82,6 +101,10 @@ export function PrintServer() {
     };
 
     const handleNewOrder = async (orderId: string) => {
+      // Retraso intencionado de 1.5s para evitar Condición de Carrera.
+      // Da tiempo a que el TPV reciba la respuesta HTTP y guarde el marcador local.
+      await new Promise(r => setTimeout(r, 1500));
+
       if (isOrderPrintedLocally(orderId, 'kitchen')) {
         console.log('ℹ️ PrintServer: Orden ya impresa localmente en este TPV. Omitiendo duplicado.');
         return;
@@ -224,9 +247,9 @@ export function PrintServer() {
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(qzHeartbeat);
     };
   }, [formatCurrency, t]);
 
   return null; // Componente invisible
 }
-
