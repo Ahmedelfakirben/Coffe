@@ -578,6 +578,8 @@ export function POS() {
           total,
           paymentMethod: 'En attente',
           cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+          tableName: tableId ? (tables.find(t => t.id === tableId)?.name || '') : '',
+          serviceType: serviceType
         };
 
         setPendingOrderData(ticketData);
@@ -616,6 +618,8 @@ export function POS() {
           total: deltaTotal, // Muestra solo el total añadido
           paymentMethod: 'En attente',
           cashierName: (user.user_metadata as any)?.full_name || user.email || 'Usuario',
+          tableName: existingOrder.table_id ? (tables.find(t => t.id === existingOrder.table_id)?.name || '') : '',
+          serviceType: existingOrder.table_id ? 'dine_in' : 'takeaway'
         };
 
         setPendingOrderData(ticketData);

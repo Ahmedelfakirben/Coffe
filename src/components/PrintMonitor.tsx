@@ -18,9 +18,13 @@ export function PrintMonitor() {
 
   const fetchJobs = async () => {
     try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       const { data, error } = await supabase
         .from('print_jobs')
         .select('*')
+        .gte('created_at', today.toISOString())
         .order('created_at', { ascending: false })
         .limit(100);
 

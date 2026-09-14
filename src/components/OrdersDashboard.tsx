@@ -598,7 +598,9 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
             items: ticketItems,
             total: order.total,
             paymentMethod: paymentMethodText,
-            cashierName: cashierName
+            cashierName: cashierName,
+            tableName: order.tables?.name || '',
+            serviceType: order.service_type || 'takeaway'
           }
         };
 

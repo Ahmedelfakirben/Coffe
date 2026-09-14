@@ -112,7 +112,7 @@ export const printKitchenRouting = async (params: KitchenPrintParams): Promise<s
               <h1>${zoneTitle}</h1>
               <div class="badge">${cleanOrderNum}</div>
               <div class="meta" style="margin-top: 4px;">
-                ${serviceType === 'dine_in' ? '🍽️ MESA: ' + (tableName || 'Sin mesa') : '🥡 PARA LLEVAR'}
+                ${serviceType === 'dine_in' ? '🍽️ TABLE : ' + (tableName || 'Sin mesa') : '🥡 À EMPORTER'}
               </div>
               <div class="meta" style="font-size: 11px; font-weight: normal; color: #333;">
                 ${new Date().toLocaleDateString()} - ${new Date().toLocaleTimeString()}
@@ -200,6 +200,9 @@ export const printMainTicket = async (params: TicketPrintParams) => {
           <div><strong>Date:</strong> ${new Date(ticketData.orderDate || new Date()).toLocaleDateString('es-ES')}</div>
           <div><strong>Heure :</strong> ${new Date(ticketData.orderDate || new Date()).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
           <div><strong>Caissier :</strong> ${ticketData.cashierName || 'Cajero'}</div>
+          <div style="font-size: 14px; font-weight: bold; margin-top: 4px; padding-top: 2px; border-top: 1px dotted #ccc;">
+            ${ticketData.serviceType === 'dine_in' && ticketData.tableName ? `🍽️ TABLE : ${ticketData.tableName}` : `🥡 À EMPORTER`}
+          </div>
         </div>
 
         <table class="items-table">

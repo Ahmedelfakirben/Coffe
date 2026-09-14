@@ -280,6 +280,8 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
           total: grandTotal,
           paymentMethod: paymentMethod === 'cash' ? t('Efectivo') : paymentMethod === 'card' ? t('Tarjeta') : t('Digital'),
           cashierName: user.user_metadata?.full_name || user.email || 'Usuario',
+          tableName: selectedTableName || '',
+          serviceType: 'dine_in'
         }
       };
       
