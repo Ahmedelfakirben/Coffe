@@ -208,13 +208,96 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       setOrdersForTable(data || []);
 
       // Fetch items for each order
+      const itemsMap: Record<string, OrderItemDetail[]> = {};
+      await Promise.all(
+        (data || []).map(async (order) => {
+          const { data: items } = await supabase
+            .from('order_items')
+            .select('id, quantity, unit_price, products(name), product_sizes(size_name)')
+            .eq('order_id', order.id);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          itemsMap[order.id] = (items || []).map((i: any) => ({
+            id: i.id,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+            product_name: Array.isArray(i.products) ? i.products[0]?.name : i.products?.name || '—',
+            size_name: Array.isArray(i.product_sizes) ? i.product_sizes[0]?.size_name : i.product_sizes?.size_name,
+          }));
+        })
+      );
+      setOrderItemsMap(itemsMap);
+      setExpandedOrder((data || [])[0]?.id || null);
+      setShowOrdersModal(true);
+    } catch { toast.error(t('Error al cargar los pedidos')); }
+  };
+
+  const validateOrder = async (targetOrderId: string, paymentMethod: 'cash' | 'card' | 'digital') => {
+    if (!tableId || !user) return;
+    try {
+      const orderIdsToProcess = targetOrderId === 'ALL' 
+        ? ordersForTable.map(o => o.id) 
+        : [targetOrderId];
+
+      let allItems: any[] = [];
+      let grandTotal = 0;
+      let firstOrderNumber = '';
+      let firstOrderDate = new Date();
+
+      for (const orderId of orderIdsToProcess) {
+        const { data: od, error: oe } = await supabase.from('orders')
+          .select(`id, total, order_number, created_at, order_items (quantity, unit_price, products (name), product_sizes (size_name))`)
+          .eq('id', orderId).single();
+        if (oe) throw oe;
+        
+        await supabase.from('orders').update({ status: 'completed', payment_method: paymentMethod }).eq('id', orderId);
+        
+        const items = od.order_items.map((i: any) => ({
+          name: Array.isArray(i.products) ? i.products[0]?.name : i.products?.name,
+          size: Array.isArray(i.product_sizes) ? i.product_sizes[0]?.size_name : i.product_sizes?.size_name,
+          quantity: i.quantity, price: i.unit_price,
+        }));
+        
+        allItems = [...allItems, ...items];
+        grandTotal += typeof od.total === 'string' ? parseFloat(od.total) : od.total;
+        
+        if (!firstOrderNumber && od.order_number) {
+          firstOrderNumber = String(od.order_number);
+          firstOrderDate = new Date(od.created_at);
+        }
+        
+        markOrderPrintedLocally(orderId, 'invoice');
+        if (od.order_number) {
+          markOrderPrintedLocally(String(od.order_number), 'invoice');
+        }
+      }
+
+      if (!isMobileDevice()) {
+        let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
+        try {
+          const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
+          if (comp) compInfo = comp;
+        } catch {}
+
+        await printMainTicket({
+          ticketData: {
+            orderDate: firstOrderDate,
+            orderNumber: firstOrderNumber ? firstOrderNumber.padStart(3, '0') : orderIdsToProcess[0].slice(-8),
+            items: allItems,
+            total: grandTotal,
+            paymentMethod: paymentMethod === 'cash' ? t('Efectivo') : paymentMethod === 'card' ? t('Tarjeta') : t('Digital'),
+            cashierName: user.user_metadata?.full_name || user.email || 'Usuario',
+          },
           companyInfo: compInfo,
           formatCurrency,
           t
         });
       }
-      if (ordersForTable.filter(o => o.id !== orderId).length === 0)
+      
+      // Update table status if we just cleared all orders (or if there are no other active orders left)
+      if (targetOrderId === 'ALL' || ordersForTable.filter(o => o.id !== targetOrderId).length === 0) {
         await supabase.from('tables').update({ status: 'available' }).eq('id', tableId);
+      }
+      
       toast.success(t('Pedido validado'));
       setShowOrdersModal(false);
       setShowPaymentSelector(null);
