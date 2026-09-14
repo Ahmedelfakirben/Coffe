@@ -139,9 +139,8 @@ export function PrintMonitor() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">{t('Fecha/Hora')}</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">{t('Tipo')}</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">{t('Estado')}</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">{t('Detalles')}</th>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">{t('Pedido')}</th>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">{t('Trabajos de Impresión')}</th>
                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">{t('Acciones')}</th>
               </tr>
             </thead>
@@ -153,61 +152,90 @@ export function PrintMonitor() {
                   </td>
                 </tr>
               ) : (
-                filteredJobs.map((job) => (
-                  <tr key={job.id} className={`hover:bg-gray-50 transition-colors ${job.status === 'failed' ? 'bg-red-50/30' : ''}`}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {format(new Date(job.created_at), 'dd/MM/yyyy HH:mm:ss')}
+                Object.entries(
+                  filteredJobs.reduce((acc, job) => {
+                    let orderNum = '-';
+                    if (job.content) {
+                      if (job.ticket_type === 'kitchen') orderNum = job.content.orderNum || '-';
+                      else orderNum = job.content.ticketData?.orderNumber || '-';
+                    }
+                    if (!acc[orderNum]) acc[orderNum] = [];
+                    acc[orderNum].push(job);
+                    return acc;
+                  }, {} as Record<string, PrintJob[]>)
+                ).map(([orderNum, orderJobs]) => (
+                  <tr key={orderNum} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 align-top">
+                      {format(new Date(orderJobs[0].created_at), 'dd/MM/yyyy HH:mm:ss')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 capitalize">
-                        {job.ticket_type === 'invoice' ? t('Caja') : job.ticket_type === 'kitchen' ? t('Cocina') : job.ticket_type}
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <span className="font-bold text-gray-800 bg-gray-100 px-3 py-1 rounded-lg">
+                        {orderNum}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(job.status)}
-                        <span className={`text-sm font-medium ${
-                          job.status === 'completed' ? 'text-green-700' :
-                          job.status === 'failed' ? 'text-red-700' :
-                          job.status === 'processing' ? 'text-blue-700' : 'text-amber-700'
-                        }`}>
-                          {getStatusText(job.status)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {(() => {
-                        let details = [];
-                        if (job.content) {
-                          if (job.ticket_type === 'kitchen') {
-                            details.push(<span key="ord" className="block text-xs font-bold text-gray-800">Pedido: {job.content.orderNum || '-'}</span>);
-                          } else {
-                            details.push(<span key="ord" className="block text-xs font-bold text-gray-800">Pedido: {job.content.ticketData?.orderNumber || '-'}</span>);
-                            if (job.content.ticketData?.cashierName) {
-                              details.push(<span key="usr" className="block text-xs text-gray-500">Cajero: {job.content.ticketData.cashierName}</span>);
-                            }
-                          }
-                        }
-                        if (job.error_message) {
-                          details.push(
-                            <div key="err" className="flex items-start gap-1 text-red-600 text-xs mt-1.5 max-w-xs">
-                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                              <span className="truncate" title={job.error_message}>{job.error_message}</span>
+                    <td className="px-6 py-4 align-top">
+                      <div className="space-y-3">
+                        {orderJobs.map(job => (
+                          <div key={job.id} className={`flex items-start gap-4 p-3 rounded-lg border ${job.status === 'failed' ? 'bg-red-50/50 border-red-100' : 'bg-white border-gray-100 shadow-sm'}`}>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 capitalize">
+                                  {job.ticket_type === 'invoice' ? t('Caja') : job.ticket_type === 'kitchen' ? t('Cocina') : job.ticket_type}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {getStatusIcon(job.status)}
+                                  <span className={`text-xs font-bold ${
+                                    job.status === 'completed' ? 'text-green-700' :
+                                    job.status === 'failed' ? 'text-red-700' :
+                                    job.status === 'processing' ? 'text-blue-700' : 'text-amber-700'
+                                  }`}>
+                                    {getStatusText(job.status)}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {job.ticket_type !== 'kitchen' && job.content?.ticketData && (
+                                <div className="flex flex-col gap-1 mt-1">
+                                  {job.content.ticketData.cashierName && (
+                                    <div className="text-xs text-gray-500">
+                                      {t('Cajero:')} {job.content.ticketData.cashierName}
+                                    </div>
+                                  )}
+                                  <div className="text-xs">
+                                    {job.content.ticketData.paymentMethod === 'En attente' || job.content.ticketData.paymentMethod === 'Pendiente' ? (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                        {t('Ticket Pendiente')}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800 border border-green-200">
+                                        {t('Ticket Final')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {job.error_message && (
+                                <div className="flex items-start gap-1 text-red-600 text-xs mt-1.5 max-w-sm">
+                                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                  <span className="truncate" title={job.error_message}>{job.error_message}</span>
+                                </div>
+                              )}
                             </div>
-                          );
-                        }
-                        return details.length > 0 ? <div className="space-y-0.5">{details}</div> : <span className="text-gray-400 text-sm">-</span>;
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {job.status === 'failed' && (
-                        <button
-                          onClick={() => handleRetry(job.id)}
-                          className="text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-colors"
-                        >
-                          {t('Reintentar')}
-                        </button>
-                      )}
+                            
+                            <div className="text-right">
+                              {job.status === 'failed' && (
+                                <button
+                                  onClick={() => handleRetry(job.id)}
+                                  className="text-xs text-amber-600 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors whitespace-nowrap"
+                                >
+                                  {t('Reintentar')}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </td>
                   </tr>
                 ))
