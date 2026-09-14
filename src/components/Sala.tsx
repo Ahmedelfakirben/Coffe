@@ -208,66 +208,6 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
       setOrdersForTable(data || []);
 
       // Fetch items for each order
-      const itemsMap: Record<string, OrderItemDetail[]> = {};
-      await Promise.all(
-        (data || []).map(async (order) => {
-          const { data: items } = await supabase
-            .from('order_items')
-            .select('id, quantity, unit_price, products(name), product_sizes(size_name)')
-            .eq('order_id', order.id);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          itemsMap[order.id] = (items || []).map((i: any) => ({
-            id: i.id,
-            quantity: i.quantity,
-            unit_price: i.unit_price,
-            product_name: Array.isArray(i.products) ? i.products[0]?.name : i.products?.name || '—',
-            size_name: Array.isArray(i.product_sizes) ? i.product_sizes[0]?.size_name : i.product_sizes?.size_name,
-          }));
-        })
-      );
-      setOrderItemsMap(itemsMap);
-      setExpandedOrder((data || [])[0]?.id || null);
-      setShowOrdersModal(true);
-    } catch { toast.error(t('Error al cargar los pedidos')); }
-  };
-
-  const validateOrder = async (orderId: string, paymentMethod: 'cash' | 'card' | 'digital') => {
-    if (!tableId || !user) return;
-    try {
-      const { data: od, error: oe } = await supabase.from('orders')
-        .select(`id, total, order_number, created_at, order_items (quantity, unit_price, products (name), product_sizes (size_name))`)
-        .eq('id', orderId).single();
-      if (oe) throw oe;
-      await supabase.from('orders').update({ status: 'completed', payment_method: paymentMethod }).eq('id', orderId);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const items = od.order_items.map((i: any) => ({
-        name: Array.isArray(i.products) ? i.products[0]?.name : i.products?.name,
-        size: Array.isArray(i.product_sizes) ? i.product_sizes[0]?.size_name : i.product_sizes?.size_name,
-        quantity: i.quantity, price: i.unit_price,
-      }));
-      if (orderId) {
-        markOrderPrintedLocally(orderId, 'invoice');
-      }
-      if (od.order_number) {
-        markOrderPrintedLocally(String(od.order_number), 'invoice');
-      }
-
-      if (!isMobileDevice()) {
-        let compInfo: any = { company_name: 'Restaurante', address: '', phone: '' };
-        try {
-          const { data: comp } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
-          if (comp) compInfo = comp;
-        } catch {}
-
-        await printMainTicket({
-          ticketData: {
-            orderDate: new Date(od.created_at),
-            orderNumber: od.order_number ? String(od.order_number).padStart(3, '0') : orderId.slice(-8),
-            items,
-            total: typeof od.total === 'string' ? parseFloat(od.total) : od.total,
-            paymentMethod: paymentMethod === 'cash' ? t('Efectivo') : paymentMethod === 'card' ? t('Tarjeta') : t('Digital'),
-            cashierName: user.user_metadata?.full_name || user.email || 'Usuario',
-          },
           companyInfo: compInfo,
           formatCurrency,
           t
@@ -528,87 +468,81 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {ordersForTable.map(order => {
-                    const items = orderItemsMap[order.id] || [];
-                    const isExpanded = expandedOrder === order.id;
-                    const orderTotal = typeof order.total === 'string' ? parseFloat(order.total) : order.total;
+                  {(() => {
+                    const allItems = ordersForTable.flatMap(order => orderItemsMap[order.id] || []);
+                    const grandTotal = ordersForTable.reduce((sum, order) => sum + (typeof order.total === 'string' ? parseFloat(order.total) : order.total), 0);
+                    const primaryOrderId = ordersForTable[0]?.id;
+                    
                     return (
-                      <div key={order.id} className="bg-amber-900/10 border border-amber-900/40 rounded-2xl overflow-hidden">
-                        {/* Order header */}
-                        <button
-                          onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                          className="w-full flex items-center justify-between p-4 hover:bg-amber-900/20 transition-colors"
-                        >
+                      <div className="bg-amber-900/10 border border-amber-900/40 rounded-2xl overflow-hidden">
+                        {/* Unified Header */}
+                        <div className="w-full flex items-center justify-between p-4 bg-amber-900/20">
                           <div className="text-left">
                             <p className="font-bold text-amber-100 text-sm">
-                              🧾 #{order.order_number?.toString().padStart(3,'0') || order.id.slice(0, 6)}
+                              🧾 {t('Cuenta Total')}
                             </p>
                             <p className="text-xs text-amber-700/60 mt-0.5">
-                              {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              {' · '}{items.length} article{items.length !== 1 ? 's' : ''}
+                              {allItems.length} article{allItems.length !== 1 ? 's' : ''}
                             </p>
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="text-lg font-black text-amber-400">
-                              {formatCurrency(orderTotal)}
+                              {formatCurrency(grandTotal)}
                             </span>
-                            <span className={`text-amber-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
                           </div>
-                        </button>
+                        </div>
 
                         {/* Item breakdown */}
-                        {isExpanded && (
-                          <div className="border-t border-amber-900/30">
-                            <div className="px-4 py-2">
-                              {items.length === 0 ? (
-                                <p className="text-amber-700/50 text-xs py-2 text-center">Chargement...</p>
-                              ) : (
-                                <div className="space-y-1.5 py-2">
-                                  {items.map(item => (
-                                    <div key={item.id} className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <span className="flex-shrink-0 w-6 h-6 bg-amber-500/15 rounded-lg text-amber-400 text-xs font-black flex items-center justify-center">
-                                          {item.quantity}
-                                        </span>
-                                        <span className="text-amber-100 text-sm truncate">
-                                          {item.product_name}
-                                          {item.size_name && <span className="text-amber-600 text-xs ml-1">({item.size_name})</span>}
-                                        </span>
-                                      </div>
-                                      <span className="flex-shrink-0 text-amber-400 text-sm font-bold">
-                                        {formatCurrency(item.unit_price * item.quantity)}
+                        <div className="border-t border-amber-900/30">
+                          <div className="px-4 py-2">
+                            {allItems.length === 0 ? (
+                              <p className="text-amber-700/50 text-xs py-2 text-center">Chargement...</p>
+                            ) : (
+                              <div className="space-y-1.5 py-2">
+                                {allItems.map((item, idx) => (
+                                  <div key={item.id || idx} className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="flex-shrink-0 w-6 h-6 bg-amber-500/15 rounded-lg text-amber-400 text-xs font-black flex items-center justify-center">
+                                        {item.quantity}
+                                      </span>
+                                      <span className="text-amber-100 text-sm truncate">
+                                        {item.product_name}
+                                        {item.size_name && <span className="text-amber-600 text-xs ml-1">({item.size_name})</span>}
                                       </span>
                                     </div>
-                                  ))}
-                                </div>
-                              )}
-                              {/* Total row */}
-                              <div className="flex justify-between items-center pt-2 border-t border-amber-900/30 mt-1">
-                                <span className="text-amber-300 text-sm font-bold">Total</span>
-                                <span className="text-amber-300 text-base font-black">{formatCurrency(orderTotal)}</span>
+                                    <span className="flex-shrink-0 text-amber-400 text-sm font-bold">
+                                      {formatCurrency(item.unit_price * item.quantity)}
+                                    </span>
+                                  </div>
+                                ))}
                               </div>
-                            </div>
-
-                            {/* Action buttons */}
-                            <div className="flex gap-2 px-4 pb-4">
-                              <button
-                                onClick={() => { setActiveOrderId(order.id); setShowOrdersModal(false); onGoToPOS?.(); }}
-                                className="flex-1 py-2.5 bg-amber-900/40 hover:bg-amber-900/60 border border-amber-800/30 text-amber-200 rounded-xl text-xs font-bold transition-colors"
-                              >
-                                {profile?.role === 'waiter' ? `➕ ${t('Añadir más productos')}` : `✏️ ${t('common.edit')}`}
-                              </button>
-                              <button
-                                onClick={() => setShowPaymentSelector(order.id)}
-                                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors"
-                              >
-                                💳 {t('Cobrar') || 'Encaisser'}
-                              </button>
+                            )}
+                            {/* Total row */}
+                            <div className="flex justify-between items-center pt-2 border-t border-amber-900/30 mt-1">
+                              <span className="text-amber-300 text-sm font-bold">Total</span>
+                              <span className="text-amber-300 text-base font-black">{formatCurrency(grandTotal)}</span>
                             </div>
                           </div>
-                        )}
+
+                          {/* Action buttons */}
+                          <div className="flex gap-2 px-4 pb-4">
+                            <button
+                              onClick={() => { if(primaryOrderId) setActiveOrderId(primaryOrderId); setShowOrdersModal(false); onGoToPOS?.(); }}
+                              className="flex-1 py-2.5 bg-amber-900/40 hover:bg-amber-900/60 border border-amber-800/30 text-amber-200 rounded-xl text-xs font-bold transition-colors"
+                            >
+                              {profile?.role === 'waiter' ? `➕ ${t('Añadir más productos')}` : `✏️ ${t('common.edit')}`}
+                            </button>
+                            <button
+                              onClick={() => setShowPaymentSelector('ALL')}
+                              className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors"
+                            >
+                              💳 {t('Cobrar') || 'Encaisser'}
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     );
-                  })}
+                  })()}
                 </div>
               )}
 
