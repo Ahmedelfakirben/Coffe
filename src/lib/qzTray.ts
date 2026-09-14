@@ -127,22 +127,27 @@ class QZTrayService {
         return null;
       }
 
-      if (targetName && targetName.trim() !== '') {
+      if (targetName && targetName.trim() !== '' && targetName.trim().toUpperCase() !== 'DEFAULT') {
         const cleanTarget = targetName.trim().toLowerCase();
         
         // 1. Coincidencia exacta
         const exact = allPrinters.find(p => p.toLowerCase() === cleanTarget);
         if (exact) return exact;
 
-        // 2. Coincidencia parcial (por ejemplo si pone "WD8260" y la impresora es "printer WD8260")
+        // 2. Coincidencia parcial
         const partial = allPrinters.find(p => p.toLowerCase().includes(cleanTarget) || cleanTarget.includes(p.toLowerCase()));
         if (partial) {
           console.log(`ℹ️ Impresora "${targetName}" resuelta como "${partial}"`);
           return partial;
         }
+        
+        // Si pidió una impresora específica y NO existe, fallamos en lugar de usar la default
+        // para que no salgan tickets de cocina en la caja.
+        console.warn(`⚠️ Impresora específica "${targetName}" no encontrada en el sistema.`);
+        return null;
       }
 
-      // 3. Fallback: impresora predeterminada del sistema
+      // 3. Fallback: impresora predeterminada del sistema (solo si no pidió una específica o pidió DEFAULT)
       try {
         const defaultPrinter = await qz.printers.getDefault();
         if (defaultPrinter) {

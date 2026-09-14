@@ -68,9 +68,11 @@ export function PrintServer() {
 
         console.log(`🖨️ Procesando trabajo de impresión [${job.ticket_type}]: ${jobId}`);
 
+        let actualPrinter = job.printer_target || '';
+
         if (job.ticket_type === 'kitchen') {
           const deps = await loadDependencies();
-          await printKitchenRouting({
+          const printedTo = await printKitchenRouting({
             orderNum: job.content.orderNum,
             cartItems: job.content.cartItems,
             categories: deps.categories,
@@ -78,6 +80,9 @@ export function PrintServer() {
             tableId: job.content.tableId,
             serviceType: job.content.serviceType || 'takeaway'
           });
+          if (printedTo.length > 0) {
+            actualPrinter = printedTo.join(', ');
+          }
         } else if (job.ticket_type === 'invoice' || job.ticket_type === 'receipt') {
           const companyInfo = await loadCompanyInfo();
           await printMainTicket({
@@ -86,12 +91,14 @@ export function PrintServer() {
             formatCurrency,
             t
           });
+          // Assuming main ticket goes to DEFAULT printer
+          actualPrinter = 'CAJA (Principal)';
         }
 
         // Marcar como completado
         await supabase
           .from('print_jobs')
-          .update({ status: 'completed' })
+          .update({ status: 'completed', printer_target: actualPrinter || null })
           .eq('id', jobId);
 
         console.log(`✅ Trabajo de impresión completado: ${jobId}`);

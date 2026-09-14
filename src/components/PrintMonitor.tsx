@@ -288,6 +288,11 @@ export function PrintMonitor() {
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 capitalize">
                                   {job.ticket_type === 'invoice' ? t('Caja') : job.ticket_type === 'kitchen' ? t('Cocina') : job.ticket_type}
                                 </span>
+                                {job.printer_target && (
+                                  <span className="text-xs text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200">
+                                    🖨️ {job.printer_target}
+                                  </span>
+                                )}
                                 <div className="flex items-center gap-1.5">
                                   {getStatusIcon(job.status)}
                                   <span className={`text-xs font-bold ${

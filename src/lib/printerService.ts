@@ -9,8 +9,9 @@ export interface KitchenPrintParams {
   serviceType: string;
 }
 
-export const printKitchenRouting = async (params: KitchenPrintParams) => {
+export const printKitchenRouting = async (params: KitchenPrintParams): Promise<string[]> => {
   const { orderNum, cartItems, categories, tables, tableId, serviceType } = params;
+  const printedPrinters: string[] = [];
   
   try {
     const tableName = tableId ? (tables.find(t => t.id === tableId)?.name || '') : '';
@@ -149,11 +150,15 @@ export const printKitchenRouting = async (params: KitchenPrintParams) => {
 
       console.log(`🖨️ KITCHEN ROUTING: Enviando comanda unificada a impresora "${targetPrinter}" con ${items.length} artículos...`);
       const printerArg = targetPrinter === 'DEFAULT' ? '' : targetPrinter;
-      await qzService.printHTML(printerArg, html);
+      const success = await qzService.printHTML(printerArg, html);
+      if (success) {
+        printedPrinters.push(targetPrinter);
+      }
     }
   } catch (err) {
     console.error('Error procesando Kitchen Routing:', err);
   }
+  return printedPrinters;
 };
 
 export interface TicketPrintParams {
