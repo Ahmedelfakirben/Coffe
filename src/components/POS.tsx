@@ -651,7 +651,7 @@ export function POS() {
       // Enviar a spooler de cocina
       await enqueuePrintJob(activeOrderId, 'kitchen', {
         orderNum,
-        cartItems: cart,
+        cartItems: pendingOrderData.items,
         tableId,
         serviceType
       });
@@ -729,7 +729,7 @@ export function POS() {
       // Imprimir comandas por zona (Kitchen Routing)
       await enqueuePrintJob(activeOrderId, 'kitchen', {
         orderNum: updatedTicketData.orderNumber,
-        cartItems: cart,
+        cartItems: pendingOrderData.items,
         tableId,
         serviceType
       });
