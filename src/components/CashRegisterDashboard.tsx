@@ -608,7 +608,7 @@ export function CashRegisterDashboard() {
         `)
         .gte('created_at', startIso)
         .lte('created_at', endIso)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'cancelled'])
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -641,9 +641,11 @@ export function CashRegisterDashboard() {
       });
 
       // Calcular totales
-      const fetchedTotal = (orders || []).reduce((sum, order) => sum + (order.total || 0), 0);
+      const completedOrdersList = (orders || []).filter(o => o.status === 'completed');
+      const fetchedTotal = completedOrdersList.reduce((sum, order) => sum + (order.total || 0), 0);
       const orderTotal = fetchedTotal > 0 ? fetchedTotal : (day.totalSales || 0);
-      const orderCount = orders?.length || 0;
+      const orderCount = completedOrdersList.length || 0;
+      const cancelledCount = (orders || []).filter(o => o.status === 'cancelled').length;
       const expectedBalance = day.totalOpening + orderTotal - (day.totalWithdrawals || 0);
 
       // 4. Generar filas de pedidos con detalle completo en una sola línea
@@ -661,14 +663,14 @@ export function CashRegisterDashboard() {
         const historyEntry = completedHistoryMap.get(order.id);
         const cashierEmpId = historyEntry?.employee_id || day.employee_id;
         const cashierEmp = cashierEmpId ? empMap.get(cashierEmpId) : null;
-        const cashierName = cashierEmp?.role === 'super_admin' ? 'Sistema' : (cashierEmp?.full_name || day.employee_profiles?.full_name || 'Caisse');
+        const cashierName = order.status === 'cancelled' ? 'ANNULÉ' : (cashierEmp?.role === 'super_admin' ? 'Sistema' : (cashierEmp?.full_name || day.employee_profiles?.full_name || 'Caisse'));
         const paidTime = historyEntry?.created_at ? new Date(historyEntry.created_at) : (order.updated_at ? new Date(order.updated_at) : createdTime);
-        const paidTimeStr = paidTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const paidTimeStr = order.status === 'cancelled' ? '-' : paidTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
         // Tiempo de atención
         const diffMs = paidTime.getTime() - createdTime.getTime();
         const waitMinutes = Math.max(0, Math.round(diffMs / 60000));
-        const waitTimeStr = `${waitMinutes} min`;
+        const waitTimeStr = order.status === 'cancelled' ? '-' : `${waitMinutes} min`;
 
         // Productos reales con cantidades y tamaños
         const productsList = (order.order_items || []).map((item: any) => {
@@ -678,17 +680,17 @@ export function CashRegisterDashboard() {
         }).join(', ');
 
         // Método de pago
-        const payMethodStr = order.payment_method === 'cash' ? 'Espèces' : order.payment_method === 'card' ? 'Carte' : order.payment_method === 'digital' ? 'Digital' : 'Espèces';
+        const payMethodStr = order.status === 'cancelled' ? '-' : (order.payment_method === 'cash' ? 'Espèces' : order.payment_method === 'card' ? 'Carte' : order.payment_method === 'digital' ? 'Digital' : 'Espèces');
 
         return `
-          <tr>
-            <td style="font-weight: bold; white-space: nowrap;">${orderNumStr} <span style="font-weight: normal; color: #555; font-size: 11px;">(${tableStr})</span></td>
-            <td style="white-space: nowrap;"><strong>${creatorName}</strong><br/><span style="color: #64748b; font-size: 11px;">${createdTimeStr}</span></td>
-            <td style="white-space: nowrap;"><strong>${cashierName}</strong><br/><span style="color: #64748b; font-size: 11px;">${paidTimeStr}</span></td>
-            <td style="text-align: center; font-weight: bold; color: #0284c7; white-space: nowrap;">${waitTimeStr}</td>
+          <tr style="${order.status === 'cancelled' ? 'color: #94a3b8; text-decoration: line-through;' : ''}">
+            <td style="font-weight: bold; white-space: nowrap;">${orderNumStr} <span style="font-weight: normal; font-size: 11px;">(${tableStr})</span></td>
+            <td style="white-space: nowrap;"><strong>${creatorName}</strong><br/><span style="font-size: 11px;">${createdTimeStr}</span></td>
+            <td style="white-space: nowrap;">${order.status === 'cancelled' ? '<strong style="color: #ef4444; text-decoration: none;">ANNULÉ</strong>' : `<strong>${cashierName}</strong><br/><span style="font-size: 11px;">${paidTimeStr}</span>`}</td>
+            <td style="text-align: center; font-weight: bold; ${order.status === 'cancelled' ? '' : 'color: #0284c7;'} white-space: nowrap;">${waitTimeStr}</td>
             <td style="font-size: 11px; max-width: 320px; word-break: break-word;">${productsList || 'Sans articles'}</td>
             <td style="text-align: center; font-size: 11px; white-space: nowrap;">${payMethodStr}</td>
-            <td style="text-align: right; font-weight: bold; font-size: 12px; white-space: nowrap;">${formatCurrency(order.total)}</td>
+            <td style="text-align: right; font-weight: bold; font-size: 12px; white-space: nowrap; ${order.status === 'cancelled' ? 'color: #ef4444; text-decoration: line-through;' : ''}">${formatCurrency(order.total)}</td>
           </tr>
         `;
       }).join('');
@@ -714,6 +716,12 @@ export function CashRegisterDashboard() {
               <strong>${orderCount}</strong>
               <span>Commandes Payées</span>
             </div>
+            ${cancelledCount > 0 ? `
+            <div class="info-item" style="border-left-color: #ef4444;">
+              <strong style="color: #ef4444;">${cancelledCount}</strong>
+              <span>Commandes Annulées</span>
+            </div>
+            ` : ''}
             <div class="info-item">
               <strong style="color: #0284c7;">${formatCurrency(orderTotal)}</strong>
               <span>Ventes Totales</span>
