@@ -95,7 +95,7 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
     {
       name: t('nav.system'),
       items: [
-        { id: 'print-monitor', label: t('Monitor de Impresión'), icon: Printer, roles: ['super_admin'] },
+        { id: 'print-monitor', label: t('Auditoría de Impresión'), icon: Printer, roles: ['super_admin', 'admin', 'cashier'] },
         { id: 'device-manager', label: t('Gestor Dispositivos'), icon: Server, roles: ['super_admin'] },
         { id: 'role-management', label: t('nav.role-management'), icon: Shield, roles: ['super_admin'] },
         { id: 'company-settings', label: t('nav.company-settings'), icon: Building2, roles: ['super_admin'] },
@@ -186,6 +186,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
         data?.forEach(perm => {
           permissionsMap[perm.page_id] = perm.can_access;
         });
+
+        if (profile.role === 'admin' || profile.role === 'cashier') {
+          permissionsMap['print-monitor'] = true;
+        }
 
         setUserPermissions(permissionsMap);
       } catch (err) {

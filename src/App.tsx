@@ -73,6 +73,11 @@ function AppContent() {
           permissionsMap[perm.page_id] = perm.can_access;
         });
 
+        // Asegurar que cajero y admin siempre puedan ver print-monitor
+        if (profile.role === 'admin' || profile.role === 'cashier') {
+          permissionsMap['print-monitor'] = true;
+        }
+
         setUserPermissions(permissionsMap);
       } catch (err) {
         console.error('Error loading permissions:', err);

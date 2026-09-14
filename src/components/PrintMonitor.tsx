@@ -5,12 +5,16 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { RefreshCw, CheckCircle, XCircle, Clock, Printer, AlertTriangle, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
+import { qzService } from '../lib/qzTray';
 
 export function PrintMonitor() {
   const { t } = useLanguage();
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [qzServerIp, setQzServerIp] = useState('');
+  const [checkingQZ, setCheckingQZ] = useState(false);
+  const [qzPrinters, setQzPrinters] = useState<string[]>([]);
 
   const fetchJobs = async () => {
     try {
@@ -22,6 +26,15 @@ export function PrintMonitor() {
 
       if (error) throw error;
       setJobs(data || []);
+      
+      const { data: settingsData } = await supabase
+        .from('company_settings')
+        .select('qz_server_ip')
+        .single();
+        
+      if (settingsData) {
+        setQzServerIp(settingsData.qz_server_ip || '');
+      }
     } catch (err) {
       console.error('Error fetching print jobs:', err);
     } finally {
@@ -55,6 +68,39 @@ export function PrintMonitor() {
     } catch (err) {
       console.error('Error retrying job:', err);
       toast.error(t('Error al reintentar'));
+    }
+  };
+
+  const handleTestQZ = async () => {
+    setCheckingQZ(true);
+    try {
+      // Save to database first
+      await supabase
+        .from('company_settings')
+        .update({ qz_server_ip: qzServerIp })
+        .eq('id', 1); // Assuming ID 1 is the company settings row
+
+      if (qzServerIp !== undefined) {
+        localStorage.setItem('qz_server_ip', (qzServerIp || '').trim());
+      }
+      await qzService.disconnect();
+      const printers = await qzService.getPrinters(qzServerIp?.trim() || undefined);
+      setQzPrinters(printers);
+      if (printers.length > 0) {
+        toast.success(`Conexión QZ Tray exitosa. ${printers.length} impresoras encontradas.`);
+      } else {
+        toast.error('QZ Tray respondió pero devolvió lista vacía de impresoras. Revisa el certificado o permisos en QZ Tray.');
+      }
+    } catch (err) {
+      console.error('Error testeando QZ Tray:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('Unable to establish connection') || errMsg.includes('Failed to fetch')) {
+        toast.error('El navegador bloqueó la conexión WSS segura con QZ Tray. Abre https://localhost:8181 en otra pestaña y pulsa "Continuar / Avanzado".', { duration: 8000 });
+      } else {
+        toast.error(`Error conectando a QZ Tray: ${errMsg}`);
+      }
+    } finally {
+      setCheckingQZ(false);
     }
   };
 
@@ -101,7 +147,67 @@ export function PrintMonitor() {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
+      {/* Configuración de Impresión Avanzada (QZ Tray) */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+            <Printer className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">{t('Enrutamiento de Comandas (QZ Tray)')}</h3>
+            <p className="text-sm text-gray-500">{t('Impresión silenciosa multi-zona')}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-1">
+              {t('IP del Servidor QZ Tray (Caja Central)')}
+            </label>
+            <input
+              type="text"
+              value={qzServerIp}
+              onChange={(e) => setQzServerIp(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm font-mono"
+              placeholder={t('Ej: 192.168.1.100 (dejar vacío para localhost)')}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {t('Escribe aquí la IP local del PC de Caja. Todos los dispositivos portátiles de los camareros se conectarán a esta IP para imprimir comanda sin configurar nada en sus móviles.')}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div>
+              <p className="font-semibold text-gray-900">{t('Conexión con QZ Tray')}</p>
+              <p className="text-sm text-gray-600">{t('Verifica que QZ Tray esté en ejecución en este equipo.')}</p>
+            </div>
+            <button
+              onClick={handleTestQZ}
+              disabled={checkingQZ}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors font-medium text-sm disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${checkingQZ ? 'animate-spin' : ''}`} />
+              {t('Testear Conexión')}
+            </button>
+          </div>
+        </div>
+
+        {qzPrinters.length > 0 && (
+          <div className="mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <p className="font-semibold text-emerald-800 mb-2">✅ {t('Impresoras detectadas:')}</p>
+            <ul className="list-disc list-inside text-sm text-emerald-700 space-y-1">
+              {qzPrinters.map(printer => (
+                <li key={printer}>{printer}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-emerald-600 mt-3">
+              {t('Copia exactamente el nombre de la impresora y pégalo en la "Zona de Impresión" de tus categorías.')}
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
