@@ -4,7 +4,7 @@ import './index.css';
 
 // Control de versión dinámico por buildId (inyectado en build por Vite)
 declare const __APP_BUILD_ID__: string;
-export const APP_VERSION = '1.1.2';
+export const APP_VERSION = '1.1.3';
 export const CURRENT_BUILD_ID = typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : 'dev';
 
 // En localhost / desarrollo, desactivar completamente el auto-recarga y desregistrar service workers previos
@@ -52,6 +52,8 @@ export const purgeCacheAndReload = async () => {
       const names = await caches.keys();
       await Promise.all(names.map(name => caches.delete(name)));
     }
+    // 3. Limpiar cookies para forzar sesión y estado limpios
+    clearAllCookies();
   } catch (err) {
     console.warn('Error purgando cachés PWA:', err);
   } finally {

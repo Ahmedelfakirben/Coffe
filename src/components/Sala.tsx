@@ -285,8 +285,7 @@ export function Sala({ onGoToPOS }: { onGoToPOS?: () => void }) {
         }
       };
       
-      // Encolar el ticket de caja principal (factura) en el spooler para que aparezca en auditoría y se imprima centralizado (2 COPIAS)
-      await enqueuePrintJob(orderIdsToProcess[0], 'invoice', ticketPayload);
+      // Encolar el ticket de caja principal (factura) en el spooler para que aparezca en auditoría y se imprima centralizado (1 COPIA)
       await enqueuePrintJob(orderIdsToProcess[0], 'invoice', ticketPayload);
       
       // Update table status if we just cleared all orders (or if there are no other active orders left)

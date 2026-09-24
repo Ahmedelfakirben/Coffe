@@ -138,6 +138,9 @@ export function POS() {
   const [noteModalIndex, setNoteModalIndex] = useState<number | null>(null);
   const [noteText, setNoteText] = useState<string>('');
 
+  // Estado para modal de selección de variantes/tallas en Pocket
+  const [variantModalProduct, setVariantModalProduct] = useState<Product | null>(null);
+
   useEffect(() => {
     Promise.all([
       fetchCategories(),
@@ -662,7 +665,7 @@ export function POS() {
         serviceType
       });
 
-      // Enviar a spooler de cliente/caja (2 copias)
+      // Enviar a spooler de cliente/caja (1 copia)
       const printPayload = {
         ticketData: {
           ...pendingOrderData,
@@ -670,7 +673,6 @@ export function POS() {
         }
       };
       
-      await enqueuePrintJob(activeOrderId, 'invoice', printPayload);
       await enqueuePrintJob(activeOrderId, 'invoice', printPayload);
 
       // 3. Si hay mesa, asegurar que el estado quede como 'occupied' en Sala
@@ -766,12 +768,10 @@ export function POS() {
           total: typeof fullOrder.total === 'string' ? parseFloat(fullOrder.total) : fullOrder.total,
           orderDate: new Date(fullOrder.created_at)
         };
-        // 2 COPIAS DEL TICKET FINAL
-        await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: fullTicketData });
+        // 1 COPIA DEL TICKET FINAL
         await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: fullTicketData });
       } else {
-        // 2 COPIAS DEL TICKET FINAL
-        await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: updatedTicketData });
+        // 1 COPIA DEL TICKET FINAL
         await enqueuePrintJob(activeOrderId, 'receipt', { ticketData: updatedTicketData });
       }
 
@@ -929,7 +929,9 @@ export function POS() {
               <div
                 key={product.id}
                 onClick={() => {
-                  if (productSizesList.length === 0) {
+                  if (productSizesList.length > 0) {
+                    setVariantModalProduct(product);
+                  } else {
                     addItem(product);
                   }
                 }}
@@ -943,11 +945,9 @@ export function POS() {
                     x{totalInCart}
                   </div>
                 ) : (
-                  productSizesList.length === 0 && (
-                    <div className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                      <Plus className="w-3 h-3" />
-                    </div>
-                  )
+                  <div className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                    <Plus className="w-3 h-3" />
+                  </div>
                 )}
 
                 {/* Encabezado: Imagen o Icono + Nombre */}
@@ -979,20 +979,10 @@ export function POS() {
                   </p>
 
                   {productSizesList.length > 0 && (
-                    <div className="space-y-1 mt-1.5">
-                      {productSizesList.map(size => (
-                        <button
-                          key={size.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addItem(product, size);
-                          }}
-                          className="w-full bg-amber-50 hover:bg-amber-100 text-amber-900 py-1 px-1 rounded-lg text-[10px] font-bold border border-amber-200 flex justify-between items-center active:scale-95 transition-transform"
-                        >
-                          <span className="truncate">{size.size_name}</span>
-                          <span className="font-black text-amber-700 ml-0.5">+{formatCurrency(size.price_modifier)}</span>
-                        </button>
-                      ))}
+                    <div className="mt-1 flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 border border-amber-300 rounded-md px-2 py-0.5 inline-flex items-center gap-1 shadow-xs">
+                        <span>{productSizesList.length} opciones</span>
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1079,6 +1069,85 @@ export function POS() {
       <div className="md:hidden">
         {renderMobileView()}
       </div>
+
+      {/* Modal de Selección de Variante / Tamaño para Móvil (Pocket) */}
+      {variantModalProduct && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl animate-in slide-in-from-bottom duration-200 max-h-[85vh] flex flex-col border border-amber-100">
+            {/* Header del Modal */}
+            <div className="flex justify-between items-start pb-3 border-b border-gray-100">
+              <div className="pr-3">
+                <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider block">
+                  {t('Seleccionar Variante')}
+                </span>
+                <h3 className="font-extrabold text-gray-950 text-lg leading-tight mt-0.5">
+                  {variantModalProduct.name}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {t('Precio base')}: <span className="font-bold text-gray-700">{formatCurrency(variantModalProduct.base_price)}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setVariantModalProduct(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 font-bold transition-colors flex-shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Lista de Variantes en Botones Grandes y Cómodos */}
+            <div className="py-4 space-y-2.5 overflow-y-auto flex-1">
+              {productSizes(variantModalProduct.id).map(size => {
+                const finalPrice = variantModalProduct.base_price + (size.price_modifier || 0);
+                return (
+                  <button
+                    key={size.id}
+                    onClick={() => {
+                      addItem(variantModalProduct, size);
+                      setVariantModalProduct(null);
+                    }}
+                    className="w-full bg-gradient-to-r from-amber-50 to-orange-50/50 hover:from-amber-100 hover:to-orange-100 active:scale-[0.98] border-2 border-amber-200 hover:border-amber-400 rounded-2xl p-4 flex items-center justify-between shadow-xs transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-700 flex items-center justify-center font-bold text-lg flex-shrink-0">
+                        ☕
+                      </div>
+                      <div>
+                        <span className="font-extrabold text-gray-900 text-base block leading-tight">
+                          {size.size_name}
+                        </span>
+                        {size.price_modifier !== 0 && (
+                          <span className="text-xs text-amber-700 font-semibold mt-0.5 block">
+                            {size.price_modifier > 0 ? `+${formatCurrency(size.price_modifier)}` : formatCurrency(size.price_modifier)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 pl-2">
+                      <span className="text-base sm:text-lg font-black text-amber-700 block">
+                        {formatCurrency(finalPrice)}
+                      </span>
+                      <span className="text-[11px] font-bold text-white bg-amber-600 px-2.5 py-0.5 rounded-full inline-block mt-1 shadow-xs">
+                        + {t('Añadir')}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Botón Cerrar */}
+            <div className="pt-2 border-t border-gray-100">
+              <button
+                onClick={() => setVariantModalProduct(null)}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm transition-colors"
+              >
+                {t('Cerrar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Pedido Activo en Móvil */}
       {showMobileActiveModal && activeOrderId && (

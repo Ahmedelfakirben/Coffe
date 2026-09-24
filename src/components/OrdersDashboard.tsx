@@ -604,8 +604,7 @@ export function OrdersDashboard({ onGoToPOS }: OrdersDashboardProps = {}) {
           }
         };
 
-        // 2 COPIAS DEL TICKET FINAL
-        await enqueuePrintJob(order.id, 'receipt', payload);
+        // 1 COPIA DEL TICKET FINAL
         await enqueuePrintJob(order.id, 'receipt', payload);
       }
 
