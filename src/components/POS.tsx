@@ -974,9 +974,11 @@ export function POS() {
 
                 {/* Pie: Precio y Tamaños si existen */}
                 <div className="mt-1.5 pt-1 border-t border-gray-100 text-center">
-                  <p className="font-black text-amber-600 text-xs sm:text-sm">
-                    {formatCurrency(product.base_price)}
-                  </p>
+                  {Number(product.base_price) > 0 ? (
+                    <p className="font-black text-amber-600 text-xs sm:text-sm">
+                      {formatCurrency(product.base_price)}
+                    </p>
+                  ) : null}
 
                   {productSizesList.length > 0 && (
                     <div className="mt-1 flex items-center justify-center">
@@ -1083,9 +1085,11 @@ export function POS() {
                 <h3 className="font-extrabold text-gray-950 text-lg leading-tight mt-0.5">
                   {variantModalProduct.name}
                 </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {t('Precio base')}: <span className="font-bold text-gray-700">{formatCurrency(variantModalProduct.base_price)}</span>
-                </p>
+                {Number(variantModalProduct.base_price) > 0 && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {t('Precio base')}: <span className="font-bold text-gray-700">{formatCurrency(variantModalProduct.base_price)}</span>
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setVariantModalProduct(null)}
@@ -1098,7 +1102,8 @@ export function POS() {
             {/* Lista de Variantes en Botones Grandes y Cómodos */}
             <div className="py-4 space-y-2.5 overflow-y-auto flex-1">
               {productSizes(variantModalProduct.id).map(size => {
-                const finalPrice = variantModalProduct.base_price + (size.price_modifier || 0);
+                const modifier = Number(size.price_modifier) || 0;
+                const finalPrice = Number(variantModalProduct.base_price) + modifier;
                 return (
                   <button
                     key={size.id}
@@ -1116,17 +1121,19 @@ export function POS() {
                         <span className="font-extrabold text-gray-900 text-base block leading-tight">
                           {size.size_name}
                         </span>
-                        {size.price_modifier !== 0 && (
+                        {modifier !== 0 && (
                           <span className="text-xs text-amber-700 font-semibold mt-0.5 block">
-                            {size.price_modifier > 0 ? `+${formatCurrency(size.price_modifier)}` : formatCurrency(size.price_modifier)}
+                            {modifier > 0 ? `+${formatCurrency(modifier)}` : formatCurrency(modifier)}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0 pl-2">
-                      <span className="text-base sm:text-lg font-black text-amber-700 block">
-                        {formatCurrency(finalPrice)}
-                      </span>
+                      {finalPrice > 0 && (
+                        <span className="text-base sm:text-lg font-black text-amber-700 block">
+                          {formatCurrency(finalPrice)}
+                        </span>
+                      )}
                       <span className="text-[11px] font-bold text-white bg-amber-600 px-2.5 py-0.5 rounded-full inline-block mt-1 shadow-xs">
                         + {t('Añadir')}
                       </span>
@@ -1469,7 +1476,11 @@ export function POS() {
                       <h3 className="font-extrabold text-gray-900 text-base leading-tight group-hover:text-amber-700 transition-colors">{product.name}</h3>
                       <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{product.description}</p>
                       <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                        <p className="text-xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{formatCurrency(product.base_price)}</p>
+                        {Number(product.base_price) > 0 ? (
+                          <p className="text-xl font-black bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{formatCurrency(product.base_price)}</p>
+                        ) : (
+                          <span />
+                        )}
                         <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded-full">
                           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                           <span className="text-xs text-green-700 font-bold">Stock</span>
@@ -1479,19 +1490,26 @@ export function POS() {
 
                     {productSizesList.length > 0 ? (
                       <div className="space-y-2 mt-4 relative z-10">
-                        {productSizesList.map(size => (
-                          <button
-                            key={size.id}
-                            onClick={() => addItem(product, size)}
-                            className="w-full bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-800 py-2.5 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex justify-between items-center border-2 border-amber-300 hover:border-amber-400 shadow-md hover:shadow-xl transform hover:-translate-y-0.5"
-                          >
-                            <span className="flex items-center gap-2">
-                              <span className="text-base">📏</span>
-                              <span>{size.size_name}</span>
-                            </span>
-                            <span className="font-black text-amber-900">+{formatCurrency(size.price_modifier)}</span>
-                          </button>
-                        ))}
+                        {productSizesList.map(size => {
+                          const modifier = Number(size.price_modifier) || 0;
+                          return (
+                            <button
+                              key={size.id}
+                              onClick={() => addItem(product, size)}
+                              className="w-full bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-800 py-2.5 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex justify-between items-center border-2 border-amber-300 hover:border-amber-400 shadow-md hover:shadow-xl transform hover:-translate-y-0.5"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="text-base">📏</span>
+                                <span>{size.size_name}</span>
+                              </span>
+                              {modifier !== 0 && (
+                                <span className="font-black text-amber-900">
+                                  {modifier > 0 ? `+${formatCurrency(modifier)}` : formatCurrency(modifier)}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
                       <button

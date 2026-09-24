@@ -4,7 +4,7 @@ import './index.css';
 
 // Control de versión dinámico por buildId (inyectado en build por Vite)
 declare const __APP_BUILD_ID__: string;
-export const APP_VERSION = '1.1.3';
+export const APP_VERSION = '1.1.4';
 export const CURRENT_BUILD_ID = typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : 'dev';
 
 // En localhost / desarrollo, desactivar completamente el auto-recarga y desregistrar service workers previos

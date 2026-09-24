@@ -82,8 +82,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const total = items.reduce((sum, item) => {
-    const basePrice = item.product.base_price;
-    const sizeModifier = item.size?.price_modifier || 0;
+    const basePrice = Number(item.product.base_price) || 0;
+    const sizeModifier = Number(item.size?.price_modifier) || 0;
     return sum + (basePrice + sizeModifier) * item.quantity;
   }, 0);
 
