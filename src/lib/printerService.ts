@@ -9,9 +9,17 @@ export interface KitchenPrintParams {
   serviceType: string;
 }
 
-export const printKitchenRouting = async (params: KitchenPrintParams): Promise<string[]> => {
+export interface KitchenPrintResult {
+  printed: string[];
+  failed: string[];
+  error: string | null;
+}
+
+export const printKitchenRoutingDetailed = async (params: KitchenPrintParams): Promise<KitchenPrintResult> => {
   const { orderNum, cartItems, categories, tables, tableId, serviceType } = params;
   const printedPrinters: string[] = [];
+  const failedPrinters: string[] = [];
+  let fatalError: string | null = null;
   
   try {
     const tableName = tableId ? (tables.find(t => t.id === tableId)?.name || '') : '';
@@ -150,15 +158,28 @@ export const printKitchenRouting = async (params: KitchenPrintParams): Promise<s
 
       console.log(`🖨️ KITCHEN ROUTING: Enviando comanda unificada a impresora "${targetPrinter}" con ${items.length} artículos...`);
       const printerArg = targetPrinter === 'DEFAULT' ? '' : targetPrinter;
-      const success = await qzService.printHTML(printerArg, html);
-      if (success) {
-        printedPrinters.push(targetPrinter);
+      try {
+        const success = await qzService.printHTML(printerArg, html);
+        if (success) {
+          printedPrinters.push(targetPrinter);
+        } else {
+          failedPrinters.push(targetPrinter);
+        }
+      } catch (printErr) {
+        console.error(`Error imprimiendo comanda en "${targetPrinter}":`, printErr);
+        failedPrinters.push(targetPrinter);
       }
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error procesando Kitchen Routing:', err);
+    fatalError = err?.message || String(err);
   }
-  return printedPrinters;
+  return { printed: printedPrinters, failed: failedPrinters, error: fatalError };
+};
+
+// Mantiene la firma original: devuelve solo las impresoras donde se imprimió correctamente
+export const printKitchenRouting = async (params: KitchenPrintParams): Promise<string[]> => {
+  return (await printKitchenRoutingDetailed(params)).printed;
 };
 
 export interface TicketPrintParams {
@@ -168,12 +189,12 @@ export interface TicketPrintParams {
   t: (key: string) => string;
 }
 
-export const printMainTicket = async (params: TicketPrintParams) => {
+export const printMainTicket = async (params: TicketPrintParams): Promise<boolean> => {
   const { ticketData, companyInfo, formatCurrency, t } = params;
 
   if (!ticketData || !ticketData.items) {
     console.error('❌ TICKET: Datos inválidos, cancelando impresión');
-    return;
+    return false;
   }
 
   try {
@@ -285,14 +306,18 @@ export const printMainTicket = async (params: TicketPrintParams) => {
 <body>${printContent}</body>
 </html>`;
 
-    const printed = await qzService.printHTML('', fullHtml, true);
+    // allowFallback=false: en el servidor de impresión no se abren ventanas del navegador si QZ falla;
+    // el fallo se devuelve como false y el trabajo queda 'failed' en el monitor (con opción de Reintentar).
+    const printed = await qzService.printHTML('', fullHtml, false);
     if (printed) {
       console.log('✅ TICKET: Printed silently via QZ Tray');
       window.dispatchEvent(new CustomEvent('ticketPrinted'));
     }
+    return !!printed;
   } catch (err) {
     console.warn('⚠️ TICKET: Error imprimiendo ticket principal:', err);
     window.dispatchEvent(new CustomEvent('ticketPrinted'));
+    return false;
   }
 };
 

@@ -15,17 +15,68 @@ export const isMobileDevice = (): boolean => {
 
 class QZTrayService {
   private isConnected = false;
-  private connecting = false;
+  private connectPromise: Promise<boolean> | null = null;
+  private intentionalDisconnect = false;
+  private reconnectAttempts = 0;
+  private cachedPrinters: string[] | null = null;
+  private lastPrintersFetch = 0;
+  private reconnectTimer: any = null;
+  private callbacksConfigured = false;
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer || this.intentionalDisconnect) return;
+    // Backoff: 5s, 10s, 20s y máximo 30s entre reintentos
+    const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 30000);
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      if (this.intentionalDisconnect || qz.websocket.isActive()) {
+        this.reconnectAttempts = 0;
+        return;
+      }
+      console.log('🔄 Reintentando reconectar automáticamente a QZ Tray...');
+      try {
+        await this.connect();
+        this.reconnectAttempts = 0;
+      } catch {
+        this.reconnectAttempts++;
+        console.warn('Reintento automático a QZ Tray falló, se volverá a intentar.');
+        this.scheduleReconnect();
+      }
+    }, delay);
+  }
 
   async connect(customHost?: string): Promise<boolean> {
     if (isMobileDevice() && !customHost) {
       return false;
     }
     if (this.isConnected && qz.websocket.isActive()) return true;
-    if (this.connecting) return false;
+    // Si ya hay una conexión en curso, esperar a que termine en lugar de fallar
+    if (this.connectPromise) return this.connectPromise;
 
-    this.connecting = true;
+    this.connectPromise = this.doConnect(customHost).finally(() => {
+      this.connectPromise = null;
+    });
+    return this.connectPromise;
+  }
+
+  private async doConnect(customHost?: string): Promise<boolean> {
+    this.intentionalDisconnect = false;
     try {
+      // Configurar callbacks de desconexión automática si aún no están
+      if (!this.callbacksConfigured) {
+        qz.websocket.setClosedCallback((event: any) => {
+          console.warn('⚠️ QZ Tray WebSocket cerrado:', event);
+          this.isConnected = false;
+          if (!this.intentionalDisconnect) this.scheduleReconnect();
+        });
+
+        qz.websocket.setErrorCallback((err: any) => {
+          console.warn('⚠️ Error en QZ Tray WebSocket:', err);
+          this.isConnected = false;
+        });
+        this.callbacksConfigured = true;
+      }
+
       // 1. Configurar Certificado Digital (HousePublique)
       qz.security.setCertificatePromise((resolve: any) => {
         resolve(QZ_CERTIFICATE);
@@ -78,12 +129,18 @@ class QZTrayService {
       console.error('❌ Error conectando a QZ Tray:', err);
       this.isConnected = false;
       throw err;
-    } finally {
-      this.connecting = false;
     }
   }
 
   async disconnect(): Promise<void> {
+    // Desconexión voluntaria: no debe disparar reconexión automática
+    this.intentionalDisconnect = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.cachedPrinters = null;
+    this.lastPrintersFetch = 0;
     try {
       if (qz.websocket.isActive()) {
         await qz.websocket.disconnect();
@@ -95,7 +152,36 @@ class QZTrayService {
     }
   }
 
-  async getPrinters(customHost?: string): Promise<string[]> {
+  /**
+   * Reinicia la conexión con QZ Tray tras un bloqueo (p.ej. timeout de impresión).
+   * Nunca lanza excepción: si no logra reconectar, programa reintentos automáticos.
+   */
+  async resetConnection(): Promise<void> {
+    console.warn('♻️ Reiniciando conexión con QZ Tray tras un bloqueo...');
+    try {
+      await Promise.race([
+        this.disconnect(),
+        new Promise<void>((resolve) => setTimeout(resolve, 8000))
+      ]);
+    } catch (e) {
+      console.warn('Error al cerrar la conexión durante el reinicio:', e);
+    }
+    this.isConnected = false;
+    this.intentionalDisconnect = false;
+    try {
+      await this.connect();
+    } catch {
+      this.scheduleReconnect();
+    }
+  }
+
+  async getPrinters(customHost?: string, forceRefresh = false): Promise<string[]> {
+    const now = Date.now();
+    // Reutilizar caché en memoria durante 2 minutos si no se fuerza refresco
+    if (!forceRefresh && this.cachedPrinters && (now - this.lastPrintersFetch < 120000)) {
+      return this.cachedPrinters;
+    }
+
     try {
       const connected = await this.connect(customHost);
       if (!connected) return [];
@@ -108,7 +194,10 @@ class QZTrayService {
       console.log('🔍 Solicitando lista de impresoras a QZ Tray...');
       const printers = await qz.printers.find();
       console.log('📋 Impresoras devueltas por QZ Tray:', printers);
-      return Array.isArray(printers) ? printers : [];
+      const list = Array.isArray(printers) ? printers : [];
+      this.cachedPrinters = list;
+      this.lastPrintersFetch = Date.now();
+      return list;
     } catch (err: any) {
       console.error('Error buscando impresoras en QZ Tray:', err);
       toast.error(`Error buscando impresoras: ${err?.message || err}`);
@@ -121,7 +210,7 @@ class QZTrayService {
     if (!connected) return null;
 
     try {
-      const allPrinters: string[] = await qz.printers.find();
+      const allPrinters: string[] = await this.getPrinters();
       if (!allPrinters || allPrinters.length === 0) {
         console.warn('⚠️ No se encontraron impresoras en el sistema via QZ Tray');
         return null;

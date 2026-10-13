@@ -11,7 +11,7 @@ function autoVersionPlugin(buildId: string) {
     buildStart() {
       const versionFile = path.resolve(__dirname, 'public/version.json');
       const data = {
-        version: '1.1.3',
+        version: '1.1.4',
         buildId,
         buildTime: new Date().toISOString()
       };
