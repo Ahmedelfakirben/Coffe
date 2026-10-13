@@ -63,17 +63,30 @@ class QZTrayService {
     this.intentionalDisconnect = false;
     try {
       // Configurar callbacks de desconexión automática si aún no están
-      if (!this.callbacksConfigured) {
-        qz.websocket.setClosedCallback((event: any) => {
+      if (!this.callbacksConfigured && qz?.websocket) {
+        const onClosed = (event: any) => {
           console.warn('⚠️ QZ Tray WebSocket cerrado:', event);
           this.isConnected = false;
           if (!this.intentionalDisconnect) this.scheduleReconnect();
-        });
+        };
 
-        qz.websocket.setErrorCallback((err: any) => {
+        const onError = (err: any) => {
           console.warn('⚠️ Error en QZ Tray WebSocket:', err);
           this.isConnected = false;
-        });
+        };
+
+        if (typeof qz.websocket.setClosedCallbacks === 'function') {
+          qz.websocket.setClosedCallbacks(onClosed);
+        } else if (typeof qz.websocket.setClosedCallback === 'function') {
+          qz.websocket.setClosedCallback(onClosed);
+        }
+
+        if (typeof qz.websocket.setErrorCallbacks === 'function') {
+          qz.websocket.setErrorCallbacks(onError);
+        } else if (typeof qz.websocket.setErrorCallback === 'function') {
+          qz.websocket.setErrorCallback(onError);
+        }
+
         this.callbacksConfigured = true;
       }
 
