@@ -64,7 +64,11 @@ export function PrintMonitor() {
     try {
       const { error } = await supabase
         .from('print_jobs')
-        .update({ status: 'pending', error_message: null })
+        .update({
+          status: 'pending',
+          error_message: null,
+          created_at: new Date().toISOString()
+        })
         .eq('id', jobId);
 
       if (error) throw error;

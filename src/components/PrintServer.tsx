@@ -121,6 +121,20 @@ export function PrintServer() {
         }
 
         processingIds.add(jobId);
+
+        // Descartar automáticamente trabajos antiguos (más de 15 minutos, p.ej. días u horas anteriores)
+        if (job.created_at) {
+          const ageMinutes = Math.round((Date.now() - new Date(job.created_at).getTime()) / 60000);
+          if (ageMinutes > 15) {
+            console.warn(`⚠️ [COLA] Omitiendo trabajo caducado (${ageMinutes} min de antigüedad): ${jobId}`);
+            await updateJob(jobId, {
+              status: 'failed',
+              error_message: `Omitido automáticamente: Pedido atrasado (${ageMinutes} min de antigüedad)`
+            });
+            return;
+          }
+        }
+
         console.log(`🖨️ [COLA] Procesando trabajo de impresión [${job.ticket_type}]: ${jobId}`);
 
         const executePrinting = async (): Promise<PrintOutcome> => {
@@ -237,11 +251,25 @@ export function PrintServer() {
       if (!isMounted || watchdogRunning) return;
       watchdogRunning = true;
       try {
-        // 1. Rescatar pendientes que Realtime pudiera haber omitido por micro-cortes
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+
+        // 1. Limpiar y marcar como descartados todos los pendientes antiguos (>15 min)
+        // para evitar imprimir tickets acumulados de días u horas anteriores
+        await supabase
+          .from('print_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Descartado automáticamente: Pedido atrasado de sesión anterior (>15 min)'
+          })
+          .eq('status', 'pending')
+          .lt('created_at', fifteenMinutesAgo);
+
+        // 2. Rescatar solo pendientes recientes (< 15 minutos) que Realtime pudiera haber omitido
         const { data: pendingJobs } = await supabase
           .from('print_jobs')
           .select('id')
           .eq('status', 'pending')
+          .gte('created_at', fifteenMinutesAgo)
           .order('created_at', { ascending: true })
           .limit(20);
 
